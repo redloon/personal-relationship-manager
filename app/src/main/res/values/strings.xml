@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PersonalCRM</string>
+    <string name="tile_description">Quickly add a new CRM event</string>
+</resources>

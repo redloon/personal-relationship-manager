@@ -1,0 +1,119 @@
+package com.idontremember.personalcrm.ui
+
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import dagger.hilt.android.testing.HiltAndroidRule
+import dagger.hilt.android.testing.HiltAndroidTest
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+
+/**
+ * UI tests for the ContactsListScreen.
+ * Verifies the contacts list renders correctly and the sync button works.
+ */
+@HiltAndroidTest
+class ContactsListScreenTest {
+
+    @get:Rule(order = 0)
+    var hiltRule = HiltAndroidRule(this)
+
+    @get:Rule(order = 1)
+    val composeTestRule = createAndroidComposeRule<MainActivity>()
+
+    @Before
+    fun setup() {
+        hiltRule.inject()
+    }
+
+    @Test
+    fun contactsScreen_showsTitle() {
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            try {
+                composeTestRule.onNodeWithText("Contacts").assertIsDisplayed()
+                true
+            } catch (e: AssertionError) {
+                false
+            }
+        }
+    }
+
+    @Test
+    fun contactsScreen_showsEmptyStateWhenNoContacts() {
+        // When there are no contacts, we should see the empty state message
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            try {
+                composeTestRule.onNodeWithText("No contacts yet.").assertExists()
+                true
+            } catch (e: AssertionError) {
+                false
+            }
+        }
+    }
+
+    @Test
+    fun contactsScreen_searchFieldExists() {
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            try {
+                composeTestRule.onNodeWithTag("search_field").assertExists()
+                true
+            } catch (e: AssertionError) {
+                false
+            }
+        }
+    }
+
+    @Test
+    fun contactsScreen_syncButtonExists() {
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            try {
+                composeTestRule.onNodeWithTag("sync_button").assertExists()
+                true
+            } catch (e: AssertionError) {
+                false
+            }
+        }
+    }
+
+    @Test
+    fun contactsScreen_syncButtonIsClickable() {
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            try {
+                composeTestRule.onNodeWithTag("sync_button").assertExists()
+                true
+            } catch (e: AssertionError) {
+                false
+            }
+        }
+        composeTestRule.onNodeWithTag("sync_button").performClick()
+        // Should not crash — sync may fail if no permission, but the button should work
+        composeTestRule.waitForIdle()
+    }
+
+    @Test
+    fun contactsScreen_searchFieldAcceptsInput() {
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            try {
+                composeTestRule.onNodeWithTag("search_field").assertExists()
+                true
+            } catch (e: AssertionError) {
+                false
+            }
+        }
+        composeTestRule.onNodeWithTag("search_field").performTextInput("Alice")
+        composeTestRule.waitForIdle()
+        // After typing, should show "No contacts match your search" or results
+        composeTestRule.waitUntil(timeoutMillis = 3_000) {
+            try {
+                composeTestRule.onNodeWithText("No contacts match your search.").assertExists()
+                true
+            } catch (e: AssertionError) {
+                false
+            }
+        }
+    }
+}
