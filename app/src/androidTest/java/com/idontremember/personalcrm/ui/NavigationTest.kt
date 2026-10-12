@@ -10,8 +10,15 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * UI tests for navigation between screens.
- * Verifies the app starts on the correct screen and basic nav works.
+ * UI tests for navigation.
+ *
+ * Verifies the app starts on the Contacts route (first in the nav backstack)
+ * and that the initial screen renders without crashing.
+ *
+ * NOTE: Full navigation tests (switching screens, back stack behavior) require
+ * either a bottom nav bar test hook or a way to set initial routes in tests.
+ * A future agent should add a NavigationTestRule that allows starting from
+ * arbitrary routes.
  */
 @HiltAndroidTest
 class NavigationTest {
@@ -41,8 +48,8 @@ class NavigationTest {
     }
 
     @Test
-    fun contactsScreenRendersWithoutCrash() {
-        // Verify the contacts screen is fully rendered
+    fun contactsScreenRendersFully() {
+        // Verify the contacts screen renders all expected elements
         composeTestRule.waitUntil(timeoutMillis = 5_000) {
             try {
                 composeTestRule.onNodeWithText("Contacts").assertIsDisplayed()
@@ -51,7 +58,15 @@ class NavigationTest {
                 false
             }
         }
-        // Give compose time to settle
+        // Verify search field is present
+        composeTestRule.waitUntil(timeoutMillis = 3_000) {
+            try {
+                composeTestRule.onNodeWithText("Search contacts...").assertExists()
+                true
+            } catch (e: AssertionError) {
+                false
+            }
+        }
         composeTestRule.waitForIdle()
     }
 }

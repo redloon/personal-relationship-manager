@@ -4,7 +4,6 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import org.junit.Before
@@ -13,7 +12,15 @@ import org.junit.Test
 
 /**
  * UI tests for the AddEventSheet.
- * Verifies the add event modal can be opened and basic interactions work.
+ *
+ * NOTE: The add event sheet is a ModalBottomSheet opened from the Events screen FAB.
+ * Testing it requires navigating to Events first, which depends on nav implementation.
+ * These tests verify the app baseline. A future agent should add a direct test entry
+ * point for the sheet composable.
+ *
+ * To test AddEventSheet directly, a future agent should:
+ * 1. Create a test activity that hosts AddEventSheet standalone
+ * 2. Or add a nav route that opens the sheet immediately
  */
 @HiltAndroidTest
 class AddEventSheetTest {
@@ -30,8 +37,8 @@ class AddEventSheetTest {
     }
 
     @Test
-    fun addEventSheet_canBeOpened() {
-        // First verify we're on the contacts screen
+    fun appLaunches_withoutCrash() {
+        // Baseline: app starts without crash
         composeTestRule.waitUntil(timeoutMillis = 5_000) {
             try {
                 composeTestRule.onNodeWithText("Contacts").assertIsDisplayed()
@@ -40,23 +47,6 @@ class AddEventSheetTest {
                 false
             }
         }
-
-        // The add event sheet is triggered from the Events screen's FAB
-        // Since navigation is complex, we just verify the app doesn't crash
         composeTestRule.waitForIdle()
-    }
-
-    @Test
-    fun addEventSheet_saveButtonExists() {
-        // This test verifies the save button tag exists when the sheet is open
-        // For now, just verify baseline app loads
-        composeTestRule.waitUntil(timeoutMillis = 5_000) {
-            try {
-                composeTestRule.onNodeWithText("Contacts").assertIsDisplayed()
-                true
-            } catch (e: AssertionError) {
-                false
-            }
-        }
     }
 }
