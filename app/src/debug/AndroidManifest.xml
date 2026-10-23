@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug/test builds only: ContactsSyncStressTest seeds the real Android
+     Contacts Provider from the app's UID, which requires WRITE_CONTACTS.
+     Production (release) builds keep the read-only manifest. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
+</manifest>

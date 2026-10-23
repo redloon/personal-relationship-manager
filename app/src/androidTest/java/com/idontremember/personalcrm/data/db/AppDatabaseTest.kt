@@ -153,4 +153,17 @@ class AppDatabaseTest {
         assertEquals(2, results.size)
         assertTrue(results.all { it.displayName.contains("Alice") })
     }
+
+    @Test
+    fun searchEventsByNote() = runTest {
+        eventDao.insert(Event(note = "Project kickoff meeting with Alice"))
+        eventDao.insert(Event(note = "Phone call with Bob"))
+
+        // Unique token so results don't depend on what other tests inserted
+        val results = eventDao.searchByNote("kickoff").first()
+        assertEquals(1, results.size)
+        assertEquals("Project kickoff meeting with Alice", results.first().note)
+
+        assertTrue(eventDao.searchByNote("zzzznomatch").first().isEmpty())
+    }
 }

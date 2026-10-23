@@ -1,15 +1,24 @@
 package com.idontremember.personalcrm.ui.navigation
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
-import androidx.compose.material3.Text
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
-import androidx.navigation3.runtime.SaveableStateHolderNavEntryDecorator
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
@@ -36,64 +45,112 @@ data class EventDetailRoute(val eventId: Long) : NavKey
 @Serializable
 data object AddEventRoute : NavKey
 
+/**
+ * Determine which top-level tab is active based on the current back stack.
+ * Returns null when viewing a detail screen (neither tab highlighted).
+ */
+private fun activeTab(backStack: List<NavKey>): NavKey? {
+    val top = backStack.lastOrNull() ?: return null
+    return when (top) {
+        is ContactsRoute -> ContactsRoute
+        is EventsRoute -> EventsRoute
+        else -> null // detail screens — no tab highlighted
+    }
+}
+
 @Composable
 fun AppNavigation() {
     val backStack = rememberNavBackStack(ContactsRoute)
     var showAddEventSheet by remember { mutableStateOf(false) }
 
-    NavDisplay(
-        backStack = backStack,
-        entryDecorators = listOf(
-            rememberSaveableStateHolderNavEntryDecorator(),
-            rememberViewModelStoreNavEntryDecorator()
-        ),
-        entryProvider = fun(route: NavKey): NavEntry<NavKey> = when (route) {
-            is ContactsRoute -> NavEntry(route) {
-                ContactsListScreen(
-                    onContactClick = { contactId ->
-                        backStack.add(ContactDetailRoute(contactId))
-                    }
-                )
-            }
+    val currentTab = activeTab(backStack)
 
-            is ContactDetailRoute -> NavEntry(route) {
-                ContactDetailScreen(
-                    contactId = route.contactId,
-                    onBack = { backStack.removeLastOrNull() },
-                    onEventClick = { eventId ->
-                        backStack.add(EventDetailRoute(eventId))
-                    }
-                )
+    Scaffold(
+        bottomBar = {
+            // Hide bottom nav on detail screens to give more screen space
+            if (currentTab != null) {
+                NavigationBar(modifier = Modifier.testTag("bottom_navigation")) {
+                    NavigationBarItem(
+                        selected = currentTab is ContactsRoute,
+                        onClick = {
+                            // Clear backstack to Contacts top-level route
+                            backStack.clear()
+                            backStack.add(ContactsRoute)
+                        },
+                        icon = { Icon(Icons.Default.Person, contentDescription = "Contacts") },
+                        label = { Text("Contacts") },
+                        modifier = Modifier.testTag("nav_tab_contacts")
+                    )
+                    NavigationBarItem(
+                        selected = currentTab is EventsRoute,
+                        onClick = {
+                            // Clear backstack to Events top-level route
+                            backStack.clear()
+                            backStack.add(EventsRoute)
+                        },
+                        icon = { Icon(Icons.Default.DateRange, contentDescription = "Events") },
+                        label = { Text("Events") },
+                        modifier = Modifier.testTag("nav_tab_events")
+                    )
+                }
             }
-
-            is EventsRoute -> NavEntry(route) {
-                EventsListScreen(
-                    onEventClick = { eventId ->
-                        backStack.add(EventDetailRoute(eventId))
-                    },
-                    onAddEventClick = {
-                        showAddEventSheet = true
-                    }
-                )
-            }
-
-            is EventDetailRoute -> NavEntry(route) {
-                EventDetailScreen(
-                    eventId = route.eventId,
-                    onBack = { backStack.removeLastOrNull() }
-                )
-            }
-
-            is AddEventRoute -> NavEntry(route) {
-                AddEventSheet(
-                    onDismiss = { backStack.removeLastOrNull() },
-                    onSaved = { backStack.removeLastOrNull() }
-                )
-            }
-
-            else -> NavEntry(route) { Text("Unknown route") }
         }
-    )
+    ) { innerPadding ->
+        NavDisplay(
+            backStack = backStack,
+            modifier = Modifier.padding(innerPadding),
+            entryDecorators = listOf(
+                rememberSaveableStateHolderNavEntryDecorator(),
+                rememberViewModelStoreNavEntryDecorator()
+            ),
+            entryProvider = fun(route: NavKey): NavEntry<NavKey> = when (route) {
+                is ContactsRoute -> NavEntry(route) {
+                    ContactsListScreen(
+                        onContactClick = { contactId ->
+                            backStack.add(ContactDetailRoute(contactId))
+                        }
+                    )
+                }
+
+                is ContactDetailRoute -> NavEntry(route) {
+                    ContactDetailScreen(
+                        contactId = route.contactId,
+                        onBack = { backStack.removeLastOrNull() },
+                        onEventClick = { eventId ->
+                            backStack.add(EventDetailRoute(eventId))
+                        }
+                    )
+                }
+
+                is EventsRoute -> NavEntry(route) {
+                    EventsListScreen(
+                        onEventClick = { eventId ->
+                            backStack.add(EventDetailRoute(eventId))
+                        },
+                        onAddEventClick = {
+                            showAddEventSheet = true
+                        }
+                    )
+                }
+
+                is EventDetailRoute -> NavEntry(route) {
+                    EventDetailScreen(
+                        eventId = route.eventId,
+                        onBack = { backStack.removeLastOrNull() }
+                    )
+                }
+
+                is AddEventRoute -> NavEntry(route) {
+                    AddEventSheet(
+                        onDismiss = { backStack.removeLastOrNull() },
+                        onSaved = { backStack.removeLastOrNull() }
+                    )
+                }
+
+                else -> NavEntry(route) { Text("Unknown route") }
+            }
+        )
+    }
 
     // Show add event sheet as overlay when triggered from Events screen FAB
     if (showAddEventSheet) {

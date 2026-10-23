@@ -40,6 +40,18 @@ echo "▶ Step 3/6: Installing APKs on emulator..."
 ./gradlew installDebug installDebugAndroidTest --no-daemon --quiet 2>&1 | tail -5
 echo "✓ APKs installed"
 
+# Start from a clean app state each run. NOTE: the `-e clearPackageData true`
+# instrumentation arg used below is a no-op without the Android Test
+# Orchestrator (not installed here), so we clear explicitly.
+# pm clear also resets runtime permissions, so it must run before the grants.
+adb shell pm clear com.idontremember.personalcrm 2>/dev/null || true
+
+# Grant runtime permissions (factory-state AVDs have none granted; the system
+# permission dialog otherwise covers the UI and compose tests time out).
+for perm in READ_CONTACTS WRITE_CONTACTS; do
+    adb shell pm grant com.idontremember.personalcrm android.permission.$perm 2>/dev/null || true
+done
+
 # Step 4: Clear logcat before test run
 echo ""
 echo "▶ Step 4/6: Clearing logcat..."

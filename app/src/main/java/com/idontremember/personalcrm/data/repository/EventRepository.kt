@@ -27,6 +27,8 @@ class EventRepository @Inject constructor(
 
     fun getAllEvents(): Flow<List<Event>> = eventDao.getAll()
 
+    fun searchEvents(query: String): Flow<List<Event>> = eventDao.searchByNote(query)
+
     fun getRecentEvents(limit: Int = 50): Flow<List<Event>> = eventDao.getRecent(limit)
 
     suspend fun getEventById(id: Long): Event? = eventDao.getById(id)

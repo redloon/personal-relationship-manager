@@ -10,8 +10,6 @@ import com.idontremember.personalcrm.data.repository.EventRepository
 import com.idontremember.personalcrm.data.repository.TagRepository
 import com.idontremember.personalcrm.ui.components.AutocompleteContact
 import com.idontremember.personalcrm.ui.components.AutocompleteTag
-import com.idontremember.personalcrm.ui.components.TriggerType
-import com.idontremember.personalcrm.ui.components.detectTrigger
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -52,8 +50,6 @@ class AddEventViewModel @Inject constructor(
 
     fun onNoteChanged(value: TextFieldValue) {
         _noteText.value = value
-        // Re-parse contacts and tags from text
-        parseReferences(value.text)
     }
 
     fun onContactSelected(contact: AutocompleteContact) {
@@ -81,35 +77,6 @@ class AddEventViewModel @Inject constructor(
             )
             _saved.value = true
         }
-    }
-
-    /**
-     * Parse @mentions and #tags from the text to track selected contacts/tags.
-     * This handles the case where text is typed manually (not via autocomplete).
-     */
-    private fun parseReferences(text: String) {
-        val contactNames = mutableSetOf<Long>()
-        val tagNames = mutableSetOf<String>()
-
-        // Find all @mentions
-        val mentionRegex = Regex("""@(\w[\w\s]*?)(?=\s[#@\n]|$)""")
-        mentionRegex.findAll(text).forEach { match ->
-            val name = match.groupValues[1].trim()
-            // Try to find matching contact
-            contacts.value.find { it.displayName.equals(name, ignoreCase = true) }?.let {
-                contactNames.add(it.id)
-            }
-        }
-
-        // Find all #tags
-        val tagRegex = Regex("""#(\w+)(?=\s[#@\n]|$)""")
-        tagRegex.findAll(text).forEach { match ->
-            tagNames.add(match.groupValues[1].lowercase())
-        }
-
-        // Merge with any manually selected via autocomplete
-        _selectedContactIds.value = _selectedContactIds.value + contactNames
-        _selectedTagNames.value = _selectedTagNames.value + tagNames
     }
 
     fun getAutocompleteContacts(): List<AutocompleteContact> {

@@ -31,6 +31,9 @@ interface EventDao {
     @Query("SELECT * FROM events ORDER BY event_date DESC")
     fun getAll(): Flow<List<Event>>
 
+    @Query("SELECT * FROM events WHERE note LIKE '%' || :query || '%' ORDER BY event_date DESC")
+    fun searchByNote(query: String): Flow<List<Event>>
+
     @Query("SELECT * FROM events ORDER BY event_date DESC LIMIT :limit")
     fun getRecent(limit: Int = 50): Flow<List<Event>>
 

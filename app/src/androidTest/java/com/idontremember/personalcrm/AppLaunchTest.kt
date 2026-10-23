@@ -38,10 +38,12 @@ class AppLaunchTest {
 
     @Test
     fun contactsScreenIsDisplayed() {
-        // The app starts on the contacts route
+        // The app starts on the contacts route. Assert on the route's testTag:
+        // onNodeWithText("Contacts") is ambiguous (header and bottom-nav tab
+        // both render that label — verified via uiautomator dump).
         composeTestRule.waitUntil(timeoutMillis = 5_000) {
             try {
-                composeTestRule.onNodeWithText("Contacts").assertIsDisplayed()
+                composeTestRule.onNodeWithTag("contacts_list_screen").assertIsDisplayed()
                 true
             } catch (e: AssertionError) {
                 false

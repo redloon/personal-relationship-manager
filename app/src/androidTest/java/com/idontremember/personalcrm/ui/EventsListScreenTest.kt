@@ -3,24 +3,24 @@ package com.idontremember.personalcrm.ui
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
+import com.idontremember.personalcrm.data.repository.EventRepository
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import javax.inject.Inject
 
 /**
  * UI tests for the EventsListScreen.
  *
- * NOTE: The app starts on ContactsRoute. These tests verify the contacts screen
- * loads as a baseline. Full events-screen navigation tests require clicking the
- * bottom nav bar, which depends on the nav implementation details.
+ * Navigation: tap the Events tab on the bottom nav bar (see TestNavHelpers.kt).
  *
- * To test events screen directly, a future agent should:
- * 1. Add a test-only nav entry point that starts on EventsRoute
- * 2. Or use a test rule that sets initial backstack to EventsRoute
+ * NOTE: the in-memory test database is a process-wide Hilt singleton shared by
+ * all tests in one instrumentation run, so setup clears every event to keep the
+ * empty/list assertions deterministic.
  */
 @HiltAndroidTest
 class EventsListScreenTest {
@@ -31,34 +31,35 @@ class EventsListScreenTest {
     @get:Rule(order = 1)
     val composeTestRule = createAndroidComposeRule<MainActivity>()
 
+    @Inject
+    lateinit var eventRepository: EventRepository
+
     @Before
     fun setup() {
         hiltRule.inject()
-    }
-
-    @Test
-    fun appLaunches_andShowsContactsScreen() {
-        // Baseline: app starts without crash on the contacts screen
-        composeTestRule.waitUntil(timeoutMillis = 5_000) {
-            try {
-                composeTestRule.onNodeWithText("Contacts").assertIsDisplayed()
-                true
-            } catch (e: AssertionError) {
-                false
-            }
+        runBlocking {
+            // Start clean: the test DB singleton is shared across tests in this run
+            eventRepository.getAllEvents().first().forEach { eventRepository.deleteEvent(it) }
         }
     }
 
     @Test
-    fun contactsScreen_syncButtonIsPresent() {
-        // Verify the sync button exists (baseline interaction test)
-        composeTestRule.waitUntil(timeoutMillis = 5_000) {
-            try {
-                composeTestRule.onNodeWithTag("sync_button").assertExists()
-                true
-            } catch (e: AssertionError) {
-                false
-            }
-        }
+    fun eventsTab_showsEventsScreen() {
+        composeTestRule.navigateToEventsTab()
+        composeTestRule.onNodeWithTag("events_list_screen").assertIsDisplayed()
+    }
+
+    @Test
+    fun eventsTab_showsSearchFieldAndFab() {
+        composeTestRule.navigateToEventsTab()
+        composeTestRule.onNodeWithTag("events_search_field").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("add_event_fab").assertIsDisplayed()
+    }
+
+    @Test
+    fun eventsTab_showsEmptyStateWhenNoEvents() {
+        composeTestRule.navigateToEventsTab()
+        composeTestRule.waitUntilTagDisplayed("events_empty_state")
+        composeTestRule.onNodeWithTag("events_empty_state").assertIsDisplayed()
     }
 }

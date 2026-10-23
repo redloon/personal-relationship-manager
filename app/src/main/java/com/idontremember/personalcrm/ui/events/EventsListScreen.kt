@@ -15,11 +15,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -48,6 +50,7 @@ fun EventsListScreen(
     viewModel: EventsListViewModel = hiltViewModel()
 ) {
     val events by viewModel.events.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
 
     Scaffold(
         modifier = modifier.testTag("events_list_screen"),
@@ -63,32 +66,51 @@ fun EventsListScreen(
             }
         }
     ) { paddingValues ->
-        if (events.isEmpty()) {
-            Box(
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            // Search bar
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { viewModel.onSearchQueryChanged(it) },
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "No events yet.\nTap + to record an interaction.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .testTag("events_list"),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(events, key = { it.event.id }) { displayItem ->
-                    EventListItem(
-                        displayItem = displayItem,
-                        onClick = { onEventClick(displayItem.event.id) }
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .testTag("events_search_field"),
+                placeholder = { Text("Search events...") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                singleLine = true
+            )
+
+            if (events.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag("events_empty_state"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (searchQuery.isBlank()) "No events yet.\nTap + to record an interaction."
+                        else "No events match your search.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag("events_list"),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(events, key = { it.event.id }) { displayItem ->
+                        EventListItem(
+                            displayItem = displayItem,
+                            onClick = { onEventClick(displayItem.event.id) }
+                        )
+                    }
                 }
             }
         }
