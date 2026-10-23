@@ -94,12 +94,14 @@ The test runner (`scripts/run-tests.sh`) handles emulator lifecycle:
 ## Known Limitations
 
 - **Bottom navigation bar exists** — `AppNavigation` wraps `NavDisplay` in a `Scaffold` with a `NavigationBar` (`nav_tab_contacts` / `nav_tab_events`). Tests can navigate between top-level screens by clicking those tabs.
-- **ContactsSyncStressTest has 3 known failures** (`firstSync_importsAllContacts`, `firstSync_contactNamesMatch`, `secondSync_picksUpEditToExistingContact`). Root causes are Contacts Provider behavior, not app logic: seeded raw contacts get aggregated (duplicate "John Smith" entries → 419 aggregated from 420 seeded), CJK names are reordered by the provider's name splitter on read-back, and the edit test matches system contacts by non-unique display name. Fixing these means changing test semantics — treat as a known red suite until deliberately addressed.
-- **ContactsSyncStressTest requires emulator** — it seeds the real Android Contacts Provider and can't run on a host JVM.
+- **ContactsSyncStressTest encodes Contacts Provider semantics** — expected counts come from the provider *after* aggregation (same-name raw contacts seeded on purpose merge into one `ContactsContract.Contacts` row), names are compared against `DISPLAY_NAME_PRIMARY` (the provider's name splitter reorders CJK names on read-back), and system-side lookups always use the aggregated contact id (`Contact.androidContactId == ContactsContract.Contacts._ID` — never the generator's synthetic ids or display names). Read the class doc in `ContactsSyncStressTest.kt` before changing it.
+- **ContactsSyncStressTest requires emulator** — it seeds the real Android Contacts Provider and can't run on a host JVM. It needs WRITE_CONTACTS too, which only the debug build declares (`app/src/debug/AndroidManifest.xml`).
 
 ## For Future Agents
 
 - Run `./scripts/pre-launch-check.sh` before committing to catch runtime crashes statically.
+- **Never launch the emulator (or any long-lived background process) from a script with inherited stdout/stderr** — the background process keeps the caller's output pipe open and the run appears hung long after the work finished (this actually happened: tests finished in 65s while the tool call sat for 30+ minutes). `ensure-emulator.sh` redirects emulator output to `test-results/emulator-*.log` and closes stdin; keep it that way.
+- `run-tests.sh` bounds every blocking step with `timeout` (override via `TEST_TIMEOUT` / `BUILD_TIMEOUT` env vars) and prints total wall time, so a wedged gradle/adb/emulator fails loudly instead of stalling.
 - The Navigation3 decorator pattern is a known footgun — always include both `rememberSaveableStateHolderNavEntryDecorator()` and `rememberViewModelStoreNavEntryDecorator()`.
 - Test DI modules are in `app/src/androidTest/.../TestDatabaseModule.kt` and `TestRepositoryModule.kt`. They use `@TestInstallIn` to replace production modules.
 - The `HiltTestRunner` in `app/src/androidTest/.../HiltTestRunner.kt` must use `ClassLoader?` (not `Context?`) for the first parameter of `newApplication`.

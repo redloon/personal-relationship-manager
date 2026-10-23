@@ -12,6 +12,7 @@ import com.idontremember.personalcrm.testdata.RandomContactGenerator
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -31,8 +32,25 @@ import javax.inject.Inject
  * syncs them into the local Room DB, verifies data integrity,
  * then mutates a couple of contacts and re-syncs to verify idempotency.
  *
- * NOTE: This test requires a running emulator and READ_CONTACTS permission.
- *       It operates on the REAL system Contacts Provider.
+ * NOTE: This test requires a running emulator plus READ_CONTACTS and
+ *       WRITE_CONTACTS (the latter only in debug builds — see
+ *       app/src/debug/AndroidManifest.xml). It operates on the REAL system
+ *       Contacts Provider.
+ *
+ * Contacts Provider semantics this suite must respect (learned the hard way):
+ * - Seeded RAW contacts are aggregated into ContactsContract.Contacts rows:
+ *   same-name raw contacts (the generator seeds duplicate "John Smith"
+ *   entries on purpose) merge into ONE aggregated contact. The app syncs
+ *   aggregated contacts, so expected counts come from the provider, not from
+ *   the number of seeded rows.
+ * - Aggregated contacts can carry several phone/email rows (one per merged
+ *   raw contact); the sync keeps one of them.
+ * - DISPLAY_NAME_PRIMARY may differ from the seeded string (the provider's
+ *   name splitter reorders CJK names on read-back).
+ * - Identity: Room's Contact.androidContactId is ContactsContract.Contacts._ID
+ *   (the AGGREGATED id) — it is NOT the generator's synthetic SystemContact
+ *   androidId, and display names are not unique. Always match the system side
+ *   by contact id.
  */
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
@@ -60,6 +78,14 @@ class ContactsSyncStressTest {
         hiltRule.inject()
         contentResolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
 
+        // Start clean in Room too: the in-memory test DB is a process-wide Hilt
+        // singleton shared by every test class in one instrumentation run, and
+        // the sync counters ("added" vs "updated") only make sense against an
+        // empty local table. Contact deletion cascades to facts/event links.
+        runBlocking {
+            contactDao.getAll().first().forEach { contactDao.delete(it) }
+        }
+
         // Clear any existing contacts from the provider
         RandomContactGenerator.clearContactsProvider(contentResolver)
 
@@ -78,25 +104,94 @@ class ContactsSyncStressTest {
         }
     }
 
+    // ------------------------------------------------------------------
+    // Provider query helpers — always match the system side by contact id
+    // (ContactsContract.Contacts._ID == Room's androidContactId).
+    // ------------------------------------------------------------------
+
+    /** Display names exactly as the sync reads them (null names are skipped). */
+    private fun providerDisplayNames(): List<String> {
+        val names = mutableListOf<String>()
+        contentResolver.query(
+            ContactsContract.Contacts.CONTENT_URI,
+            arrayOf(ContactsContract.Contacts.DISPLAY_NAME_PRIMARY),
+            null,
+            null,
+            null
+        )?.use { c ->
+            val idx = c.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME_PRIMARY)
+            while (c.moveToNext()) {
+                c.getString(idx)?.let { names.add(it) }
+            }
+        }
+        return names
+    }
+
+    private fun providerPhoneNumbers(contactId: Long): Set<String> {
+        val numbers = mutableSetOf<String>()
+        contentResolver.query(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
+            "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?",
+            arrayOf(contactId.toString()),
+            null
+        )?.use { c ->
+            val idx = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+            while (c.moveToNext()) {
+                c.getString(idx)?.let { numbers.add(it) }
+            }
+        }
+        return numbers
+    }
+
+    private fun providerEmails(contactId: Long): Set<String> {
+        val addresses = mutableSetOf<String>()
+        contentResolver.query(
+            ContactsContract.CommonDataKinds.Email.CONTENT_URI,
+            arrayOf(ContactsContract.CommonDataKinds.Email.ADDRESS),
+            "${ContactsContract.CommonDataKinds.Email.CONTACT_ID} = ?",
+            arrayOf(contactId.toString()),
+            null
+        )?.use { c ->
+            val idx = c.getColumnIndex(ContactsContract.CommonDataKinds.Email.ADDRESS)
+            while (c.moveToNext()) {
+                c.getString(idx)?.let { addresses.add(it) }
+            }
+        }
+        return addresses
+    }
+
+    /**
+     * Name fingerprint tolerant of the provider's name-splitter normalization:
+     * "John Smith Jr." reads back as "John Smith, Jr." (suffix rejoined with a
+     * comma) and "田中 太郎" reads back as "田中太郎" (space dropped) or
+     * "太郎 田中" (CJK tokens reordered). Comparing the sorted set of
+     * letters/digits tolerates punctuation, whitespace and token-order changes.
+     */
+    private fun nameFingerprint(name: String): String =
+        name.filter { it.isLetterOrDigit() }.toSortedSet().joinToString("")
+
     @Test
     fun firstSync_importsAllContacts() = runTest {
+        // The provider aggregates same-name raw contacts into one aggregated
+        // contact (seeding includes duplicate "John Smith" entries on purpose)
+        // and the app syncs aggregated contacts — so the expected count is
+        // what the provider reports after seeding, not the seeded row count.
+        val providerNames = providerDisplayNames()
+        val providerCount = providerNames.size
+        assertTrue("Seed should produce 400+ aggregated contacts, got $providerCount", providerCount > 400)
+
         // Act: perform first sync
         val result = contactsSyncManager.syncContacts()
 
-        // Assert: all contacts were added
-        assertTrue(
-            "Expected at least $CONTACT_COUNT contacts, got ${result.total}",
-            result.total >= CONTACT_COUNT
-        )
+        // Assert: every provider contact was added, nothing updated
+        assertEquals("Sync should report one result per provider contact", providerCount, result.total)
         assertEquals("Expected all contacts to be added", result.total, result.added)
         assertEquals("Expected zero updates on first sync", 0, result.updated)
 
-        // Verify Room DB has the contacts
+        // Verify Room mirrors the provider exactly
         val allContacts = contactDao.getAll().first()
-        assertTrue(
-            "Expected at least $CONTACT_COUNT contacts in DB, got ${allContacts.size}",
-            allContacts.size >= CONTACT_COUNT
-        )
+        assertEquals("Room should mirror the provider contact count", providerCount, allContacts.size)
     }
 
     @Test
@@ -106,7 +201,15 @@ class ContactsSyncStressTest {
         val allContacts = contactDao.getAll().first()
         val dbNames = allContacts.map { it.displayName }.toSet()
 
-        // Verify special names survived
+        // The synced names must mirror the provider exactly — the app copies
+        // DISPLAY_NAME_PRIMARY verbatim. The provider may normalize seeded
+        // names (CJK name splitter reorders on read-back), so compare against
+        // the provider, not the seeded strings.
+        val providerNames = providerDisplayNames().toSet()
+        assertEquals("Synced names should mirror the provider", providerNames, dbNames)
+
+        // Verify special names survived (whitespace/token-order tolerant —
+        // see sameNameIgnoringTokenOrder)
         val specialNames = listOf(
             "José García-López",
             "François Müller",
@@ -117,8 +220,8 @@ class ContactsSyncStressTest {
 
         for (name in specialNames) {
             assertTrue(
-                "Expected to find '$name' in synced contacts",
-                dbNames.any { it.contains(name.take(10)) || name.contains(it.take(10)) }
+                "Expected to find '$name' in synced contacts, got: ${dbNames.sorted()}",
+                dbNames.any { nameFingerprint(it) == nameFingerprint(name) }
             )
         }
     }
@@ -129,16 +232,19 @@ class ContactsSyncStressTest {
 
         val allContacts = contactDao.getAll().first()
 
-        // Find a contact with a phone number
-        val contactWithPhone = allContacts.firstOrNull { it.phoneNumber != null }
-        assertNotNull("Expected at least one contact with a phone number", contactWithPhone)
-
-        // Find the matching system contact
-        val systemContact = generatedData.systemContacts.find {
-            it.displayName == contactWithPhone!!.displayName
+        // Match the system side by contact id (display names are not unique —
+        // the generator seeds duplicates on purpose). Pick a contact whose
+        // aggregated provider row has exactly one phone row so the expected
+        // value is unambiguous regardless of which row the sync kept.
+        val target = allContacts.firstOrNull { contact ->
+            contact.phoneNumber != null &&
+                contact.androidContactId != null &&
+                providerPhoneNumbers(contact.androidContactId!!).size == 1
         }
-        assertNotNull("System contact should exist for: ${contactWithPhone!!.displayName}", systemContact)
-        assertEquals(systemContact!!.phoneNumber, contactWithPhone.phoneNumber)
+        assertNotNull("Expected at least one contact with a single provider phone row", target)
+
+        val providerPhones = providerPhoneNumbers(target!!.androidContactId!!)
+        assertEquals("Synced phone should match the provider", providerPhones.first(), target.phoneNumber)
     }
 
     @Test
@@ -147,16 +253,17 @@ class ContactsSyncStressTest {
 
         val allContacts = contactDao.getAll().first()
 
-        // Find a contact with an email
-        val contactWithEmail = allContacts.firstOrNull { it.email != null }
-        assertNotNull("Expected at least one contact with an email", contactWithEmail)
-
-        // Find the matching system contact
-        val systemContact = generatedData.systemContacts.find {
-            it.displayName == contactWithEmail!!.displayName
+        // Same identity rules as firstSync_phoneNumbersMatch: match by contact
+        // id, and use a contact with a single provider email row.
+        val target = allContacts.firstOrNull { contact ->
+            contact.email != null &&
+                contact.androidContactId != null &&
+                providerEmails(contact.androidContactId!!).size == 1
         }
-        assertNotNull("System contact should exist for: ${contactWithEmail!!.displayName}", systemContact)
-        assertEquals(systemContact!!.email, contactWithEmail.email)
+        assertNotNull("Expected at least one contact with a single provider email row", target)
+
+        val expectedEmails = providerEmails(target!!.androidContactId!!)
+        assertEquals("Synced email should match the provider", expectedEmails.first(), target.email)
     }
 
     @Test
@@ -244,27 +351,32 @@ class ContactsSyncStressTest {
         contactsSyncManager.syncContacts()
         val afterFirst = contactDao.getAll().first()
 
-        // Pick a contact to edit
-        val targetContact: Contact = afterFirst.firstOrNull { it.phoneNumber != null }
-            ?: return@runTest fail("No contact with phone number found")
+        // Pick a contact to edit. The system side must be located by contact id
+        // (Room's androidContactId == ContactsContract.Contacts._ID), NOT by
+        // display name (non-unique) and NOT by the generator's synthetic
+        // SystemContact.androidId (that is not a provider row id).
+        val targetContact: Contact = afterFirst.firstOrNull {
+            it.phoneNumber != null &&
+                it.androidContactId != null &&
+                providerPhoneNumbers(it.androidContactId!!).isNotEmpty()
+        } ?: return@runTest fail("No contact with phone number found")
 
-        val systemContact = generatedData.systemContacts.find {
-            it.displayName == targetContact.displayName
-        } ?: return@runTest fail("System contact not found for: ${targetContact.displayName}")
-
-        // Update the phone number in the system contacts provider
+        // Update the phone number in the system contacts provider. Target the
+        // aggregated contact's Data rows and update every one of them, so the
+        // sync's read-back is deterministic regardless of row order.
         val newPhone = "+15550009999"
-        contentResolver.update(
+        val rowsUpdated = contentResolver.update(
             ContactsContract.Data.CONTENT_URI,
             android.content.ContentValues().apply {
                 put(ContactsContract.CommonDataKinds.Phone.NUMBER, newPhone)
             },
-            "${ContactsContract.Data.RAW_CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+            "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ? AND ${ContactsContract.CommonDataKinds.Phone.MIMETYPE} = ?",
             arrayOf(
-                systemContact.androidId.toString(),
+                targetContact.androidContactId.toString(),
                 ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE
             )
         )
+        assertTrue("Provider should have updated at least one phone row", rowsUpdated > 0)
 
         // Second sync
         val secondResult = contactsSyncManager.syncContacts()

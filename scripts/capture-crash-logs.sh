@@ -10,15 +10,20 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_FILE="$OUTPUT_DIR/logcat-${TIMESTAMP}.txt"
 
 echo "Capturing logcat..."
-# Capture recent logcat, filtering for crashes and our app
-adb logcat -d \
+# Capture recent logcat, filtering for crashes and our app.
+# All adb calls are bounded with `timeout` so log capture can never hang the
+# runner (a wedged adb would otherwise block forever here).
+if ! timeout 30 adb logcat -d \
     -s "AndroidRuntime:E" \
     -s "FATAL:E" \
     "idontremember.personalcrm:*" \
-    > "$LOG_FILE" 2>/dev/null || true
+    > "$LOG_FILE" 2>/dev/null; then
+    echo "⚠ adb logcat timed out or failed — skipping capture"
+    exit 0
+fi
 
 # Also grab a broader dump for context
-adb logcat -d | grep -E "(FATAL|AndroidRuntime|idontremember\.personalcrm|Process.*died|Force finishing)" \
+timeout 30 adb logcat -d 2>/dev/null | grep -E "(FATAL|AndroidRuntime|idontremember\.personalcrm|Process.*died|Force finishing)" \
     >> "$LOG_FILE" 2>/dev/null || true
 
 # Extract just the stack trace section

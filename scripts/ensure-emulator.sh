@@ -2,6 +2,7 @@
 # ensure-emulator.sh — start a headless emulator if one isn't already running.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EMULATOR_NAME="${AVD_NAME:-pixel_6_api_34}"
 BOOT_TIMEOUT=120
 
@@ -37,19 +38,34 @@ if ! emulator -list-avds 2>/dev/null | grep -q "^${EMULATOR_NAME}$"; then
 fi
 
 echo "Starting headless emulator: $EMULATOR_NAME ..."
+
+# Launch fully detached from this script's stdio. A background emulator that
+# inherits stdout/stderr keeps the caller's output pipe open forever, so the
+# calling script/agent tool call appears to hang long after the work finished.
+# Redirect all three stdio fds to a log file / /dev/null and disown the job.
+RESULTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/test-results"
+mkdir -p "$RESULTS_DIR"
+EMU_LOG="$RESULTS_DIR/emulator-$(date +%Y%m%d_%H%M%S).log"
+echo "Emulator log: $EMU_LOG"
 emulator -avd "$EMULATOR_NAME" \
     -no-window \
     -no-audio \
     -gpu swiftshader_indirect \
     -no-boot-anim \
     -no-snapshot \
-    &
+    < /dev/null > "$EMU_LOG" 2>&1 &
 EMU_PID=$!
+disown "$EMU_PID" 2>/dev/null || true
 
 echo "Waiting for emulator to boot (timeout: ${BOOT_TIMEOUT}s)..."
 
-# Wait for the device to appear
-adb wait-for-device
+# Wait for the device to appear (bounded — plain `adb wait-for-device` blocks
+# forever if the emulator dies during startup)
+if ! timeout "$BOOT_TIMEOUT" adb wait-for-device; then
+    echo "ERROR: No device appeared within ${BOOT_TIMEOUT}s (see $EMU_LOG)"
+    kill $EMU_PID 2>/dev/null || true
+    exit 1
+fi
 
 # Poll for boot_completed
 ELAPSED=0
@@ -68,6 +84,6 @@ while [ "$ELAPSED" -lt "$BOOT_TIMEOUT" ]; do
     echo "  ... still booting (${ELAPSED}s)"
 done
 
-echo "ERROR: Emulator failed to boot within ${BOOT_TIMEOUT}s"
+echo "ERROR: Emulator failed to boot within ${BOOT_TIMEOUT}s (see $EMU_LOG)"
 kill $EMU_PID 2>/dev/null || true
 exit 1

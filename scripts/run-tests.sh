@@ -10,7 +10,9 @@ mkdir -p "$RESULTS_DIR"
 
 # Parse arguments
 FILTER="${1:-}"   # Optional: specific test class or method
-TIMEOUT="300"     # Default test timeout in seconds
+TIMEOUT="${TEST_TIMEOUT:-300}"    # Instrumented-test timeout in seconds
+BUILD_TIMEOUT="${BUILD_TIMEOUT:-900}"  # Per-gradle-step timeout in seconds
+START_TIME=$SECONDS
 
 echo "============================================"
 echo "  Personal CRM — Automated Test Runner"
@@ -31,14 +33,22 @@ sleep 3
 echo ""
 echo "▶ Step 2/6: Building debug APK..."
 cd "$PROJECT_DIR"
-./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --quiet 2>&1 | tail -5
-echo "✓ Build complete"
+# Every step is bounded by `timeout` so no single step can hang the runner:
+# a wedged gradle/adb/emulator fails loudly instead of stalling forever.
+if ! timeout "$BUILD_TIMEOUT" ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --quiet 2>&1 | tail -5; then
+    echo "❌ Build failed (or timed out after ${BUILD_TIMEOUT}s)"
+    exit 1
+fi
+echo "✓ Build complete ($((SECONDS - START_TIME))s elapsed)"
 
 # Step 3: Install APKs
 echo ""
 echo "▶ Step 3/6: Installing APKs on emulator..."
-./gradlew installDebug installDebugAndroidTest --no-daemon --quiet 2>&1 | tail -5
-echo "✓ APKs installed"
+if ! timeout "$BUILD_TIMEOUT" ./gradlew installDebug installDebugAndroidTest --no-daemon --quiet 2>&1 | tail -5; then
+    echo "❌ Install failed (or timed out after ${BUILD_TIMEOUT}s)"
+    exit 1
+fi
+echo "✓ APKs installed ($((SECONDS - START_TIME))s elapsed)"
 
 # Start from a clean app state each run. NOTE: the `-e clearPackageData true`
 # instrumentation arg used below is a no-op without the Android Test
@@ -96,7 +106,6 @@ echo "============================================"
 if [ "$TEST_EXIT" -eq 124 ]; then
     echo "⚠ Tests TIMED OUT after ${TIMEOUT}s"
 fi
-
 if [ -n "$ERRORS" ] || [ "$TEST_EXIT" -ne 0 ]; then
     echo "❌ Some tests FAILED"
     echo ""
@@ -106,6 +115,7 @@ if [ -n "$ERRORS" ] || [ "$TEST_EXIT" -ne 0 ]; then
     bash "$SCRIPT_DIR/capture-crash-logs.sh" "$RESULTS_DIR" || true
 
     echo ""
+    echo "Wall time: $((SECONDS - START_TIME))s"
     echo "Test output: $TEST_OUTPUT"
     exit 1
 else
@@ -117,6 +127,7 @@ else
     bash "$SCRIPT_DIR/capture-crash-logs.sh" "$RESULTS_DIR" || true
 
     echo ""
+    echo "Wall time: $((SECONDS - START_TIME))s"
     echo "Test output: $TEST_OUTPUT"
     exit 0
 fi
