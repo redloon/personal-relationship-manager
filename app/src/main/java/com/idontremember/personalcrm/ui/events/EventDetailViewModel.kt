@@ -37,6 +37,11 @@ class EventDetailViewModel @Inject constructor(
     private val _event = MutableStateFlow<Event?>(null)
     val event: StateFlow<Event?> = _event
 
+    /** P2: false until the load completes — drives the shared `LoadingState`;
+     *  a null event after this is "not found" and renders the shared `ErrorState`. */
+    private val _eventLoaded = MutableStateFlow(false)
+    val eventLoaded: StateFlow<Boolean> = _eventLoaded
+
     private val _contacts = MutableStateFlow<List<Contact>>(emptyList())
     val contacts: StateFlow<List<Contact>> = _contacts
 
@@ -62,6 +67,7 @@ class EventDetailViewModel @Inject constructor(
         viewModelScope.launch {
             val e = eventRepository.getEventById(eventId)
             _event.value = e
+            _eventLoaded.value = true
             e?.let {
                 _editNote.value = it.note
                 val contactIds = eventDao.getContactIdsForEvent(it.id)
@@ -107,5 +113,10 @@ class EventDetailViewModel @Inject constructor(
 
     fun cancelEditing() {
         _isEditing.value = false
+    }
+
+    /** P2: retry hook for the shared `ErrorState` after a failed/missing load. */
+    fun retryLoad() {
+        loadEvent()
     }
 }

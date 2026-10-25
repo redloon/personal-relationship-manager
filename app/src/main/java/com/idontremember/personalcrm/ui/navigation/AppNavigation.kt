@@ -16,12 +16,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import com.idontremember.personalcrm.R
 import com.idontremember.personalcrm.ui.addevent.AddEventSheet
 import com.idontremember.personalcrm.ui.contacts.ContactDetailScreen
 import com.idontremember.personalcrm.ui.contacts.ContactsListScreen
@@ -81,8 +83,9 @@ fun AppNavigation() {
                             backStack.clear()
                             backStack.add(ContactsRoute)
                         },
-                        icon = { Icon(Icons.Default.Person, contentDescription = "Contacts") },
-                        label = { Text("Contacts") },
+                        // a11y: the label already names the tab — icon is decorative.
+                        icon = { Icon(Icons.Default.Person, contentDescription = null) },
+                        label = { Text(stringResource(R.string.title_contacts)) },
                         modifier = Modifier.testTag("nav_tab_contacts")
                     )
                     NavigationBarItem(
@@ -92,8 +95,9 @@ fun AppNavigation() {
                             backStack.clear()
                             backStack.add(EventsRoute)
                         },
-                        icon = { Icon(Icons.Default.DateRange, contentDescription = "Events") },
-                        label = { Text("Events") },
+                        // a11y: the label already names the tab — icon is decorative.
+                        icon = { Icon(Icons.Default.DateRange, contentDescription = null) },
+                        label = { Text(stringResource(R.string.title_events)) },
                         modifier = Modifier.testTag("nav_tab_events")
                     )
                 }
@@ -159,7 +163,7 @@ fun AppNavigation() {
                     )
                 }
 
-                else -> NavEntry(route) { Text("Unknown route") }
+                else -> NavEntry(route) { Text(stringResource(R.string.unknown_route)) }
             }
         )
     }

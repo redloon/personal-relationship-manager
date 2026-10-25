@@ -37,7 +37,7 @@ app/src/main/java/com/idontremember/personalcrm/
 │   ├── contacts/                         # ContactsListScreen, ContactDetailScreen
 │   ├── events/                           # EventsListScreen, EventDetailScreen
 │   ├── addevent/                         # AddEventSheet (modal bottom sheet)
-│   ├── components/                       # AutocompleteTextField, chips, date formatting
+│   ├── components/                       # Shared EmptyState/LoadingState/ErrorState, autocomplete, chips, date formatting
 │   ├── settings/                         # SettingsScreen (grouped sections), SettingsViewModel
 │   └── theme/                            # Material3 theme (wired to SettingsRepository)
 └── tile/                                 # Quick-add event tile service
@@ -48,6 +48,7 @@ app/src/main/java/com/idontremember/personalcrm/
 - **Navigation3**: Uses `NavDisplay` with `SaveableStateHolderNavEntryDecorator` + `ViewModelStoreNavEntryDecorator`. Both decorators are required — omitting SaveableStateHolder causes a runtime crash.
 - **Hilt DI**: Test modules (`TestDatabaseModule`, `TestRepositoryModule`) replace production modules with in-memory Room DB.
 - **Preferences**: one process-wide Preferences DataStore (`di/SettingsModule.kt`, created via the `preferencesDataStore` delegate — required because Hilt rebuilds its component per instrumented test and DataStore refuses two live instances over one file). `data/settings/SettingsRepository` exposes typed Flows + suspend setters; keys are named constants in `SettingsKeys`. `MainActivity` collects theme prefs into `PersonalCRMTheme` — theme changes apply without restart.
+- **Strings & a11y (P2)**: every user-visible string lives in `res/values/strings.xml` (including icon `contentDescription`s, SimpleDateFormat patterns like `date_pattern_event`, and relative-date copy resolved via `RelativeDateStrings` in `ui/components/DateFormatting.kt`). `scripts/pre-launch-check.sh` fails on `Text("` or `contentDescription = "` literals under `ui/` — always extract there. All empty/loading/error states render through the shared `EmptyState` / `LoadingState` / `ErrorState` composables in `ui/components/` (each takes a snake_case `testTag`).
 - **Contacts Sync**: `ContactsSyncManager` reads from Android's `ContactsContract` and upserts into Room. Local-only fields (facts, events) are preserved across syncs.
 
 ## Testing
@@ -62,6 +63,7 @@ app/src/androidTest/
 │   ├── EventsListScreenTest.kt   # Events screen via bottom nav (search, FAB, empty state)
 │   ├── EventsSearchTest.kt       # Events search: nav via bottom bar, filter by note
 │   ├── SettingsScreenTest.kt     # Settings: gear entry (both lists), theme flip + persistence
+│   ├── AccessibilitySmokeTest.kt # TalkBack order (semantics traversal), shared empty states, max font scale + 48dp targets
 │   ├── AddEventSheetTest.kt      # Add event sheet: open via FAB, save event end-to-end
 │   ├── NavigationTest.kt         # Start route + bottom-nav tab switching
 │   └── TestNavHelpers.kt         # Shared bottom-nav navigation helpers for UI tests
@@ -81,6 +83,11 @@ All key composables have `Modifier.testTag(...)`:
 - `events_search_field`, `events_empty_state`
 - `bottom_navigation`, `nav_tab_contacts`, `nav_tab_events`
 - `settings_button`, `settings_screen`, `settings_back_button`
+- `contact_list_item`, `contacts_empty_state`, `contacts_loading_state`, `contacts_error_state`, `contacts_error_retry_button`
+- `events_loading_state`, `events_error_state`, `events_error_retry_button`
+- `facts_empty_state`, `contact_events_empty_state`, `contact_detail_loading_state`, `contact_detail_error_state`
+- `event_links_empty_state`, `event_detail_loading_state`, `event_detail_error_state`, `event_detail_error_retry_button`
+- shared state composables take a `testTag` param (defaults: `empty_state`, `loading_state`, `error_state`, `error_retry_button`)
 - `settings_section_appearance`, `settings_section_date_time`
 - `theme_mode_selector`, `theme_mode_system`, `theme_mode_light`, `theme_mode_dark`
 - `dynamic_color_toggle`

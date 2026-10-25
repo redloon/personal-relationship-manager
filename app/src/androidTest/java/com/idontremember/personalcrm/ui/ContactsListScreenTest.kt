@@ -59,15 +59,10 @@ class ContactsListScreenTest {
 
     @Test
     fun contactsScreen_showsEmptyStateWhenNoContacts() {
-        // When there are no contacts, we should see the empty state message
-        composeTestRule.waitUntil(timeoutMillis = 5_000) {
-            try {
-                composeTestRule.onNodeWithText("No contacts yet.", substring = true).assertExists()
-                true
-            } catch (e: AssertionError) {
-                false
-            }
-        }
+        // P2: the shared EmptyState composable renders this — tag + localized text.
+        composeTestRule.waitUntilTagDisplayed("contacts_empty_state")
+        composeTestRule.onNodeWithTag("contacts_empty_state").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No contacts yet.", substring = true).assertExists()
     }
 
     @Test

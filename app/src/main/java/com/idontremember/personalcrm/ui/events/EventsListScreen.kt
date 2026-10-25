@@ -2,7 +2,6 @@ package com.idontremember.personalcrm.ui.events
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -11,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -30,17 +30,21 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.idontremember.personalcrm.R
 import com.idontremember.personalcrm.data.settings.DateDisplay
 import com.idontremember.personalcrm.ui.components.ContactChip
+import com.idontremember.personalcrm.ui.components.EmptyState
+import com.idontremember.personalcrm.ui.components.ErrorState
+import com.idontremember.personalcrm.ui.components.LoadingState
 import com.idontremember.personalcrm.ui.components.TagChip
-import com.idontremember.personalcrm.ui.components.formatEventDate
+import com.idontremember.personalcrm.ui.components.formatEventDateText
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -54,18 +58,22 @@ fun EventsListScreen(
     val events by viewModel.events.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val dateDisplay by viewModel.dateDisplay.collectAsState()
+    val loadError by viewModel.loadError.collectAsState()
 
     Scaffold(
         modifier = modifier.testTag("events_list_screen"),
         topBar = {
             TopAppBar(
-                title = { Text("Events") },
+                title = { Text(stringResource(R.string.title_events)) },
                 actions = {
                     IconButton(
                         onClick = onSettingsClick,
-                        modifier = Modifier.testTag("settings_button")
+                        modifier = Modifier
+                            // a11y: 48dp touch target (M3 IconButton defaults to 40dp).
+                            .size(48.dp)
+                            .testTag("settings_button")
                     ) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.cd_settings))
                     }
                 }
             )
@@ -75,7 +83,7 @@ fun EventsListScreen(
                 onClick = onAddEventClick,
                 modifier = Modifier.testTag("add_event_fab")
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add event")
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.cd_add_event))
             }
         }
     ) { paddingValues ->
@@ -92,33 +100,41 @@ fun EventsListScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
                     .testTag("events_search_field"),
-                placeholder = { Text("Search events...") },
+                placeholder = { Text(stringResource(R.string.search_events_hint)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true
             )
 
-            if (events.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .testTag("events_empty_state"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (searchQuery.isBlank()) "No events yet.\nTap + to record an interaction."
-                        else "No events match your search.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                LazyColumn(
+            val eventList = events
+            val error = loadError
+            when {
+                error != null -> ErrorState(
+                    message = error,
+                    onRetry = { viewModel.retryLoad() },
+                    modifier = Modifier.fillMaxSize(),
+                    testTag = "events_error_state",
+                    retryTestTag = "events_error_retry_button"
+                )
+
+                eventList == null -> LoadingState(
+                    modifier = Modifier.fillMaxSize(),
+                    testTag = "events_loading_state"
+                )
+
+                eventList.isEmpty() -> EmptyState(
+                    message = if (searchQuery.isBlank()) stringResource(R.string.empty_events)
+                    else stringResource(R.string.empty_events_search),
+                    modifier = Modifier.fillMaxSize(),
+                    testTag = "events_empty_state"
+                )
+
+                else -> LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
                         .testTag("events_list"),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(events, key = { it.event.id }) { displayItem ->
+                    items(eventList, key = { it.event.id }) { displayItem ->
                         EventListItem(
                             displayItem = displayItem,
                             dateDisplay = dateDisplay,
@@ -174,7 +190,7 @@ private fun EventListItem(
             // Date
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = formatEventDate(displayItem.event.eventDate, dateDisplay),
+                text = formatEventDateText(displayItem.event.eventDate, dateDisplay),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

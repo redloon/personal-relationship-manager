@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -42,14 +43,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import coil3.compose.AsyncImage
+import com.idontremember.personalcrm.R
 import com.idontremember.personalcrm.data.db.entity.ContactFact
 import com.idontremember.personalcrm.data.db.entity.Event
 import com.idontremember.personalcrm.data.settings.DateDisplay
-import com.idontremember.personalcrm.ui.components.formatEventDate
+import com.idontremember.personalcrm.ui.components.EmptyState
+import com.idontremember.personalcrm.ui.components.ErrorState
+import com.idontremember.personalcrm.ui.components.LoadingState
+import com.idontremember.personalcrm.ui.components.formatEventDateText
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,6 +71,7 @@ fun ContactDetailScreen(
     }
 
     val contact by viewModel.contact.collectAsState()
+    val contactLoaded by viewModel.contactLoaded.collectAsState()
     val facts by viewModel.facts.collectAsState()
     val events by viewModel.events.collectAsState()
     val dateDisplay by viewModel.dateDisplay.collectAsState()
@@ -72,16 +80,32 @@ fun ContactDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(contact?.displayName ?: "Contact") },
+                title = { Text(contact?.displayName ?: stringResource(R.string.title_contact)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 }
             )
         }
     ) { paddingValues ->
-        LazyColumn(
+        val currentContact = contact
+        if (!contactLoaded) {
+            LoadingState(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                testTag = "contact_detail_loading_state"
+            )
+        } else if (currentContact == null) {
+            ErrorState(
+                message = stringResource(R.string.error_contact_not_found),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                testTag = "contact_detail_error_state"
+            )
+        } else LazyColumn(
             modifier = Modifier
                 .testTag("contact_detail_screen")
                 .fillMaxSize()
@@ -91,20 +115,22 @@ fun ContactDetailScreen(
         ) {
             // Contact header
             item {
-                contact?.let { c ->
-                    Card(
+                Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant
                         )
                     ) {
                         Row(
-                            modifier = Modifier.padding(16.dp),
+                            modifier = Modifier
+                                .padding(16.dp)
+                                // a11y: name + phone + email read as one ordered utterance.
+                                .semantics(mergeDescendants = true) {},
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (c.photoUri != null) {
+                            if (currentContact.photoUri != null) {
                                 AsyncImage(
-                                    model = c.photoUri,
+                                    model = currentContact.photoUri,
                                     contentDescription = null,
                                     modifier = Modifier
                                         .size(56.dp)
@@ -122,18 +148,18 @@ fun ContactDetailScreen(
                             Spacer(modifier = Modifier.width(16.dp))
                             Column {
                                 Text(
-                                    text = c.displayName,
+                                    text = currentContact.displayName,
                                     style = MaterialTheme.typography.headlineSmall,
                                     fontWeight = FontWeight.Bold
                                 )
-                                c.phoneNumber?.let {
+                                currentContact.phoneNumber?.let {
                                     Text(
                                         text = it,
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                                c.email?.let {
+                                currentContact.email?.let {
                                     Text(
                                         text = it,
                                         style = MaterialTheme.typography.bodyMedium,
@@ -143,7 +169,6 @@ fun ContactDetailScreen(
                             }
                         }
                     }
-                }
             }
 
             // Facts section
@@ -154,30 +179,33 @@ fun ContactDetailScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Facts",
+                        text = stringResource(R.string.section_facts),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     IconButton(
                         onClick = { viewModel.onAddFactClick() },
-                        modifier = Modifier.testTag("fact_add_button")
+                        modifier = Modifier
+                            // a11y: 48dp touch target (M3 IconButton defaults to 40dp).
+                            .size(48.dp)
+                            .testTag("fact_add_button")
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add fact")
+                        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.cd_add_fact))
                     }
                 }
             }
 
             if (facts.isEmpty()) {
                 item {
-                    Text(
-                        text = "No facts yet. Tap + to add details about this person.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    EmptyState(
+                        message = stringResource(R.string.empty_facts),
+                        modifier = Modifier.fillMaxWidth(),
+                        testTag = "facts_empty_state"
                     )
                 }
             }
 
-            items(facts, key = { it.id }) { fact ->
+            items(facts, key = { "fact_${it.id}" }) { fact ->
                 FactItem(
                     fact = fact,
                     onDelete = { viewModel.deleteFact(fact) }
@@ -188,7 +216,7 @@ fun ContactDetailScreen(
             item {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Events",
+                    text = stringResource(R.string.section_events),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -196,15 +224,15 @@ fun ContactDetailScreen(
 
             if (events.isEmpty()) {
                 item {
-                    Text(
-                        text = "No events with this person yet.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    EmptyState(
+                        message = stringResource(R.string.empty_contact_events),
+                        modifier = Modifier.fillMaxWidth(),
+                        testTag = "contact_events_empty_state"
                     )
                 }
             }
 
-            items(events, key = { it.id }) { event ->
+            items(events, key = { "event_${it.id}" }) { event ->
                 EventItem(
                     event = event,
                     dateDisplay = dateDisplay,
@@ -246,10 +274,10 @@ private fun FactItem(
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.weight(1f)
             )
-            IconButton(onClick = onDelete) {
+            IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
                 Icon(
                     Icons.Default.Delete,
-                    contentDescription = "Delete fact",
+                    contentDescription = stringResource(R.string.cd_delete_fact),
                     tint = MaterialTheme.colorScheme.error
                 )
             }
@@ -277,7 +305,7 @@ private fun EventItem(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = formatEventDate(event.eventDate, dateDisplay),
+                text = formatEventDateText(event.eventDate, dateDisplay),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -294,12 +322,12 @@ private fun AddFactDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Fact") },
+        title = { Text(stringResource(R.string.dialog_add_fact_title)) },
         text = {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
-                placeholder = { Text("e.g. gluten-free, birder, loves hiking") },
+                placeholder = { Text(stringResource(R.string.fact_placeholder)) },
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -309,14 +337,18 @@ private fun AddFactDialog(
         confirmButton = {
             TextButton(
                 onClick = { onConfirm(text) },
-                enabled = text.isNotBlank()
+                enabled = text.isNotBlank(),
+                modifier = Modifier.heightIn(min = 48.dp)
             ) {
-                Text("Add")
+                Text(stringResource(R.string.action_add))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) {
+                Text(stringResource(R.string.action_cancel))
             }
         }
     )

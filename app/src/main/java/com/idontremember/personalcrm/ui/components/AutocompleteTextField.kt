@@ -21,10 +21,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
+import com.idontremember.personalcrm.R
 
 /**
  * A text field that detects @ and # triggers to show autocomplete dropdowns.
@@ -36,7 +38,7 @@ import androidx.compose.ui.window.PopupProperties
  * @param onContactSelected Called when a contact is selected from @ dropdown
  * @param onTagSelected Called when a tag is selected from # dropdown
  * @param modifier Modifier
- * @param placeholder Placeholder text
+ * @param placeholder Placeholder text; defaults to the localized note prompt.
  */
 @Composable
 fun AutocompleteTextField(
@@ -47,8 +49,9 @@ fun AutocompleteTextField(
     onContactSelected: (AutocompleteContact) -> Unit,
     onTagSelected: (AutocompleteTag) -> Unit,
     modifier: Modifier = Modifier,
-    placeholder: String = "What happened? Use @ to mention people, # for tags"
+    placeholder: String? = null
 ) {
+    val resolvedPlaceholder = placeholder ?: stringResource(R.string.note_placeholder)
     var showContactDropdown by remember { mutableStateOf(false) }
     var showTagDropdown by remember { mutableStateOf(false) }
     var triggerQuery by remember { mutableStateOf("") }
@@ -166,7 +169,10 @@ fun AutocompleteTextField(
                             DropdownMenuItem(
                                 text = {
                                     Text(
-                                        text = "+ Create \"${triggerQuery.trim()}\"",
+                                        text = stringResource(
+                                            R.string.create_tag_option,
+                                            triggerQuery.trim()
+                                        ),
                                         style = MaterialTheme.typography.bodyLarge,
                                         color = MaterialTheme.colorScheme.primary
                                     )
@@ -203,7 +209,7 @@ fun AutocompleteTextField(
         modifier = modifier
             .fillMaxWidth()
             .testTag("note_text_field"),
-        placeholder = { Text(placeholder) },
+        placeholder = { Text(resolvedPlaceholder) },
         minLines = 3,
         maxLines = 8
     )

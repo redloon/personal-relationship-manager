@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -33,9 +34,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.idontremember.personalcrm.R
 import com.idontremember.personalcrm.data.settings.DateDisplay
 import com.idontremember.personalcrm.data.settings.DefaultEventTime
 import com.idontremember.personalcrm.data.settings.ThemeMode
@@ -60,13 +63,16 @@ fun SettingsScreen(
         modifier = Modifier.testTag("settings_screen"),
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text(stringResource(R.string.title_settings)) },
                 navigationIcon = {
                     IconButton(
                         onClick = onBack,
-                        modifier = Modifier.testTag("settings_back_button")
+                        modifier = Modifier
+                            // a11y: 48dp touch target (M3 IconButton defaults to 40dp).
+                            .size(48.dp)
+                            .testTag("settings_back_button")
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 }
             )
@@ -78,25 +84,28 @@ fun SettingsScreen(
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
         ) {
-            SettingsSection(title = "Appearance", testTag = "settings_section_appearance") {
+            SettingsSection(
+                title = stringResource(R.string.settings_section_appearance),
+                testTag = "settings_section_appearance"
+            ) {
                 SettingsChoiceGroup(
-                    title = "Theme",
+                    title = stringResource(R.string.settings_pref_theme),
                     groupTag = "theme_mode_selector",
                     options = listOf(
                         SettingsChoiceOption(
-                            label = "System",
+                            label = stringResource(R.string.settings_theme_system),
                             tag = "theme_mode_system",
                             selected = themeMode == ThemeMode.SYSTEM,
                             onSelect = { viewModel.setThemeMode(ThemeMode.SYSTEM) }
                         ),
                         SettingsChoiceOption(
-                            label = "Light",
+                            label = stringResource(R.string.settings_theme_light),
                             tag = "theme_mode_light",
                             selected = themeMode == ThemeMode.LIGHT,
                             onSelect = { viewModel.setThemeMode(ThemeMode.LIGHT) }
                         ),
                         SettingsChoiceOption(
-                            label = "Dark",
+                            label = stringResource(R.string.settings_theme_dark),
                             tag = "theme_mode_dark",
                             selected = themeMode == ThemeMode.DARK,
                             onSelect = { viewModel.setThemeMode(ThemeMode.DARK) }
@@ -104,26 +113,29 @@ fun SettingsScreen(
                     )
                 )
                 SettingsSwitchRow(
-                    title = "Dynamic color",
+                    title = stringResource(R.string.settings_pref_dynamic_color),
                     checked = dynamicColor,
                     onCheckedChange = viewModel::setDynamicColor,
                     testTag = "dynamic_color_toggle"
                 )
             }
 
-            SettingsSection(title = "Date & time", testTag = "settings_section_date_time") {
+            SettingsSection(
+                title = stringResource(R.string.settings_section_date_time),
+                testTag = "settings_section_date_time"
+            ) {
                 SettingsChoiceGroup(
-                    title = "Date display",
+                    title = stringResource(R.string.settings_pref_date_display),
                     groupTag = "date_display_selector",
                     options = listOf(
                         SettingsChoiceOption(
-                            label = "Absolute",
+                            label = stringResource(R.string.settings_date_display_absolute),
                             tag = "date_display_absolute",
                             selected = dateDisplay == DateDisplay.ABSOLUTE,
                             onSelect = { viewModel.setDateDisplay(DateDisplay.ABSOLUTE) }
                         ),
                         SettingsChoiceOption(
-                            label = "Relative",
+                            label = stringResource(R.string.settings_date_display_relative),
                             tag = "date_display_relative",
                             selected = dateDisplay == DateDisplay.RELATIVE,
                             onSelect = { viewModel.setDateDisplay(DateDisplay.RELATIVE) }
@@ -131,17 +143,17 @@ fun SettingsScreen(
                     )
                 )
                 SettingsChoiceGroup(
-                    title = "Default event time",
+                    title = stringResource(R.string.settings_pref_default_event_time),
                     groupTag = "default_event_time_selector",
                     options = listOf(
                         SettingsChoiceOption(
-                            label = "Now",
+                            label = stringResource(R.string.settings_default_event_time_now),
                             tag = "default_event_time_now",
                             selected = defaultEventTime == DefaultEventTime.NOW,
                             onSelect = { viewModel.setDefaultEventTime(DefaultEventTime.NOW) }
                         ),
                         SettingsChoiceOption(
-                            label = "Last used",
+                            label = stringResource(R.string.settings_default_event_time_last_used),
                             tag = "default_event_time_last_used",
                             selected = defaultEventTime == DefaultEventTime.LAST_USED,
                             onSelect = { viewModel.setDefaultEventTime(DefaultEventTime.LAST_USED) }

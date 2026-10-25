@@ -32,6 +32,11 @@ class ContactDetailViewModel @Inject constructor(
     private val _contact = MutableStateFlow<Contact?>(null)
     val contact: StateFlow<Contact?> = _contact
 
+    /** P2: false until the first query emission — drives the shared `LoadingState`;
+     *  a null contact after this is "not found" and renders the shared `ErrorState`. */
+    private val _contactLoaded = MutableStateFlow(false)
+    val contactLoaded: StateFlow<Boolean> = _contactLoaded
+
     private val _facts = MutableStateFlow<List<ContactFact>>(emptyList())
     val facts: StateFlow<List<ContactFact>> = _facts
 
@@ -51,6 +56,7 @@ class ContactDetailViewModel @Inject constructor(
         viewModelScope.launch {
             contactRepository.getContactByIdFlow(contactId).collect {
                 _contact.value = it
+                _contactLoaded.value = true
             }
         }
         viewModelScope.launch {

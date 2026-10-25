@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -38,9 +40,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.idontremember.personalcrm.R
 import com.idontremember.personalcrm.ui.components.AutocompleteTextField
 import com.idontremember.personalcrm.ui.components.ContactChip
 import com.idontremember.personalcrm.ui.components.TagChip
@@ -96,15 +100,15 @@ fun AddEventSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "New Event",
+                    text = stringResource(R.string.title_add_event),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold
                 )
                 IconButton(onClick = {
                     viewModel.reset()
                     onDismiss()
-                }) {
-                    Icon(Icons.Default.Close, contentDescription = "Close")
+                }, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_close))
                 }
             }
 
@@ -145,21 +149,29 @@ fun AddEventSheet(
             ) {
                 OutlinedButton(
                     onClick = { showDatePicker = true },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
                 ) {
                     Text(
-                        text = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
-                            .format(Date(eventDate)),
+                        text = SimpleDateFormat(
+                            stringResource(R.string.date_pattern_short),
+                            Locale.getDefault()
+                        ).format(Date(eventDate)),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
                 OutlinedButton(
                     onClick = { showTimePicker = true },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
                 ) {
                     Text(
-                        text = SimpleDateFormat("h:mm a", Locale.getDefault())
-                            .format(Date(eventDate)),
+                        text = SimpleDateFormat(
+                            stringResource(R.string.time_pattern),
+                            Locale.getDefault()
+                        ).format(Date(eventDate)),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -172,10 +184,11 @@ fun AddEventSheet(
                 onClick = { viewModel.save() },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = 48.dp)
                     .testTag("save_event_button"),
                 enabled = noteText.text.isNotBlank()
             ) {
-                Text("Save Event", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.action_save_event), style = MaterialTheme.typography.labelLarge)
             }
         }
     }
@@ -191,13 +204,16 @@ fun AddEventSheet(
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { viewModel.onDateChanged(it) }
                     showDatePicker = false
-                }) {
-                    Text("OK")
+                }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(stringResource(R.string.action_ok))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
-                    Text("Cancel")
+                TextButton(
+                    onClick = { showDatePicker = false },
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         ) {
@@ -214,7 +230,7 @@ fun AddEventSheet(
         )
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showTimePicker = false },
-            title = { Text("Select Time") },
+            title = { Text(stringResource(R.string.select_time_title)) },
             text = {
                 TimePicker(state = timePickerState)
             },
@@ -227,13 +243,16 @@ fun AddEventSheet(
                     }
                     viewModel.onDateChanged(cal.timeInMillis)
                     showTimePicker = false
-                }) {
-                    Text("OK")
+                }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(stringResource(R.string.action_ok))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showTimePicker = false }) {
-                    Text("Cancel")
+                TextButton(
+                    onClick = { showTimePicker = false },
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )

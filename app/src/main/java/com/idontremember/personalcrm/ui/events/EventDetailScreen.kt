@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -38,13 +40,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.idontremember.personalcrm.R
 import com.idontremember.personalcrm.data.settings.DateDisplay
 import com.idontremember.personalcrm.ui.components.ContactChip
+import com.idontremember.personalcrm.ui.components.EmptyState
+import com.idontremember.personalcrm.ui.components.ErrorState
+import com.idontremember.personalcrm.ui.components.LoadingState
 import com.idontremember.personalcrm.ui.components.TagChip
-import com.idontremember.personalcrm.ui.components.formatEventDate
+import com.idontremember.personalcrm.ui.components.formatEventDateText
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -58,6 +65,7 @@ fun EventDetailScreen(
     }
 
     val event by viewModel.event.collectAsState()
+    val eventLoaded by viewModel.eventLoaded.collectAsState()
     val dateDisplay by viewModel.dateDisplay.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
     val tags by viewModel.tags.collectAsState()
@@ -73,21 +81,27 @@ fun EventDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Event") },
+                title = { Text(stringResource(R.string.title_event)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
                 actions = {
                     if (!isEditing) {
-                        IconButton(onClick = { viewModel.startEditing() }) {
-                            Icon(Icons.Default.Edit, contentDescription = "Edit")
+                        IconButton(
+                            onClick = { viewModel.startEditing() },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.cd_edit_event))
                         }
-                        IconButton(onClick = { showDeleteDialog = true }) {
+                        IconButton(
+                            onClick = { showDeleteDialog = true },
+                            modifier = Modifier.size(48.dp)
+                        ) {
                             Icon(
                                 Icons.Default.Delete,
-                                contentDescription = "Delete",
+                                contentDescription = stringResource(R.string.cd_delete_event),
                                 tint = MaterialTheme.colorScheme.error
                             )
                         }
@@ -96,8 +110,26 @@ fun EventDetailScreen(
             )
         }
     ) { paddingValues ->
-        event?.let { e ->
-            Column(
+        val currentEvent = event
+        when {
+            !eventLoaded -> LoadingState(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                testTag = "event_detail_loading_state"
+            )
+
+            currentEvent == null -> ErrorState(
+                message = stringResource(R.string.error_event_not_found),
+                onRetry = { viewModel.retryLoad() },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                testTag = "event_detail_error_state",
+                retryTestTag = "event_detail_error_retry_button"
+            )
+
+            else -> Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
@@ -113,15 +145,18 @@ fun EventDetailScreen(
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3,
                         maxLines = 10,
-                        label = { Text("Note") }
+                        label = { Text(stringResource(R.string.field_note)) }
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End
                     ) {
-                        TextButton(onClick = { viewModel.cancelEditing() }) {
-                            Text("Cancel")
+                        TextButton(
+                            onClick = { viewModel.cancelEditing() },
+                            modifier = Modifier.heightIn(min = 48.dp)
+                        ) {
+                            Text(stringResource(R.string.action_cancel))
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         TextButton(onClick = {
@@ -131,8 +166,8 @@ fun EventDetailScreen(
                                 contacts.map { it.id },
                                 tags.map { it.name }
                             )
-                        }) {
-                            Text("Save")
+                        }, modifier = Modifier.heightIn(min = 48.dp)) {
+                            Text(stringResource(R.string.action_save))
                         }
                     }
                 } else {
@@ -144,7 +179,7 @@ fun EventDetailScreen(
                         )
                     ) {
                         Text(
-                            text = e.note,
+                            text = currentEvent.note,
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.padding(16.dp)
                         )
@@ -153,21 +188,31 @@ fun EventDetailScreen(
                     // Date
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = formatEventDate(
-                            e.eventDate,
+                        text = formatEventDateText(
+                            currentEvent.eventDate,
                             dateDisplay,
-                            absolutePattern = "MMMM d, yyyy 'at' h:mm a"
+                            absolutePatternRes = R.string.date_pattern_event_full
                         ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Medium
                     )
 
+                    // Empty state for linked people/tags (P2 shared EmptyState)
+                    if (contacts.isEmpty() && tags.isEmpty()) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        EmptyState(
+                            message = stringResource(R.string.empty_event_links),
+                            modifier = Modifier.fillMaxWidth(),
+                            testTag = "event_links_empty_state"
+                        )
+                    }
+
                     // Contacts
                     if (contacts.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "People",
+                            text = stringResource(R.string.section_people),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
@@ -186,7 +231,7 @@ fun EventDetailScreen(
                     if (tags.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "Tags",
+                            text = stringResource(R.string.section_tags),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
@@ -209,19 +254,22 @@ fun EventDetailScreen(
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete Event") },
-            text = { Text("Are you sure you want to delete this event?") },
+            title = { Text(stringResource(R.string.dialog_delete_event_title)) },
+            text = { Text(stringResource(R.string.dialog_delete_event_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteDialog = false
                     viewModel.deleteEvent()
-                }) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
-                    Text("Cancel")
+                TextButton(
+                    onClick = { showDeleteDialog = false },
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )

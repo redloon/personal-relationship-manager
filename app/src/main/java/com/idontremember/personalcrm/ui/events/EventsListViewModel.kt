@@ -16,8 +16,11 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -45,29 +48,47 @@ class EventsListViewModel @Inject constructor(
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
 
-    val events: StateFlow<List<EventDisplayItem>> = _searchQuery
+    /** P2: query failure surface for the shared `ErrorState` composable. */
+    private val _loadError = MutableStateFlow<String?>(null)
+    val loadError: StateFlow<String?> = _loadError
+
+    /** Bumped by [retryLoad] to re-subscribe the query after a failure. */
+    private val refreshTrigger = MutableStateFlow(0)
+
+    /** P2: null until the first query emission — drives the shared `LoadingState`. */
+    val events: StateFlow<List<EventDisplayItem>?> = combine(refreshTrigger, _searchQuery) { _, query -> query }
         .flatMapLatest { query ->
-            if (query.isBlank()) {
+            val source = if (query.isBlank()) {
                 eventRepository.getAllEvents()
             } else {
                 eventRepository.searchEvents(query)
             }
-        }
-        .map { eventList ->
-            eventList.map { event ->
-                val contactIds = eventDao.getContactIdsForEvent(event.id)
-                val tagIds = eventDao.getTagIdsForEvent(event.id)
-                val contacts = contactIds.mapNotNull { contactDao.getById(it) }
-                val tags = tagIds.mapNotNull { tagId ->
-                    tagDao.getAllOnce().find { it.id == tagId }
+            source.map { eventList ->
+                eventList.map { event ->
+                    val contactIds = eventDao.getContactIdsForEvent(event.id)
+                    val tagIds = eventDao.getTagIdsForEvent(event.id)
+                    val contacts = contactIds.mapNotNull { contactDao.getById(it) }
+                    val tags = tagIds.mapNotNull { tagId ->
+                        tagDao.getAllOnce().find { it.id == tagId }
+                    }
+                    EventDisplayItem(event = event, contacts = contacts, tags = tags)
                 }
-                EventDisplayItem(event = event, contacts = contacts, tags = tags)
             }
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .onEach { _loadError.value = null }
+        .catch { e ->
+            _loadError.value = e.message
+            emit(emptyList())
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     fun onSearchQueryChanged(query: String) {
         _searchQuery.value = query
+    }
+
+    fun retryLoad() {
+        _loadError.value = null
+        refreshTrigger.value = refreshTrigger.value + 1
     }
 
     fun deleteEvent(event: Event) {

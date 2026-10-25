@@ -61,6 +61,29 @@ if [ -f "$MANIFEST" ]; then
     fi
 fi
 
+# P2: hardcoded UI strings — all user-visible copy lives in res/values/strings.xml.
+# Fail on Text("...") literals and hardcoded icon contentDescription literals in ui/.
+UI_DIR="app/src/main/java/com/idontremember/personalcrm/ui"
+if [ -d "$UI_DIR" ]; then
+    HARDCODED_TEXT=$(grep -rn --include='*.kt' 'Text("' "$UI_DIR" || true)
+    if [ -n "$HARDCODED_TEXT" ]; then
+        echo "  ❌ Hardcoded Text(\"...\") literals in ui/ — move them to res/values/strings.xml:"
+        echo "$HARDCODED_TEXT" | sed 's/^/     /'
+        ERRORS=$((ERRORS + 1))
+    else
+        echo "  ✅ No hardcoded Text() literals in ui/"
+    fi
+
+    HARDCODED_CD=$(grep -rn --include='*.kt' 'contentDescription = "' "$UI_DIR" || true)
+    if [ -n "$HARDCODED_CD" ]; then
+        echo "  ❌ Hardcoded contentDescription literals in ui/ — use stringResource(...) or null:"
+        echo "$HARDCODED_CD" | sed 's/^/     /'
+        ERRORS=$((ERRORS + 1))
+    else
+        echo "  ✅ No hardcoded contentDescription literals in ui/"
+    fi
+fi
+
 echo ""
 if [ "$ERRORS" -gt 0 ]; then
     echo "❌ $ERRORS issue(s) found. Fix before deploying."
