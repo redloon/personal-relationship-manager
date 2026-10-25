@@ -9,6 +9,8 @@ import com.idontremember.personalcrm.data.db.entity.Contact
 import com.idontremember.personalcrm.data.db.entity.Event
 import com.idontremember.personalcrm.data.db.entity.Tag
 import com.idontremember.personalcrm.data.repository.EventRepository
+import com.idontremember.personalcrm.data.settings.DateDisplay
+import com.idontremember.personalcrm.data.settings.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,8 +34,13 @@ class EventsListViewModel @Inject constructor(
     private val eventRepository: EventRepository,
     private val eventDao: EventDao,
     private val contactDao: ContactDao,
-    private val tagDao: TagDao
+    private val tagDao: TagDao,
+    settingsRepository: SettingsRepository
 ) : ViewModel() {
+
+    /** P1 preference: absolute vs. relative rendering of event timestamps. */
+    val dateDisplay: StateFlow<DateDisplay> = settingsRepository.dateDisplay
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DateDisplay.ABSOLUTE)
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery

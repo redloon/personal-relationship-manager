@@ -48,9 +48,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import com.idontremember.personalcrm.data.db.entity.ContactFact
 import com.idontremember.personalcrm.data.db.entity.Event
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.idontremember.personalcrm.data.settings.DateDisplay
+import com.idontremember.personalcrm.ui.components.formatEventDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,6 +66,7 @@ fun ContactDetailScreen(
     val contact by viewModel.contact.collectAsState()
     val facts by viewModel.facts.collectAsState()
     val events by viewModel.events.collectAsState()
+    val dateDisplay by viewModel.dateDisplay.collectAsState()
     val showAddFactDialog by viewModel.showAddFactDialog.collectAsState()
 
     Scaffold(
@@ -207,6 +207,7 @@ fun ContactDetailScreen(
             items(events, key = { it.id }) { event ->
                 EventItem(
                     event = event,
+                    dateDisplay = dateDisplay,
                     onClick = { onEventClick(event.id) }
                 )
             }
@@ -259,6 +260,7 @@ private fun FactItem(
 @Composable
 private fun EventItem(
     event: Event,
+    dateDisplay: DateDisplay,
     onClick: () -> Unit
 ) {
     Card(
@@ -275,8 +277,7 @@ private fun EventItem(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = SimpleDateFormat("MMM d, yyyy 'at' h:mm a", Locale.getDefault())
-                    .format(Date(event.eventDate)),
+                text = formatEventDate(event.eventDate, dateDisplay),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

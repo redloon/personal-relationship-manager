@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -49,6 +50,7 @@ import com.idontremember.personalcrm.data.db.entity.Contact
 @Composable
 fun ContactsListScreen(
     onContactClick: (Long) -> Unit,
+    onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ContactsListViewModel = hiltViewModel()
 ) {
@@ -90,6 +92,12 @@ fun ContactsListScreen(
                         } else {
                             Icon(Icons.Default.Refresh, contentDescription = "Sync contacts")
                         }
+                    }
+                    IconButton(
+                        onClick = onSettingsClick,
+                        modifier = Modifier.testTag("settings_button")
+                    ) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
                 }
             )

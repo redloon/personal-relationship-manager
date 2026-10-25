@@ -94,6 +94,9 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
+    // Preferences DataStore (SettingsRepository)
+    implementation(libs.androidx.datastore.preferences)
+
     // Compose
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)

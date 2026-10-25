@@ -8,12 +8,15 @@ import com.idontremember.personalcrm.data.db.entity.Tag
 import com.idontremember.personalcrm.data.repository.ContactRepository
 import com.idontremember.personalcrm.data.repository.EventRepository
 import com.idontremember.personalcrm.data.repository.TagRepository
+import com.idontremember.personalcrm.data.settings.DefaultEventTime
+import com.idontremember.personalcrm.data.settings.SettingsRepository
 import com.idontremember.personalcrm.ui.components.AutocompleteContact
 import com.idontremember.personalcrm.ui.components.AutocompleteTag
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -22,7 +25,8 @@ import javax.inject.Inject
 class AddEventViewModel @Inject constructor(
     private val eventRepository: EventRepository,
     private val contactRepository: ContactRepository,
-    private val tagRepository: TagRepository
+    private val tagRepository: TagRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     val contacts: StateFlow<List<Contact>> = contactRepository
@@ -47,6 +51,11 @@ class AddEventViewModel @Inject constructor(
 
     private val _saved = MutableStateFlow(false)
     val saved: StateFlow<Boolean> = _saved
+
+    init {
+        // P1 "default event time" preference: now vs. the timestamp used last time.
+        applyDefaultEventTime()
+    }
 
     fun onNoteChanged(value: TextFieldValue) {
         _noteText.value = value
@@ -75,6 +84,7 @@ class AddEventViewModel @Inject constructor(
                 tagNames = _selectedTagNames.value.toList(),
                 eventDate = _eventDate.value
             )
+            settingsRepository.setLastUsedEventTimestamp(_eventDate.value)
             _saved.value = true
         }
     }
@@ -99,7 +109,19 @@ class AddEventViewModel @Inject constructor(
         _noteText.value = TextFieldValue("")
         _selectedContactIds.value = emptySet()
         _selectedTagNames.value = emptySet()
-        _eventDate.value = System.currentTimeMillis()
+        applyDefaultEventTime()
         _saved.value = false
+    }
+
+    private fun applyDefaultEventTime() {
+        viewModelScope.launch {
+            _eventDate.value = when (settingsRepository.defaultEventTime.first()) {
+                DefaultEventTime.NOW -> System.currentTimeMillis()
+                DefaultEventTime.LAST_USED -> {
+                    val lastUsed = settingsRepository.lastUsedEventTimestamp.first()
+                    if (lastUsed > 0L) lastUsed else System.currentTimeMillis()
+                }
+            }
+        }
     }
 }

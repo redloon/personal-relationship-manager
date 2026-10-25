@@ -41,11 +41,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.idontremember.personalcrm.data.settings.DateDisplay
 import com.idontremember.personalcrm.ui.components.ContactChip
 import com.idontremember.personalcrm.ui.components.TagChip
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.idontremember.personalcrm.ui.components.formatEventDate
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -59,6 +58,7 @@ fun EventDetailScreen(
     }
 
     val event by viewModel.event.collectAsState()
+    val dateDisplay by viewModel.dateDisplay.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
     val tags by viewModel.tags.collectAsState()
     val isEditing by viewModel.isEditing.collectAsState()
@@ -153,8 +153,11 @@ fun EventDetailScreen(
                     // Date
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = SimpleDateFormat("MMMM d, yyyy 'at' h:mm a", Locale.getDefault())
-                            .format(Date(e.eventDate)),
+                        text = formatEventDate(
+                            e.eventDate,
+                            dateDisplay,
+                            absolutePattern = "MMMM d, yyyy 'at' h:mm a"
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Medium

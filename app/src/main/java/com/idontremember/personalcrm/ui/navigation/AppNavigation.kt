@@ -27,6 +27,7 @@ import com.idontremember.personalcrm.ui.contacts.ContactDetailScreen
 import com.idontremember.personalcrm.ui.contacts.ContactsListScreen
 import com.idontremember.personalcrm.ui.events.EventDetailScreen
 import com.idontremember.personalcrm.ui.events.EventsListScreen
+import com.idontremember.personalcrm.ui.settings.SettingsScreen
 import kotlinx.serialization.Serializable
 
 // Route definitions — must be @Serializable and implement NavKey
@@ -44,6 +45,9 @@ data class EventDetailRoute(val eventId: Long) : NavKey
 
 @Serializable
 data object AddEventRoute : NavKey
+
+@Serializable
+data object SettingsRoute : NavKey
 
 /**
  * Determine which top-level tab is active based on the current back stack.
@@ -108,7 +112,8 @@ fun AppNavigation() {
                     ContactsListScreen(
                         onContactClick = { contactId ->
                             backStack.add(ContactDetailRoute(contactId))
-                        }
+                        },
+                        onSettingsClick = { backStack.add(SettingsRoute) }
                     )
                 }
 
@@ -129,7 +134,14 @@ fun AppNavigation() {
                         },
                         onAddEventClick = {
                             showAddEventSheet = true
-                        }
+                        },
+                        onSettingsClick = { backStack.add(SettingsRoute) }
+                    )
+                }
+
+                is SettingsRoute -> NavEntry(route) {
+                    SettingsScreen(
+                        onBack = { backStack.removeLastOrNull() }
                     )
                 }
 

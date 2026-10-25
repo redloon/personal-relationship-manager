@@ -28,16 +28,18 @@ app/src/main/java/com/idontremember/personalcrm/
 ├── data/
 │   ├── contacts/ContactsSyncManager.kt   # Syncs Android Contacts Provider → Room
 │   ├── db/                               # Room database, DAOs, entities
-│   └── repository/                       # Data access layer
-├── di/                                   # Hilt modules (DatabaseModule, RepositoryModule)
+│   ├── repository/                       # Data access layer
+│   └── settings/SettingsRepository.kt    # Typed DataStore preferences (theme, dates, defaults)
+├── di/                                   # Hilt modules (DatabaseModule, RepositoryModule, SettingsModule)
 ├── ui/
 │   ├── MainActivity.kt                   # Single activity, Hilt entry point
 │   ├── navigation/AppNavigation.kt       # Navigation3 routes
 │   ├── contacts/                         # ContactsListScreen, ContactDetailScreen
 │   ├── events/                           # EventsListScreen, EventDetailScreen
 │   ├── addevent/                         # AddEventSheet (modal bottom sheet)
-│   ├── components/                       # AutocompleteTextField, chips
-│   └── theme/                            # Material3 theme
+│   ├── components/                       # AutocompleteTextField, chips, date formatting
+│   ├── settings/                         # SettingsScreen (grouped sections), SettingsViewModel
+│   └── theme/                            # Material3 theme (wired to SettingsRepository)
 └── tile/                                 # Quick-add event tile service
 ```
 
@@ -45,6 +47,7 @@ app/src/main/java/com/idontremember/personalcrm/
 
 - **Navigation3**: Uses `NavDisplay` with `SaveableStateHolderNavEntryDecorator` + `ViewModelStoreNavEntryDecorator`. Both decorators are required — omitting SaveableStateHolder causes a runtime crash.
 - **Hilt DI**: Test modules (`TestDatabaseModule`, `TestRepositoryModule`) replace production modules with in-memory Room DB.
+- **Preferences**: one process-wide Preferences DataStore (`di/SettingsModule.kt`, created via the `preferencesDataStore` delegate — required because Hilt rebuilds its component per instrumented test and DataStore refuses two live instances over one file). `data/settings/SettingsRepository` exposes typed Flows + suspend setters; keys are named constants in `SettingsKeys`. `MainActivity` collects theme prefs into `PersonalCRMTheme` — theme changes apply without restart.
 - **Contacts Sync**: `ContactsSyncManager` reads from Android's `ContactsContract` and upserts into Room. Local-only fields (facts, events) are preserved across syncs.
 
 ## Testing
@@ -58,11 +61,16 @@ app/src/androidTest/
 │   ├── ContactsListScreenTest.kt # Contacts list renders, search + sync work
 │   ├── EventsListScreenTest.kt   # Events screen via bottom nav (search, FAB, empty state)
 │   ├── EventsSearchTest.kt       # Events search: nav via bottom bar, filter by note
+│   ├── SettingsScreenTest.kt     # Settings: gear entry (both lists), theme flip + persistence
 │   ├── AddEventSheetTest.kt      # Add event sheet: open via FAB, save event end-to-end
 │   ├── NavigationTest.kt         # Start route + bottom-nav tab switching
 │   └── TestNavHelpers.kt         # Shared bottom-nav navigation helpers for UI tests
 └── data/db/AppDatabaseTest.kt    # Room DAO unit tests
 ```
+
+JVM unit tests (`./gradlew testDebugUnitTest`, no emulator):
+- `app/src/test/.../data/settings/SettingsRepositoryTest.kt` — prefs defaults, round-trip, persistence across a DataStore restart
+- `app/src/test/.../ui/components/DateFormattingTest.kt` — absolute/relative date rendering (P1 date-display preference)
 
 ### Test Tags (for Compose UI tests)
 
@@ -72,6 +80,12 @@ All key composables have `Modifier.testTag(...)`:
 - `note_text_field`, `contacts_list`, `events_list`, `add_event_fab`, `add_event_sheet`
 - `events_search_field`, `events_empty_state`
 - `bottom_navigation`, `nav_tab_contacts`, `nav_tab_events`
+- `settings_button`, `settings_screen`, `settings_back_button`
+- `settings_section_appearance`, `settings_section_date_time`
+- `theme_mode_selector`, `theme_mode_system`, `theme_mode_light`, `theme_mode_dark`
+- `dynamic_color_toggle`
+- `date_display_selector`, `date_display_absolute`, `date_display_relative`
+- `default_event_time_selector`, `default_event_time_now`, `default_event_time_last_used`
 
 ### Running on Emulator
 

@@ -16,10 +16,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -35,27 +37,38 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.idontremember.personalcrm.data.settings.DateDisplay
 import com.idontremember.personalcrm.ui.components.ContactChip
 import com.idontremember.personalcrm.ui.components.TagChip
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.idontremember.personalcrm.ui.components.formatEventDate
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun EventsListScreen(
     onEventClick: (Long) -> Unit,
     onAddEventClick: () -> Unit,
+    onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: EventsListViewModel = hiltViewModel()
 ) {
     val events by viewModel.events.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val dateDisplay by viewModel.dateDisplay.collectAsState()
 
     Scaffold(
         modifier = modifier.testTag("events_list_screen"),
         topBar = {
-            TopAppBar(title = { Text("Events") })
+            TopAppBar(
+                title = { Text("Events") },
+                actions = {
+                    IconButton(
+                        onClick = onSettingsClick,
+                        modifier = Modifier.testTag("settings_button")
+                    ) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                    }
+                }
+            )
         },
         floatingActionButton = {
             FloatingActionButton(
@@ -108,6 +121,7 @@ fun EventsListScreen(
                     items(events, key = { it.event.id }) { displayItem ->
                         EventListItem(
                             displayItem = displayItem,
+                            dateDisplay = dateDisplay,
                             onClick = { onEventClick(displayItem.event.id) }
                         )
                     }
@@ -121,6 +135,7 @@ fun EventsListScreen(
 @Composable
 private fun EventListItem(
     displayItem: EventDisplayItem,
+    dateDisplay: DateDisplay,
     onClick: () -> Unit
 ) {
     Card(
@@ -159,8 +174,7 @@ private fun EventListItem(
             // Date
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = SimpleDateFormat("MMM d, yyyy 'at' h:mm a", Locale.getDefault())
-                    .format(Date(displayItem.event.eventDate)),
+                text = formatEventDate(displayItem.event.eventDate, dateDisplay),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

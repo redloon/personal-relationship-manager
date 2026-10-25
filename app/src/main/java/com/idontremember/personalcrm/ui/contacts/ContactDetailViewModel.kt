@@ -6,6 +6,8 @@ import com.idontremember.personalcrm.data.db.entity.Contact
 import com.idontremember.personalcrm.data.db.entity.ContactFact
 import com.idontremember.personalcrm.data.db.entity.Event
 import com.idontremember.personalcrm.data.repository.ContactRepository
+import com.idontremember.personalcrm.data.settings.DateDisplay
+import com.idontremember.personalcrm.data.settings.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -16,8 +18,13 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ContactDetailViewModel @Inject constructor(
-    private val contactRepository: ContactRepository
+    private val contactRepository: ContactRepository,
+    settingsRepository: SettingsRepository
 ) : ViewModel() {
+
+    /** P1 preference: absolute vs. relative rendering of event timestamps. */
+    val dateDisplay: StateFlow<DateDisplay> = settingsRepository.dateDisplay
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DateDisplay.ABSOLUTE)
 
     // Set after creation via setContactId()
     private var contactId: Long = 0L
