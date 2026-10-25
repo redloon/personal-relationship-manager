@@ -58,13 +58,40 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    sourceSets {
+        getByName("androidTest") {
+            // P4 schema discipline: androidx.room:room-testing's MigrationTestHelper
+            // reads exported schema JSONs from the *test APK's* assets, keyed by the
+            // database class's canonical name. Ship app/schemas there so migration
+            // tests always validate against the real committed schemas.
+            // (Test-only scratch schemas for AppDatabaseMigrationTest's worked
+            // example live separately in androidTest/assets/scratch-schemas/.)
+            assets.srcDir("$projectDir/schemas")
+        }
+    }
 }
 
+// P4 schema discipline: Room exports schema JSONs to app/schemas/<db-class>/<version>.json
+// on every build. Commit them — migration tests read them back as test-APK assets.
+// (Same effect as the Room Gradle plugin's `room { schemaDirectory(...) }`, via the
+// plain KSP config this project already uses.)
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
+
+    // P4: room-testing's schema-JSON parsing needs kotlinx-serialization 1.8.1 (the version
+    // room-migration 2.8.4 is compiled against). navigation/lifecycle request 1.7.3
+    // transitively, and AGP pins androidTest to the app's resolved versions (consistent
+    // resolution) — the mixed runtime crashes MigrationTestHelper with AbstractMethodError.
+    // Align every configuration on 1.8.1 (compatible minor bump for the app classpath).
+    constraints {
+        implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.8.1")
+        implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+        implementation("org.jetbrains.kotlinx:kotlinx-serialization-json-okio:1.8.1")
+    }
 
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)
@@ -93,6 +120,8 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
+    // Migration tests (MigrationTestHelper) — instrumented only.
+    androidTestImplementation(libs.androidx.room.testing)
 
     // Preferences DataStore (SettingsRepository)
     implementation(libs.androidx.datastore.preferences)

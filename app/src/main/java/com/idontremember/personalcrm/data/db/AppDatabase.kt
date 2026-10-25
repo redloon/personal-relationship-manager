@@ -1,3 +1,30 @@
+/*
+ * ============================================================================
+ * ROOM SCHEMA / MIGRATION POLICY (packet P4) — every DB change, always:
+ *
+ *   1. BUMP the `version` in the @Database annotation below.
+ *   2. MIGRATION: write an explicit `androidx.room.migration.Migration` for every
+ *      version step (live in `data/db/Migrations.kt`) and register it in the
+ *      production builder via `DatabaseModule`'s `.addMigrations(...)`.
+ *   3. SCHEMA JSON: commit the schema KSP exports to
+ *      `app/schemas/com.idontremember.personalcrm.data.db.AppDatabase/<version>.json`
+ *      (export wired via the `room.schemaLocation` KSP arg in app/build.gradle.kts).
+ *   4. MIGRATION TEST: add a `MigrationTestHelper` test (androidTest) that migrates
+ *      a *populated* database from the previous version and asserts data
+ *      preservation. Extend `data/db/MigrationTestBase` and follow
+ *      `AppDatabaseMigrationTest`'s worked example.
+ *   All four, together, every time. Never ship 1-2 without 3-4, never 3-4 without 1-2.
+ *
+ * NEVER call `fallbackToDestructiveMigration()` on a release code path — it silently
+ * destroys user data. If it is ever needed for debug iteration only, guard it behind
+ * `BuildConfig.DEBUG` (note: `buildConfig = false` today; enabling it is part of that
+ * decision) so a release build can never ship it.
+ *
+ * Production schema history:
+ *   1 = initial schema: contacts, contact_facts, events, event_contacts, tags,
+ *       event_tags (see app/schemas/.../1.json for the authoritative snapshot).
+ * ============================================================================
+ */
 package com.idontremember.personalcrm.data.db
 
 import androidx.room.Database

@@ -50,6 +50,7 @@ app/src/main/java/com/idontremember/personalcrm/
 - **Preferences**: one process-wide Preferences DataStore (`di/SettingsModule.kt`, created via the `preferencesDataStore` delegate — required because Hilt rebuilds its component per instrumented test and DataStore refuses two live instances over one file). `data/settings/SettingsRepository` exposes typed Flows + suspend setters; keys are named constants in `SettingsKeys`. `MainActivity` collects theme prefs into `PersonalCRMTheme` — theme changes apply without restart.
 - **Strings & a11y (P2)**: every user-visible string lives in `res/values/strings.xml` (including icon `contentDescription`s, SimpleDateFormat patterns like `date_pattern_event`, and relative-date copy resolved via `RelativeDateStrings` in `ui/components/DateFormatting.kt`). `scripts/pre-launch-check.sh` fails on `Text("` or `contentDescription = "` literals under `ui/` — always extract there. All empty/loading/error states render through the shared `EmptyState` / `LoadingState` / `ErrorState` composables in `ui/components/` (each takes a snake_case `testTag`).
 - **Contacts Sync**: `ContactsSyncManager` reads from Android's `ContactsContract` and upserts into Room. Local-only fields (facts, events) are preserved across syncs.
+- **Room schema discipline (P4)**: every DB change ships as version bump + explicit `Migration` + committed schema JSON (`app/schemas/<db-class>/<version>.json`, exported via the `room.schemaLocation` KSP arg in `app/build.gradle.kts`) + a `MigrationTestHelper` migration test — all four, always. The policy comment at the top of `data/db/AppDatabase.kt` has the checklist; `androidTest/data/db/MigrationTestBase.kt`'s KDoc has the step-by-step recipe for adding a column. Migration tests read the committed schemas back from the test APK's assets (`androidTest.assets.srcDir("$projectDir/schemas")`). Never `fallbackToDestructiveMigration()` in release.
 
 ## Testing
 
@@ -67,7 +68,10 @@ app/src/androidTest/
 │   ├── AddEventSheetTest.kt      # Add event sheet: open via FAB, save event end-to-end
 │   ├── NavigationTest.kt         # Start route + bottom-nav tab switching
 │   └── TestNavHelpers.kt         # Shared bottom-nav navigation helpers for UI tests
-└── data/db/AppDatabaseTest.kt    # Room DAO unit tests
+└── data/db/
+    ├── AppDatabaseTest.kt          # Room DAO unit tests
+    ├── MigrationTestBase.kt        # Migration harness: helper rule, seed/assert helpers, add-a-column recipe
+    └── AppDatabaseMigrationTest.kt # v1 schema smoke + worked v1→v2→v3 scratch-column round trip (P4)
 ```
 
 JVM unit tests (`./gradlew testDebugUnitTest`, no emulator):
