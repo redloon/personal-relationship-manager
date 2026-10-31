@@ -32,8 +32,9 @@ object RepositoryModule {
     fun provideEventRepository(
         eventDao: EventDao,
         contactDao: ContactDao,
-        tagDao: TagDao
-    ): EventRepository = EventRepository(eventDao, contactDao, tagDao)
+        tagDao: TagDao,
+        database: com.idontremember.personalcrm.data.db.AppDatabase
+    ): EventRepository = EventRepository(eventDao, contactDao, tagDao, database)
 
     @Provides
     @Singleton

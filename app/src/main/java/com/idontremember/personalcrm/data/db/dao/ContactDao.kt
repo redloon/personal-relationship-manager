@@ -21,6 +21,12 @@ interface ContactDao {
     @Query("SELECT * FROM contacts ORDER BY display_name ASC")
     fun getAll(): Flow<List<Contact>>
 
+    @Query("SELECT * FROM contacts ORDER BY id")
+    suspend fun getAllOnce(): List<Contact>
+
+    @Query("DELETE FROM contacts")
+    suspend fun deleteAll()
+
     @Query("SELECT * FROM contacts WHERE id = :id")
     suspend fun getById(id: Long): Contact?
 

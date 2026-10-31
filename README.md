@@ -5,21 +5,26 @@ An Android app for tracking contacts, interactions, and personal facts. Built wi
 ## Quick Start
 
 ```bash
-# Build
-./gradlew assembleDebug
-
-# Install on connected device
-./gradlew installDebug
-
-# Run all tests (starts emulator if needed)
-./scripts/run-tests.sh
-
-# Run specific test class
-./scripts/run-tests.sh com.idontremember.personalcrm.AppLaunchTest
-
-# Pre-commit checks (build + lint + static analysis)
-./scripts/pre-launch-check.sh
+# Common commands (see mise.toml)
+mise run build
+mise run install
+mise run unit
+mise run test
+mise run test-class -- com.idontremember.personalcrm.AppLaunchTest
+mise run check
 ```
+
+The test runner reads `sdk.dir` from the ignored `local.properties` and adds the SDK's platform tools, emulator, and command-line tools to `PATH`. If it needs to create an emulator, it installs the Android 34 Google APIs x86_64 image and creates `pixel_6_api_34`. If provisioning fails, check SDK licenses (`sdkmanager --licenses`) and make sure the SDK command-line tools are installed.
+
+## Phase 1 dogfood loop
+
+Create people in Android Contacts, grant this app Contacts access, then tap the refresh icon in the Contacts tab. Add freeform facts on a person's detail page. Use the Quick Settings **Add Event** tile to jot a note immediately; select a person with `@` if convenient, or open the saved event later and attach them in Edit. Look up the person's facts and event history before or after a conversation.
+
+Use **Settings → Data → Export data** weekly and before installing a development build that changes storage. Keep the plain JSON file outside the app and treat it as private. **Restore data** replaces all current app records after confirmation; it does not restore preferences or merge records. Confirm the export success message and that the file exists before relying on it.
+
+After three weeks, check the success signals and stop conditions in [product-intent.md](docs/product-intent.md). Keep new feature ideas parked until the capture and recall loop proves useful.
+
+For sandbox build and emulator setup, see [android-sandbox.md](docs/android-sandbox.md).
 
 ## Architecture
 
@@ -27,6 +32,7 @@ An Android app for tracking contacts, interactions, and personal facts. Built wi
 app/src/main/java/com/idontremember/personalcrm/
 ├── data/
 │   ├── contacts/ContactsSyncManager.kt   # Syncs Android Contacts Provider → Room
+│   ├── backup/DataExporter.kt             # Manual JSON export and transactional restore
 │   ├── db/                               # Room database, DAOs, entities
 │   ├── repository/                       # Data access layer
 │   └── settings/SettingsRepository.kt    # Typed DataStore preferences (theme, dates, defaults)
@@ -92,6 +98,8 @@ All key composables have `Modifier.testTag(...)`:
 - `facts_empty_state`, `contact_events_empty_state`, `contact_detail_loading_state`, `contact_detail_error_state`
 - `event_links_empty_state`, `event_detail_loading_state`, `event_detail_error_state`, `event_detail_error_retry_button`
 - shared state composables take a `testTag` param (defaults: `empty_state`, `loading_state`, `error_state`, `error_retry_button`)
+- `settings_section_data`, `export_json_button`, `import_json_button`, `restore_confirmation_dialog`, `confirm_restore_button`
+- `event_person_search`, `event_person_option_<id>`, `edit_event_button`, `save_event_edit_button`, `event_save_error`
 - `settings_section_appearance`, `settings_section_date_time`
 - `theme_mode_selector`, `theme_mode_system`, `theme_mode_light`, `theme_mode_dark`
 - `dynamic_color_toggle`

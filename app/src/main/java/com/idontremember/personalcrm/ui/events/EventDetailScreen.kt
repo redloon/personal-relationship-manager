@@ -68,11 +68,15 @@ fun EventDetailScreen(
     val eventLoaded by viewModel.eventLoaded.collectAsState()
     val dateDisplay by viewModel.dateDisplay.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
+    val availableContacts by viewModel.availableContacts.collectAsState()
+    val editContactIds by viewModel.editContactIds.collectAsState()
     val tags by viewModel.tags.collectAsState()
     val isEditing by viewModel.isEditing.collectAsState()
     val editNote by viewModel.editNote.collectAsState()
+    val editSaveFailed by viewModel.editSaveFailed.collectAsState()
     val saved by viewModel.saved.collectAsState()
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var personQuery by remember { mutableStateOf("") }
 
     LaunchedEffect(saved) {
         if (saved) onBack()
@@ -90,8 +94,8 @@ fun EventDetailScreen(
                 actions = {
                     if (!isEditing) {
                         IconButton(
-                            onClick = { viewModel.startEditing() },
-                            modifier = Modifier.size(48.dp)
+                            onClick = { personQuery = ""; viewModel.startEditing() },
+                            modifier = Modifier.size(48.dp).testTag("edit_event_button")
                         ) {
                             Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.cd_edit_event))
                         }
@@ -147,26 +151,54 @@ fun EventDetailScreen(
                         maxLines = 10,
                         label = { Text(stringResource(R.string.field_note)) }
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = personQuery,
+                        onValueChange = { personQuery = it },
+                        label = { Text(stringResource(R.string.event_search_person)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("event_person_search")
+                    )
+                    if (personQuery.isNotBlank()) {
+                        availableContacts.filter {
+                            it.id !in editContactIds && it.displayName.contains(personQuery, ignoreCase = true)
+                        }.take(5).forEach { person ->
+                            TextButton(onClick = {
+                                viewModel.addEditContact(person.id)
+                                personQuery = ""
+                            }, modifier = Modifier.testTag("event_person_option_${person.id}")) {
+                                Text(person.displayName)
+                            }
+                        }
+                    }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        availableContacts.filter { it.id in editContactIds }.forEach { person ->
+                            ContactChip(name = person.displayName,
+                                onRemove = { viewModel.removeEditContact(person.id) })
+                        }
+                    }
+                    if (editSaveFailed) {
+                        Text(stringResource(R.string.event_edit_error), color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.testTag("event_edit_error"))
+                    }
                     Spacer(modifier = Modifier.height(16.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End
                     ) {
                         TextButton(
-                            onClick = { viewModel.cancelEditing() },
+                            onClick = { personQuery = ""; viewModel.cancelEditing() },
                             modifier = Modifier.heightIn(min = 48.dp)
                         ) {
                             Text(stringResource(R.string.action_cancel))
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         TextButton(onClick = {
-                            // For simplicity, save with current contacts/tags (not editable in this simple edit view)
                             viewModel.saveEdit(
                                 editNote,
-                                contacts.map { it.id },
                                 tags.map { it.name }
                             )
-                        }, modifier = Modifier.heightIn(min = 48.dp)) {
+                        }, modifier = Modifier.heightIn(min = 48.dp).testTag("save_event_edit_button")) {
                             Text(stringResource(R.string.action_save))
                         }
                     }

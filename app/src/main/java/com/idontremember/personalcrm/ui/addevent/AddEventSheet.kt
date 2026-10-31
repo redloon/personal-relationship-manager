@@ -57,6 +57,7 @@ import java.util.Locale
 fun AddEventSheet(
     onDismiss: () -> Unit,
     onSaved: () -> Unit,
+    autoFocus: Boolean = true,
     viewModel: AddEventViewModel = hiltViewModel()
 ) {
     val noteText by viewModel.noteText.collectAsState()
@@ -64,6 +65,8 @@ fun AddEventSheet(
     val selectedTagNames by viewModel.selectedTagNames.collectAsState()
     val eventDate by viewModel.eventDate.collectAsState()
     val saved by viewModel.saved.collectAsState()
+    val saving by viewModel.saving.collectAsState()
+    val saveFailed by viewModel.saveFailed.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
     val tags by viewModel.tags.collectAsState()
 
@@ -121,7 +124,8 @@ fun AddEventSheet(
                 contacts = viewModel.getAutocompleteContacts(),
                 tags = viewModel.getAutocompleteTags(),
                 onContactSelected = { viewModel.onContactSelected(it) },
-                onTagSelected = { viewModel.onTagSelected(it) }
+                onTagSelected = { viewModel.onTagSelected(it) },
+                autoFocus = autoFocus
             )
 
             // Show selected contacts and tags as chips
@@ -132,10 +136,16 @@ fun AddEventSheet(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     contacts.filter { it.id in selectedContactIds }.forEach { contact ->
-                        ContactChip(name = contact.displayName)
+                        ContactChip(
+                            name = contact.displayName,
+                            onRemove = { viewModel.removeContact(contact.id) }
+                        )
                     }
                     selectedTagNames.forEach { tagName ->
-                        TagChip(name = tagName)
+                        TagChip(
+                            name = tagName,
+                            onRemove = { viewModel.removeTag(tagName) }
+                        )
                     }
                 }
             }
@@ -186,9 +196,13 @@ fun AddEventSheet(
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
                     .testTag("save_event_button"),
-                enabled = noteText.text.isNotBlank()
+                enabled = noteText.text.isNotBlank() && !saving
             ) {
                 Text(stringResource(R.string.action_save_event), style = MaterialTheme.typography.labelLarge)
+            }
+            if (saveFailed) {
+                Text(stringResource(R.string.event_save_error), color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("event_save_error"))
             }
         }
     }

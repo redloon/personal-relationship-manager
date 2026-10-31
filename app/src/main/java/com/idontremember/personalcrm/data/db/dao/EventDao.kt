@@ -82,4 +82,16 @@ interface EventDao {
         ORDER BY e.event_date DESC
     """)
     fun getAllEventsWithMeta(): Flow<List<Event>>
+
+    @Query("SELECT * FROM events ORDER BY event_date DESC")
+    suspend fun getAllOnce(): List<Event>
+
+    @Query("DELETE FROM events")
+    suspend fun deleteAll()
+
+    @Query("SELECT * FROM event_contacts")
+    suspend fun getAllEventContacts(): List<EventContact>
+
+    @Query("SELECT * FROM event_tags")
+    suspend fun getAllEventTags(): List<EventTag>
 }

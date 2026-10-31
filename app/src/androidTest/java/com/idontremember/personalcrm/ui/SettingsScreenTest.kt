@@ -7,6 +7,7 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.graphics.toPixelMap
 import com.idontremember.personalcrm.data.settings.DateDisplay
 import com.idontremember.personalcrm.data.settings.DefaultEventTime
@@ -116,17 +117,17 @@ class SettingsScreenTest {
         openSettingsFromContacts()
 
         composeTestRule.waitUntilTagExists("date_display_selector")
-        composeTestRule.onNodeWithTag("date_display_relative").performClick()
+        composeTestRule.onNodeWithTag("date_display_relative").performScrollTo().performClick()
         awaitStored { runBlocking { settingsRepository.dateDisplay.first() } == DateDisplay.RELATIVE }
         composeTestRule.onNodeWithTag("date_display_relative").assertIsSelected()
 
-        composeTestRule.onNodeWithTag("default_event_time_last_used").performClick()
+        composeTestRule.onNodeWithTag("default_event_time_last_used").performScrollTo().performClick()
         awaitStored {
             runBlocking { settingsRepository.defaultEventTime.first() } == DefaultEventTime.LAST_USED
         }
         composeTestRule.onNodeWithTag("default_event_time_last_used").assertIsSelected()
 
-        composeTestRule.onNodeWithTag("dynamic_color_toggle").performClick()
+        composeTestRule.onNodeWithTag("dynamic_color_toggle").performScrollTo().performClick()
         awaitStored { runBlocking { settingsRepository.dynamicColor.first() } == false }
         composeTestRule.onNodeWithTag("dynamic_color_toggle").assertIsOff()
     }

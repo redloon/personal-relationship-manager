@@ -1,5 +1,10 @@
 package com.idontremember.personalcrm.ui.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,8 +14,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.LocalIndication
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -19,20 +22,26 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -42,6 +51,9 @@ import com.idontremember.personalcrm.R
 import com.idontremember.personalcrm.data.settings.DateDisplay
 import com.idontremember.personalcrm.data.settings.DefaultEventTime
 import com.idontremember.personalcrm.data.settings.ThemeMode
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Settings screen ([SettingsRoute] target). Grouped sections keep it trivially
@@ -58,9 +70,55 @@ fun SettingsScreen(
     val dynamicColor by viewModel.dynamicColor.collectAsState()
     val dateDisplay by viewModel.dateDisplay.collectAsState()
     val defaultEventTime by viewModel.defaultEventTime.collectAsState()
+    val exportState by viewModel.exportState.collectAsState()
+    val restoreState by viewModel.restoreState.collectAsState()
+    val restorePreview by viewModel.restorePreview.collectAsState()
+    val exportSuccessMessage = stringResource(R.string.settings_export_success)
+    val exportErrorMessage = stringResource(R.string.settings_export_error)
+    val restoreSuccessMessage = stringResource(R.string.settings_restore_success)
+    val restoreErrorMessage = stringResource(R.string.settings_restore_error)
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+
+    val safLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) viewModel.exportTo(context.contentResolver, uri)
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> if (uri != null) viewModel.readImport(context.contentResolver, uri) }
+
+    LaunchedEffect(exportState, restoreState) {
+        when (exportState) {
+            ExportState.DONE -> {
+                snackbarHostState.showSnackbar(exportSuccessMessage)
+                viewModel.clearExportFeedback()
+            }
+            ExportState.ERROR -> {
+                snackbarHostState.showSnackbar(exportErrorMessage)
+                viewModel.clearExportFeedback()
+            }
+            else -> {}
+        }
+        when (restoreState) {
+            RestoreState.DONE -> {
+                snackbarHostState.showSnackbar(restoreSuccessMessage)
+                viewModel.clearRestoreFeedback()
+            }
+            RestoreState.ERROR -> {
+                snackbarHostState.showSnackbar(restoreErrorMessage)
+                viewModel.clearRestoreFeedback()
+            }
+            else -> {}
+        }
+    }
 
     Scaffold(
         modifier = Modifier.testTag("settings_screen"),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.title_settings)) },
@@ -68,7 +126,6 @@ fun SettingsScreen(
                     IconButton(
                         onClick = onBack,
                         modifier = Modifier
-                            // a11y: 48dp touch target (M3 IconButton defaults to 40dp).
                             .size(48.dp)
                             .testTag("settings_back_button")
                     ) {
@@ -161,7 +218,49 @@ fun SettingsScreen(
                     )
                 )
             }
+
+            SettingsSection(
+                title = stringResource(R.string.settings_section_data),
+                testTag = "settings_section_data"
+            ) {
+                SettingsActionRow(
+                    title = stringResource(R.string.settings_export_json),
+                    subtitle = stringResource(R.string.settings_export_json_desc),
+                    onClick = {
+                        val ts = SimpleDateFormat("yyyy-MM-dd-HHmm", Locale.US).format(Date())
+                        safLauncher.launch("personal-crm-backup-$ts.json")
+                    },
+                    enabled = exportState != ExportState.EXPORTING,
+                    testTag = "export_json_button"
+                )
+                SettingsActionRow(
+                    title = stringResource(R.string.settings_import_json),
+                    subtitle = stringResource(R.string.settings_import_json_desc),
+                    onClick = { importLauncher.launch(arrayOf("application/json", "text/plain")) },
+                    enabled = restoreState != RestoreState.RESTORING && restoreState != RestoreState.LOADING,
+                    testTag = "import_json_button"
+                )
+            }
         }
+    }
+
+    val preview = restorePreview
+    if (restoreState == RestoreState.READY && preview != null) {
+        AlertDialog(
+            onDismissRequest = viewModel::cancelRestore,
+            title = { Text(stringResource(R.string.settings_restore_confirm_title)) },
+            text = { Text(stringResource(R.string.settings_restore_confirm_body,
+                preview.contacts.size, preview.facts.size, preview.events.size, preview.tags.size)) },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmRestore, modifier = Modifier.testTag("confirm_restore_button")) {
+                    Text(stringResource(R.string.settings_restore_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::cancelRestore) { Text(stringResource(R.string.action_cancel)) }
+            },
+            modifier = Modifier.testTag("restore_confirmation_dialog")
+        )
     }
 }
 
@@ -272,5 +371,39 @@ fun SettingsSwitchRow(
         )
         Spacer(modifier = Modifier.width(8.dp))
         Switch(checked = checked, onCheckedChange = null)
+    }
+}
+
+/** Clickable row for one-shot actions (not preferences). */
+@Composable
+fun SettingsActionRow(
+    title: String,
+    subtitle: String? = null,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    testTag: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(enabled = enabled, onClick = onClick)
+            .testTag(testTag)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (enabled) MaterialTheme.colorScheme.onSurface
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+        )
+        if (subtitle != null) {
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }

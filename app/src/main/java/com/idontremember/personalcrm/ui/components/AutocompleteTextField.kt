@@ -14,19 +14,24 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import com.idontremember.personalcrm.R
+import kotlinx.coroutines.delay
 
 /**
  * A text field that detects @ and # triggers to show autocomplete dropdowns.
@@ -49,8 +54,18 @@ fun AutocompleteTextField(
     onContactSelected: (AutocompleteContact) -> Unit,
     onTagSelected: (AutocompleteTag) -> Unit,
     modifier: Modifier = Modifier,
-    placeholder: String? = null
+    placeholder: String? = null,
+    autoFocus: Boolean = false
 ) {
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    LaunchedEffect(autoFocus) {
+        if (autoFocus) {
+            delay(150)
+            focusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
     val resolvedPlaceholder = placeholder ?: stringResource(R.string.note_placeholder)
     var showContactDropdown by remember { mutableStateOf(false) }
     var showTagDropdown by remember { mutableStateOf(false) }
@@ -208,6 +223,7 @@ fun AutocompleteTextField(
         onValueChange = onValueChange,
         modifier = modifier
             .fillMaxWidth()
+            .focusRequester(focusRequester)
             .testTag("note_text_field"),
         placeholder = { Text(resolvedPlaceholder) },
         minLines = 3,

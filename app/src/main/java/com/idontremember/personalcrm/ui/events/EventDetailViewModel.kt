@@ -45,6 +45,12 @@ class EventDetailViewModel @Inject constructor(
     private val _contacts = MutableStateFlow<List<Contact>>(emptyList())
     val contacts: StateFlow<List<Contact>> = _contacts
 
+    val availableContacts: StateFlow<List<Contact>> = contactDao.getAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _editContactIds = MutableStateFlow<Set<Long>>(emptySet())
+    val editContactIds: StateFlow<Set<Long>> = _editContactIds
+
     private val _tags = MutableStateFlow<List<Tag>>(emptyList())
     val tags: StateFlow<List<Tag>> = _tags
 
@@ -53,6 +59,9 @@ class EventDetailViewModel @Inject constructor(
 
     private val _editNote = MutableStateFlow("")
     val editNote: StateFlow<String> = _editNote
+
+    private val _editSaveFailed = MutableStateFlow(false)
+    val editSaveFailed: StateFlow<Boolean> = _editSaveFailed
 
     private val _saved = MutableStateFlow(false)
     val saved: StateFlow<Boolean> = _saved
@@ -83,24 +92,32 @@ class EventDetailViewModel @Inject constructor(
     fun startEditing() {
         _isEditing.value = true
         _editNote.value = _event.value?.note ?: ""
+        _editContactIds.value = _contacts.value.map { it.id }.toSet()
+        _editSaveFailed.value = false
     }
+
+    fun addEditContact(id: Long) { _editContactIds.value = _editContactIds.value + id }
+    fun removeEditContact(id: Long) { _editContactIds.value = _editContactIds.value - id }
 
     fun onNoteChanged(note: String) {
         _editNote.value = note
     }
 
-    fun saveEdit(note: String, contactIds: List<Long>, tagNames: List<String>) {
+    fun saveEdit(note: String, tagNames: List<String>) {
         viewModelScope.launch {
             val e = _event.value ?: return@launch
-            eventRepository.updateEvent(
-                eventId = e.id,
-                note = note,
-                contactIds = contactIds,
-                tagNames = tagNames,
-                eventDate = e.eventDate
-            )
-            _isEditing.value = false
-            loadEvent() // Refresh
+            try {
+                eventRepository.updateEvent(
+                    eventId = e.id,
+                    note = note,
+                    contactIds = _editContactIds.value.toList(),
+                    tagNames = tagNames,
+                    eventDate = e.eventDate
+                )
+                _isEditing.value = false
+                loadEvent()
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e
+            } catch (_: Exception) { _editSaveFailed.value = true }
         }
     }
 
@@ -113,6 +130,8 @@ class EventDetailViewModel @Inject constructor(
 
     fun cancelEditing() {
         _isEditing.value = false
+        _editContactIds.value = emptySet()
+        _editSaveFailed.value = false
     }
 
     /** P2: retry hook for the shared `ErrorState` after a failed/missing load. */

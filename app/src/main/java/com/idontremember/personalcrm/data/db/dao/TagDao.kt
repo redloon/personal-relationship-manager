@@ -23,6 +23,9 @@ interface TagDao {
     @Query("SELECT * FROM tags ORDER BY name ASC")
     suspend fun getAllOnce(): List<Tag>
 
+    @Query("DELETE FROM tags")
+    suspend fun deleteAll()
+
     @Query("SELECT * FROM tags WHERE name LIKE '%' || :query || '%' ORDER BY name ASC")
     fun search(query: String): Flow<List<Tag>>
 

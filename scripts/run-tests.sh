@@ -4,15 +4,64 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/android-sdk-env.sh"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 RESULTS_DIR="$PROJECT_DIR/test-results"
 mkdir -p "$RESULTS_DIR"
 
 # Parse arguments
 FILTER="${1:-}"   # Optional: specific test class or method
-TIMEOUT="${TEST_TIMEOUT:-300}"    # Instrumented-test timeout in seconds
-BUILD_TIMEOUT="${BUILD_TIMEOUT:-900}"  # Per-gradle-step timeout in seconds
+TIMEOUT="${TEST_TIMEOUT:-180}"    # Instrumented-test timeout in seconds
+BUILD_TIMEOUT="${BUILD_TIMEOUT:-120}"  # Per-gradle-step timeout in seconds
 START_TIME=$SECONDS
+ACTIVE_TIMEOUT_PID=""
+ACTIVE_TAIL_PID=""
+
+# Keep the timed command's output on a regular file, then tail that file for
+# live progress. This avoids a Gradle child retaining a pipe to tee after the
+# build has printed BUILD SUCCESSFUL. Track the timeout's process group so an
+# interrupt also stops its isolated command group.
+stop_active_command() {
+    if [ -n "$ACTIVE_TIMEOUT_PID" ]; then
+        kill -TERM -- "-$ACTIVE_TIMEOUT_PID" 2>/dev/null || \
+            kill -TERM "$ACTIVE_TIMEOUT_PID" 2>/dev/null || true
+        wait "$ACTIVE_TIMEOUT_PID" 2>/dev/null || true
+    fi
+    if [ -n "$ACTIVE_TAIL_PID" ]; then
+        kill -TERM "$ACTIVE_TAIL_PID" 2>/dev/null || true
+        wait "$ACTIVE_TAIL_PID" 2>/dev/null || true
+    fi
+    ACTIVE_TIMEOUT_PID=""
+    ACTIVE_TAIL_PID=""
+}
+
+handle_interrupt() {
+    stop_active_command
+    exit "$1"
+}
+trap 'handle_interrupt 130' INT
+trap 'handle_interrupt 143' TERM
+
+run_logged_command() {
+    local limit="$1" log_file="$2" result=0
+    shift 2
+    timeout "$limit" "$@" >"$log_file" 2>&1 &
+    ACTIVE_TIMEOUT_PID=$!
+    tail --pid="$ACTIVE_TIMEOUT_PID" -n +1 -f "$log_file" &
+    ACTIVE_TAIL_PID=$!
+
+    if wait "$ACTIVE_TIMEOUT_PID"; then
+        result=0
+    else
+        result=$?
+    fi
+    # GNU tail exits shortly after the timed process exits. Waiting for it
+    # flushes the final log lines before the next step starts.
+    wait "$ACTIVE_TAIL_PID" 2>/dev/null || true
+    ACTIVE_TIMEOUT_PID=""
+    ACTIVE_TAIL_PID=""
+    return "$result"
+}
 
 echo "============================================"
 echo "  Personal CRM — Automated Test Runner"
@@ -26,17 +75,37 @@ if ! bash "$SCRIPT_DIR/ensure-emulator.sh"; then
     exit 1
 fi
 
+# Never run pm clear or instrumentation against a connected physical phone.
+EMULATOR_SERIAL=$(adb devices | awk '$1 ~ /^emulator-[0-9]+$/ && $2 == "device" { print $1; exit }')
+if [ -z "$EMULATOR_SERIAL" ]; then
+    echo "FATAL: No online emulator found"
+    exit 1
+fi
+export ANDROID_SERIAL="$EMULATOR_SERIAL"
+echo "Using $ANDROID_SERIAL"
+
 # Wait a moment for the emulator to fully settle
 sleep 3
 
-# Step 2: Clean previous build artifacts (optional, speeds up fresh builds)
+# Step 2: Build APKs. Stream output so a Gradle wait/download/lock is visible,
+# while keeping a complete log for diagnosis if the bounded step fails.
 echo ""
 echo "▶ Step 2/6: Building debug APK..."
 cd "$PROJECT_DIR"
-# Every step is bounded by `timeout` so no single step can hang the runner:
-# a wedged gradle/adb/emulator fails loudly instead of stalling forever.
-if ! timeout "$BUILD_TIMEOUT" ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --quiet 2>&1 | tail -5; then
-    echo "❌ Build failed (or timed out after ${BUILD_TIMEOUT}s)"
+BUILD_LOG="$RESULTS_DIR/build-${TIMESTAMP:-$(date +%Y%m%d_%H%M%S)}.log"
+if run_logged_command "$BUILD_TIMEOUT" "$BUILD_LOG" \
+    ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --console=plain; then
+    BUILD_EXIT=0
+else
+    BUILD_EXIT=$?
+fi
+if [ "$BUILD_EXIT" -ne 0 ]; then
+    if [ "$BUILD_EXIT" -eq 124 ]; then
+        echo "❌ Build timed out after ${BUILD_TIMEOUT}s"
+    else
+        echo "❌ Build failed (exit ${BUILD_EXIT})"
+    fi
+    echo "Build log: $BUILD_LOG"
     exit 1
 fi
 echo "✓ Build complete ($((SECONDS - START_TIME))s elapsed)"
@@ -44,8 +113,20 @@ echo "✓ Build complete ($((SECONDS - START_TIME))s elapsed)"
 # Step 3: Install APKs
 echo ""
 echo "▶ Step 3/6: Installing APKs on emulator..."
-if ! timeout "$BUILD_TIMEOUT" ./gradlew installDebug installDebugAndroidTest --no-daemon --quiet 2>&1 | tail -5; then
-    echo "❌ Install failed (or timed out after ${BUILD_TIMEOUT}s)"
+INSTALL_LOG="$RESULTS_DIR/install-$(date +%Y%m%d_%H%M%S).log"
+if run_logged_command "$BUILD_TIMEOUT" "$INSTALL_LOG" \
+    ./gradlew installDebug installDebugAndroidTest --no-daemon --console=plain; then
+    INSTALL_EXIT=0
+else
+    INSTALL_EXIT=$?
+fi
+if [ "$INSTALL_EXIT" -ne 0 ]; then
+    if [ "$INSTALL_EXIT" -eq 124 ]; then
+        echo "❌ Install timed out after ${BUILD_TIMEOUT}s"
+    else
+        echo "❌ Install failed (exit ${INSTALL_EXIT})"
+    fi
+    echo "Install log: $INSTALL_LOG"
     exit 1
 fi
 echo "✓ APKs installed ($((SECONDS - START_TIME))s elapsed)"
@@ -71,27 +152,29 @@ adb logcat -c 2>/dev/null || true
 echo ""
 echo "▶ Step 5/6: Running instrumented tests..."
 
-TEST_COMMAND="adb shell am instrument -w"
-TEST_COMMAND="$TEST_COMMAND -e clearPackageData true"
+TEST_COMMAND=(adb shell am instrument -w -e clearPackageData true)
 
 if [ -n "$FILTER" ]; then
-    TEST_COMMAND="$TEST_COMMAND -e class $FILTER"
+    TEST_COMMAND+=(-e class "$FILTER")
 fi
 
-TEST_COMMAND="$TEST_COMMAND com.idontremember.personalcrm.test/com.idontremember.personalcrm.HiltTestRunner"
+TEST_COMMAND+=(com.idontremember.personalcrm.test/com.idontremember.personalcrm.HiltTestRunner)
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 TEST_OUTPUT="$RESULTS_DIR/test-output-${TIMESTAMP}.txt"
 
-echo "  Command: $TEST_COMMAND"
+printf '  Command:'
+printf ' %q' "${TEST_COMMAND[@]}"
+printf '\n'
 echo "  Output:  $TEST_OUTPUT"
 echo ""
 
-# Run tests with timeout
-set +e
-timeout "$TIMEOUT" $TEST_COMMAND 2>&1 | tee "$TEST_OUTPUT"
-TEST_EXIT=$?
-set -e
+# Run tests with timeout and live output from the file-backed log.
+if run_logged_command "$TIMEOUT" "$TEST_OUTPUT" "${TEST_COMMAND[@]}"; then
+    TEST_EXIT=0
+else
+    TEST_EXIT=$?
+fi
 
 # Parse results from output
 PASS_COUNT=$(grep -c 'OK (' "$TEST_OUTPUT" 2>/dev/null || echo "0")

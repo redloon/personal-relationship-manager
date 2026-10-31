@@ -7,6 +7,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import com.idontremember.personalcrm.data.repository.EventRepository
+import com.idontremember.personalcrm.data.db.dao.ContactDao
+import com.idontremember.personalcrm.data.db.entity.Contact
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.flow.first
@@ -38,6 +40,7 @@ class AddEventSheetTest {
 
     @Inject
     lateinit var eventRepository: EventRepository
+    @Inject lateinit var contactDao: ContactDao
 
     @Before
     fun setup() {
@@ -78,6 +81,33 @@ class AddEventSheetTest {
             } catch (e: AssertionError) {
                 false
             }
+        }
+    }
+
+    @Test
+    fun unlinkedQuickNote_canBeLinkedLaterAndRecalledFromContact() {
+        val contactId = runBlocking { contactDao.insert(Contact(displayName = "Alice Dogfood")) }
+        val note = "Remember Alice's new job"
+        openAddEventSheet()
+        composeTestRule.onNodeWithTag("note_text_field").performTextInput(note)
+        composeTestRule.onNodeWithTag("save_event_button").performClick()
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            runBlocking { eventRepository.getAllEvents().first().any { it.note == note } }
+        }
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            try { composeTestRule.onNodeWithTag("add_event_sheet").assertDoesNotExist(); true }
+            catch (_: AssertionError) { false }
+        }
+        composeTestRule.waitUntilTagDisplayed("events_list_screen")
+        composeTestRule.onNodeWithText(note).performClick()
+        composeTestRule.waitUntilTagDisplayed("event_detail_screen")
+        composeTestRule.onNodeWithTag("edit_event_button").performClick()
+        composeTestRule.onNodeWithTag("event_person_search").performTextInput("Alice Dogfood")
+        composeTestRule.waitUntilTagExists("event_person_option_$contactId")
+        composeTestRule.onNodeWithTag("event_person_option_$contactId").performClick()
+        composeTestRule.onNodeWithTag("save_event_edit_button").performClick()
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            runBlocking { eventRepository.getEventsForContact(contactId).first().any { it.note == note } }
         }
     }
 }

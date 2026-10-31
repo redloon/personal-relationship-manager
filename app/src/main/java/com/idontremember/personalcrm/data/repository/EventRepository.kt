@@ -1,5 +1,7 @@
 package com.idontremember.personalcrm.data.repository
 
+import androidx.room.withTransaction
+import com.idontremember.personalcrm.data.db.AppDatabase
 import com.idontremember.personalcrm.data.db.dao.ContactDao
 import com.idontremember.personalcrm.data.db.dao.EventDao
 import com.idontremember.personalcrm.data.db.dao.TagDao
@@ -22,7 +24,8 @@ data class EventWithMeta(
 class EventRepository @Inject constructor(
     private val eventDao: EventDao,
     private val contactDao: ContactDao,
-    private val tagDao: TagDao
+    private val tagDao: TagDao,
+    private val database: AppDatabase
 ) {
 
     fun getAllEvents(): Flow<List<Event>> = eventDao.getAll()
@@ -53,7 +56,7 @@ class EventRepository @Inject constructor(
         contactIds: List<Long>,
         tagNames: List<String>,
         eventDate: Long = System.currentTimeMillis()
-    ): Long {
+    ): Long = database.withTransaction {
         val event = Event(note = note, eventDate = eventDate)
         val eventId = eventDao.insert(event)
 
@@ -68,7 +71,7 @@ class EventRepository @Inject constructor(
             eventDao.insertEventTag(EventTag(eventId = eventId, tagId = tag.id))
         }
 
-        return eventId
+        eventId
     }
 
     /**
@@ -80,8 +83,8 @@ class EventRepository @Inject constructor(
         contactIds: List<Long>,
         tagNames: List<String>,
         eventDate: Long
-    ) {
-        val existing = eventDao.getById(eventId) ?: return
+    ) = database.withTransaction {
+        val existing = eventDao.getById(eventId) ?: return@withTransaction
         eventDao.update(existing.copy(note = note, eventDate = eventDate, updatedAt = System.currentTimeMillis()))
 
         // Replace links

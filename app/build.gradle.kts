@@ -92,6 +92,7 @@ dependencies {
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
         implementation("org.jetbrains.kotlinx:kotlinx-serialization-json-okio:1.8.1")
     }
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
 
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)

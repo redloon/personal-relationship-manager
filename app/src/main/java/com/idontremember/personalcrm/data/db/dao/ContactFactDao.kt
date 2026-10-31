@@ -24,4 +24,7 @@ interface ContactFactDao {
 
     @Query("DELETE FROM contact_facts WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query("SELECT * FROM contact_facts ORDER BY contact_id, created_at DESC")
+    suspend fun getAllOnce(): List<ContactFact>
 }

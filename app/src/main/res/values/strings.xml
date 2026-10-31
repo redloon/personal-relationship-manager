@@ -36,6 +36,8 @@
     <string name="cd_edit_event">Edit</string>
     <string name="cd_delete_event">Delete</string>
     <string name="cd_close">Close</string>
+    <string name="cd_remove_contact">Remove contact</string>
+    <string name="cd_remove_tag">Remove tag</string>
 
     <!-- Search -->
     <string name="search_contacts_hint">Search contacts...</string>
@@ -83,6 +85,21 @@
     <string name="settings_pref_default_event_time">Default event time</string>
     <string name="settings_default_event_time_now">Now</string>
     <string name="settings_default_event_time_last_used">Last used</string>
+    <string name="settings_section_data">Data</string>
+    <string name="settings_export_json">Export data</string>
+    <string name="settings_export_json_desc">Save all contacts, facts, and events as JSON</string>
+    <string name="settings_export_success">Data exported</string>
+    <string name="settings_export_error">Export failed</string>
+    <string name="settings_import_json">Restore data</string>
+    <string name="settings_import_json_desc">Replace app records from a JSON export</string>
+    <string name="settings_restore_confirm_title">Replace app data?</string>
+    <string name="settings_restore_confirm_body">This backup has %1$d contacts, %2$d facts, %3$d events, and %4$d tags. Restoring replaces the app’s current records.</string>
+    <string name="settings_restore_action">Restore</string>
+    <string name="settings_restore_success">Data restored</string>
+    <string name="settings_restore_error">Restore failed. Current data was kept.</string>
+    <string name="event_search_person">Search people</string>
+    <string name="event_save_error">Could not save. Your note is still here.</string>
+    <string name="event_edit_error">Could not save changes. Try again.</string>
 
     <!-- Date/time formatting: SimpleDateFormat patterns are localizable so
          translators can reorder day/month and swap the clock convention. -->

@@ -1,0 +1,31 @@
+[tasks.build]
+description = "Build the debug APK"
+run = "./gradlew assembleDebug"
+
+[tasks.install]
+description = "Install the debug APK on the selected Android device"
+run = "./gradlew installDebug"
+
+[tasks.unit]
+description = "Run JVM unit tests (no emulator required)"
+run = "./gradlew testDebugUnitTest"
+
+[tasks.test]
+description = "Build, install, and run the full instrumented test suite"
+run = "./scripts/run-tests.sh"
+
+[tasks.test-class]
+description = "Run one instrumented test class; pass its fully qualified name after --"
+run = "./scripts/run-tests.sh {{arg(name='class')}}"
+
+[tasks.check]
+description = "Run build, lint, and static pre-launch checks"
+run = "./scripts/pre-launch-check.sh"
+
+[tasks.emulator]
+description = "Start or wait for the configured Android emulator"
+run = "./scripts/ensure-emulator.sh"
+
+[tasks.clean]
+description = "Clean Gradle build outputs"
+run = "./gradlew clean"

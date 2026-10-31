@@ -52,6 +52,11 @@ class AddEventViewModel @Inject constructor(
     private val _saved = MutableStateFlow(false)
     val saved: StateFlow<Boolean> = _saved
 
+    private val _saving = MutableStateFlow(false)
+    val saving: StateFlow<Boolean> = _saving
+    private val _saveFailed = MutableStateFlow(false)
+    val saveFailed: StateFlow<Boolean> = _saveFailed
+
     init {
         // P1 "default event time" preference: now vs. the timestamp used last time.
         applyDefaultEventTime()
@@ -69,23 +74,42 @@ class AddEventViewModel @Inject constructor(
         _selectedTagNames.value = _selectedTagNames.value + tag.name
     }
 
+    fun removeContact(id: Long) {
+        _selectedContactIds.value = _selectedContactIds.value - id
+    }
+
+    fun removeTag(name: String) {
+        _selectedTagNames.value = _selectedTagNames.value - name
+    }
+
     fun onDateChanged(dateMillis: Long) {
         _eventDate.value = dateMillis
     }
 
     fun save() {
         val note = _noteText.value.text
-        if (note.isBlank()) return
+        if (note.isBlank() || _saving.value || _saved.value) return
 
+        _saving.value = true
+        _saveFailed.value = false
         viewModelScope.launch {
-            eventRepository.createEvent(
-                note = note,
-                contactIds = _selectedContactIds.value.toList(),
-                tagNames = _selectedTagNames.value.toList(),
-                eventDate = _eventDate.value
-            )
-            settingsRepository.setLastUsedEventTimestamp(_eventDate.value)
-            _saved.value = true
+            try {
+                eventRepository.createEvent(
+                    note = note,
+                    contactIds = _selectedContactIds.value.toList(),
+                    tagNames = _selectedTagNames.value.toList(),
+                    eventDate = _eventDate.value
+                )
+                _saved.value = true
+                try { settingsRepository.setLastUsedEventTimestamp(_eventDate.value) }
+                catch (_: Exception) { /* Event already saved. */ }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _saveFailed.value = true
+            } finally {
+                _saving.value = false
+            }
         }
     }
 
@@ -111,6 +135,8 @@ class AddEventViewModel @Inject constructor(
         _selectedTagNames.value = emptySet()
         applyDefaultEventTime()
         _saved.value = false
+        _saving.value = false
+        _saveFailed.value = false
     }
 
     private fun applyDefaultEventTime() {
