@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# Pull notes linked to one contact from an installed debug build.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/android-sdk-env.sh"
+
+if [[ $# -lt 1 || $# -gt 2 || -z "$1" ]]; then
+    echo "Usage: $0 CONTACT_NAME [ADB_SERIAL]" >&2
+    exit 2
+fi
+if ! command -v adb >/dev/null 2>&1; then
+    echo "adb not found; install Android platform-tools or set ANDROID_HOME" >&2
+    exit 1
+fi
+
+CONTACT_NAME="$1"
+mapfile -t DEVICES < <(adb devices | awk 'NR > 1 && $2 == "device" { print $1 }')
+PHONES=()
+for DEVICE in "${DEVICES[@]}"; do
+    if [[ "$DEVICE" != *emulator* ]]; then
+        PHONES+=("$DEVICE")
+    fi
+done
+if [[ $# -eq 2 ]]; then
+    SERIAL="$2"
+    FOUND=0
+    for DEVICE in "${DEVICES[@]}"; do
+        if [[ "$DEVICE" == "$SERIAL" ]]; then
+            FOUND=1
+        fi
+    done
+    if [[ "$FOUND" -ne 1 ]]; then
+        echo "Device $SERIAL is not connected and authorized" >&2
+        exit 1
+    fi
+elif [[ ${#PHONES[@]} -eq 1 ]]; then
+    SERIAL="${PHONES[0]}"
+elif [[ ${#PHONES[@]} -eq 0 ]]; then
+    echo "No connected, authorized phone found. Plug in and unlock the phone." >&2
+    exit 1
+else
+    echo "Multiple non-emulator devices found. Pass the phone's adb serial as the second argument." >&2
+    exit 1
+fi
+
+PACKAGE="com.idontremember.personalcrm"
+ADB=(adb -s "$SERIAL")
+if ! "${ADB[@]}" shell run-as "$PACKAGE" pwd >/dev/null 2>&1; then
+    echo "Cannot access $PACKAGE with run-as. Install the debug APK and unlock the phone." >&2
+    exit 1
+fi
+
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf -- "$TMP_DIR"' EXIT
+DB_NAME="personal_crm.db"
+
+# Stopping the app closes its writer before copying the database and WAL.
+"${ADB[@]}" shell am force-stop "$PACKAGE"
+"${ADB[@]}" exec-out run-as "$PACKAGE" cat "databases/$DB_NAME" > "$TMP_DIR/$DB_NAME"
+if "${ADB[@]}" shell run-as "$PACKAGE" test -f "databases/$DB_NAME-wal"; then
+    "${ADB[@]}" exec-out run-as "$PACKAGE" cat "databases/$DB_NAME-wal" > "$TMP_DIR/$DB_NAME-wal"
+fi
+
+OUTPUT="$PROJECT_DIR/ignored/dogfood-notes-$(date -u +%Y-%m-%dT%H-%M-%SZ).md"
+python3 "$SCRIPT_DIR/extract_dogfood_notes.py" \
+    "$TMP_DIR/$DB_NAME" "$CONTACT_NAME" "$OUTPUT"

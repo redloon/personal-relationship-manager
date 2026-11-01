@@ -26,6 +26,10 @@ run = "./scripts/pre-launch-check.sh"
 description = "Start or wait for the configured Android emulator"
 run = "./scripts/ensure-emulator.sh"
 
+[tasks.pull-dogfood]
+description = "Pull events linked to Dogfooding Lname from the phone"
+run = "./scripts/pull-dogfood-notes.sh 'Dogfooding Lname'"
+
 [tasks.clean]
 description = "Clean Gradle build outputs"
 run = "./gradlew clean"

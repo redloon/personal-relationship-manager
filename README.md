@@ -22,6 +22,15 @@ Create people in Android Contacts, grant this app Contacts access, then tap the 
 
 Use **Settings → Data → Export data** weekly and before installing a development build that changes storage. Keep the plain JSON file outside the app and treat it as private. **Restore data** replaces all current app records after confirmation; it does not restore preferences or merge records. Confirm the export success message and that the file exists before relying on it.
 
+To review dogfooding notes, link events to a fake Android contact. On the host, save any open note, plug in the phone, and run from this repo:
+
+```bash
+mise run pull-dogfood
+sbx run codex
+```
+
+Ask Codex to read the newest `ignored/dogfood-notes-*.md` and plan changes from it. Each pull creates a new UTC timestamped file and refuses to overwrite one; earlier notes remain available. The pull requires an installed debug build, briefly stops the app, and writes only linked event notes. It ignores emulators when choosing a device; if multiple phones are connected, run `./scripts/pull-dogfood-notes.sh 'Dogfooding Lname' SERIAL` instead. Launch the sandbox from a checkout that contains the generated file. This development note pull does not replace the JSON backup.
+
 After three weeks, check the success signals and stop conditions in [product-intent.md](docs/product-intent.md). Keep new feature ideas parked until the capture and recall loop proves useful.
 
 For sandbox build and emulator setup, see [android-sandbox.md](docs/android-sandbox.md).
