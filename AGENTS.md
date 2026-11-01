@@ -14,6 +14,11 @@
 - Validation is key: if you can't prove that your code works, then assume it doesn't.
 - Assume most code doesn't need to handle migrations. Too often you've overbuilt migration code for features which are still in progress, and therefore had no users yet.
 
+## UI conventions
+
+- Inspect sibling screens and `ui/components` before UI work. Reuse shared controls such as `SearchField` and `SettingsButton`, and fix repeated interactions in those components.
+- Test user-visible behavior and explain intentional deviations from shared patterns.
+
 ## Android tests in a sandbox
 
 - Use `android-tests` MCP for instrumented tests; build inside the sandbox and run APKs on the dedicated host emulator. Read `scripts/host-mcp/README.md` for setup and the tool contract.

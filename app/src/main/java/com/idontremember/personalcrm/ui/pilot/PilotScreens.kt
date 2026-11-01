@@ -18,6 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.idontremember.personalcrm.ui.components.SearchField
+import com.idontremember.personalcrm.ui.components.SettingsButton
 import com.idontremember.personalcrm.data.db.entity.Tag
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -26,9 +28,9 @@ fun Dashboard(onContact: (Long) -> Unit, onContacts: () -> Unit, onEvents: () ->
     val contacts by vm.contacts.collectAsState()
     val recent by vm.recent.collectAsState()
     var query by remember { mutableStateOf("") }
-    Scaffold(modifier = Modifier.testTag("dashboard_screen"), topBar = { TopAppBar(title = { Text(stringResource(R.string.pilot_people)) }, actions = { TextButton(onClick = onSettings) { Text(stringResource(R.string.pilot_settings)) } }) }, floatingActionButton = { FloatingActionButton(onClick = onAdd) { Icon(Icons.Default.Add, contentDescription = stringResource(R.string.pilot_quick_capture)) } }) { padding ->
+    Scaffold(modifier = Modifier.testTag("dashboard_screen"), topBar = { TopAppBar(title = { Text(stringResource(R.string.pilot_people)) }, actions = { SettingsButton(onClick = onSettings) }) }, floatingActionButton = { FloatingActionButton(onClick = onAdd) { Icon(Icons.Default.Add, contentDescription = stringResource(R.string.pilot_quick_capture)) } }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)) {
-            item { OutlinedTextField(query, { query = it }, label = { Text(stringResource(R.string.pilot_search)) }, modifier = Modifier.fillMaxWidth().testTag("dashboard_search"), singleLine = true) }
+            item { SearchField(query, { query = it }, stringResource(R.string.pilot_search), "clear_dashboard_search_button", Modifier.fillMaxWidth().testTag("dashboard_search")) }
             item { Row { TextButton(onClick = onContacts) { Text(stringResource(R.string.pilot_all_contacts)) }; TextButton(onClick = onEvents) { Text(stringResource(R.string.pilot_events)) }; TextButton(onClick = onTags) { Text(stringResource(R.string.pilot_tags)) } } }
             item { Text(if (query.isBlank()) stringResource(R.string.pilot_recent) else stringResource(R.string.pilot_search_results), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 12.dp)) }
             items(if (query.isBlank()) recent else contacts.filter { it.displayName.contains(query, true) }, key = { it.id }) { person ->

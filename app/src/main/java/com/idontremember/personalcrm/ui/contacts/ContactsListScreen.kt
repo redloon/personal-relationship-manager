@@ -14,17 +14,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -45,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import com.idontremember.personalcrm.R
+import com.idontremember.personalcrm.ui.components.SearchField
+import com.idontremember.personalcrm.ui.components.SettingsButton
 import com.idontremember.personalcrm.data.db.entity.Contact
 import com.idontremember.personalcrm.ui.components.EmptyState
 import com.idontremember.personalcrm.ui.components.ErrorState
@@ -106,14 +104,7 @@ fun ContactsListScreen(
                             Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.cd_sync))
                         }
                     }
-                    IconButton(
-                        onClick = onSettingsClick,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .testTag("settings_button")
-                    ) {
-                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.cd_settings))
-                    }
+                    SettingsButton(onClick = onSettingsClick)
                 }
             )
         },
@@ -125,24 +116,12 @@ fun ContactsListScreen(
                 .padding(paddingValues)
         ) {
             // Search bar
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { viewModel.onSearchQueryChanged(it) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .testTag("search_field"),
-                placeholder = { Text(stringResource(R.string.search_contacts_hint)) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                trailingIcon = if (searchQuery.isNotEmpty()) {{
-                    IconButton(
-                        onClick = { viewModel.onSearchQueryChanged("") },
-                        modifier = Modifier.testTag("clear_contacts_search_button")
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_clear_search))
-                    }
-                }} else null,
-                singleLine = true
+            SearchField(
+                query = searchQuery,
+                onQueryChange = viewModel::onSearchQueryChanged,
+                hint = stringResource(R.string.search_contacts_hint),
+                clearTag = "clear_contacts_search_button",
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).testTag("search_field")
             )
 
             val contactList = contacts

@@ -45,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.idontremember.personalcrm.R
+import com.idontremember.personalcrm.ui.components.SearchField
 import com.idontremember.personalcrm.data.settings.DateDisplay
 import com.idontremember.personalcrm.ui.components.ContactChip
 import com.idontremember.personalcrm.ui.components.EmptyState
@@ -153,11 +154,11 @@ fun EventDetailScreen(
                         label = { Text(stringResource(R.string.field_note)) }
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = personQuery,
-                        onValueChange = { personQuery = it },
-                        label = { Text(stringResource(R.string.event_search_person)) },
-                        singleLine = true,
+                    SearchField(
+                        query = personQuery,
+                        onQueryChange = { personQuery = it },
+                        hint = stringResource(R.string.event_search_person),
+                        clearTag = "clear_event_person_search_button",
                         modifier = Modifier.fillMaxWidth().testTag("event_person_search")
                     )
                     if (personQuery.isNotBlank()) {

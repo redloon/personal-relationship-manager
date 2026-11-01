@@ -1,6 +1,7 @@
 package com.idontremember.personalcrm.ui
 
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import com.idontremember.personalcrm.data.db.AppDatabase
 import com.idontremember.personalcrm.data.db.entity.*
@@ -51,7 +52,21 @@ class DashboardTest {
         }
         ui.waitUntil(10000) { ui.onAllNodesWithText("Recent Alice").fetchSemanticsNodes().isNotEmpty() }
         ui.onNodeWithText("Hidden Bob").assertDoesNotExist()
+        ui.onNodeWithTag("clear_dashboard_search_button").assertDoesNotExist()
         ui.onNodeWithTag("dashboard_search").performTextInput("Bob")
         ui.waitUntil(10000) { ui.onAllNodesWithText("Hidden Bob").fetchSemanticsNodes().isNotEmpty() }
+        ui.onNodeWithTag("clear_dashboard_search_button").assertIsDisplayed().performClick()
+        ui.onNodeWithTag("dashboard_search").assert(SemanticsMatcher("Search query is empty") {
+            it.config[SemanticsProperties.EditableText].text.isEmpty()
+        })
+        ui.onNodeWithTag("clear_dashboard_search_button").assertDoesNotExist()
+        ui.waitUntil(10000) { ui.onAllNodesWithText("Recent Alice").fetchSemanticsNodes().isNotEmpty() }
+        ui.onNodeWithText("Hidden Bob").assertDoesNotExist()
+    }
+
+    @Test fun settingsOpensFromDashboard() {
+        ui.waitUntilTagDisplayed("settings_button", 10_000)
+        ui.onNodeWithTag("settings_button").performClick()
+        ui.waitUntilTagDisplayed("settings_screen", 10_000)
     }
 }
