@@ -10,7 +10,7 @@ mise install
 
 # Common commands (see mise.toml)
 mise run build
-mise run install
+mise run phone-install # host: single connected physical phone
 mise run unit
 mise run test
 mise run test-class -- com.idontremember.personalcrm.AppLaunchTest
@@ -19,7 +19,7 @@ mise run check
 
 Provision the Android SDK packages listed in [android-sandbox.md](docs/android-sandbox.md). Use the sandbox for builds, lint, and JVM tests. For instrumented tests, run `mise run test-stage` and submit the APK hashes through the host `android-tests` MCP tools; see the [MCP runbook](scripts/host-mcp/README.md).
 
-The test runner reads `sdk.dir` from the ignored `local.properties` and adds the SDK's platform tools, emulator, and command-line tools to `PATH`. If it needs to create an emulator, it installs the Android 34 Google APIs x86_64 image and creates `pixel_6_api_34`. If provisioning fails, check SDK licenses (`sdkmanager --licenses`) and make sure the SDK command-line tools are installed.
+Gradle tasks discover the SDK per environment through `scripts/android-sdk-env.sh` (`ANDROID_HOME` / `ANDROID_SDK_ROOT`, tools on PATH, or `~/Android/Sdk`). Keep `sdk.dir` out of shared `local.properties`; it overrides environment discovery. Use the host MCP installer to provision the dedicated `android_tests` emulator. The legacy `test` / `test-class` commands above run a local emulator; sandbox agents should use `test-stage` and MCP instead.
 
 ## Phase 1 dogfood loop
 

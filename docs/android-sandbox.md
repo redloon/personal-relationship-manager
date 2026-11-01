@@ -6,7 +6,9 @@ This records the setup attempted in the October 2026 sandbox. The host's Android
 
 Run `mise install` to install the project-managed Java 21 toolchain. Provision the Android SDK separately using the packages below. Use `mise run build`, `mise run unit`, and `mise run check` inside the sandbox; use `mise run test-stage` plus the host `android-tests` MCP tools for emulator/instrumented tests. See the [MCP runbook](../scripts/host-mcp/README.md).
 
-Keep SDK paths environment-specific. A local sandbox shares workspace files with the host, including ignored `local.properties`. Do not overwrite a host SDK path with a sandbox-only path. If the SDK paths differ, use a separate checkout for the sandbox and put its SDK path in that checkout’s ignored `local.properties`. Setting `ANDROID_HOME` alone does not override Gradle’s `sdk.dir`.
+Resolve SDK paths per environment through `scripts/android-sdk-env.sh`: `ANDROID_HOME` / `ANDROID_SDK_ROOT`, SDK tools on PATH, or `~/Android/Sdk`. Sandbox-specific installations can set ANDROID_HOME in their environment. Do not store `sdk.dir` in the shared ignored `local.properties`: it overrides environment discovery and points to different locations on host and sandbox. Remove an existing sdk.dir entry once when adopting this workflow. Mise Gradle tasks use `scripts/gradle.sh` to load discovery automatically.
+
+`mise run phone-install` builds locally and installs with an explicit ADB serial on the single authorized physical phone. Emulators are ignored. Debug keys can differ between environments: keep phone installation on the host so its existing debug key is used. Do not uninstall the phone app to fix a signature error without preserving its data. MCP continues to handle emulator installs separately.
 
 ## Verified host MCP workflow
 
@@ -24,7 +26,7 @@ The automatic startup command now includes SwiftShader. Refresh the installed sn
 - Emulator runtime libraries: `libx11-6` and `libx11-xcb1` from apt. Without these, the emulator binary failed to load or stopped during startup.
 - AVD: `printf 'no\n' | avdmanager create avd -n pixel_6_api_34 -k 'system-images;android-34;google_apis;x86_64' --device pixel_6 --force`.
 
-In a separate sandbox checkout, set its ignored `local.properties` to `sdk.dir=/home/agent/android-sdk`. After `mise install`, for commands in a fresh shell:
+For the sandbox SDK location, set `ANDROID_HOME` in its environment. After `mise install`, for commands in a fresh shell:
 
 ```bash
 export ANDROID_HOME=/home/agent/android-sdk

@@ -14,7 +14,7 @@ echo ""
 
 # 1. Build must succeed
 echo "▶ Building debug APK..."
-if ! ./gradlew assembleDebug --no-daemon --quiet 2>/dev/null; then
+if ! bash scripts/gradle.sh assembleDebug --no-daemon --quiet; then
     echo "  ❌ Build failed"
     ERRORS=$((ERRORS + 1))
 else
@@ -23,7 +23,7 @@ fi
 
 # 2. Build instrumented test APK (catches test compilation issues)
 echo "▶ Building test APK..."
-if ! ./gradlew assembleDebugAndroidTest --no-daemon --quiet 2>/dev/null; then
+if ! bash scripts/gradle.sh assembleDebugAndroidTest --no-daemon --quiet; then
     echo "  ❌ Test APK build failed"
     ERRORS=$((ERRORS + 1))
 else
@@ -32,7 +32,7 @@ fi
 
 # 3. Lint check (catches common issues)
 echo "▶ Running lint..."
-if ! ./gradlew lintDebug --no-daemon --quiet 2>/dev/null; then
+if ! bash scripts/gradle.sh lintDebug --no-daemon --quiet; then
     echo "  ⚠ Lint warnings (not blocking)"
 else
     echo "  ✅ Lint OK"
