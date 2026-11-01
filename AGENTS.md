@@ -26,6 +26,7 @@
 - Run a focused test while iterating and the full suite before reporting instrumented validation. Report job ID, test count, and result; a build alone is not a test pass.
 - Discover gateway tools if needed. If MCP is unavailable, diagnose attachment/setup using the runbook; do not silently fall back to launching an emulator inside the sandbox or executing checkout scripts on the host.
 - The installed host runner is a separate trusted snapshot. Repo edits do not update it; host setup/refresh uses `python3 scripts/host-mcp/setup.py --sandbox NAME`; setup refreshes idle host runner processes; a sandbox restart alone does not reload them. Confirm health PID/hash and AVD after refresh. Never broaden it to host builds without the user's agreement.
+- For code-only runner refresh, use `bash scripts/host-mcp/install.sh --refresh-only` (optionally `--sandbox NAME`), then reconnect MCP. Version 3 serializes jobs across host/sandbox connections and resets incompatible debug signatures only on the verified dedicated emulator. Never apply that reset to a phone. Pass log offsets as integers; terminal status includes completed cleanup.
 
 ## context on your human partner
 

@@ -100,13 +100,18 @@ def check_emulator(sdk, expected):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--sandbox', required=True, help='Existing sandbox name (see sbx ls)')
+    parser.add_argument('--sandbox', help='Existing sandbox name (see sbx ls)')
+    parser.add_argument('--refresh-only', action='store_true', help='Refresh installed runner code without provisioning SDK/AVD; optionally reload --sandbox')
     parser.add_argument('--sdk', help='Host Android SDK; otherwise preserve config or detect Android SDK')
     args = parser.parse_args()
-    for command in ['java', 'sbx', 'python3']:
+    if not args.sandbox and not args.refresh_only:
+        parser.error('Provide --sandbox NAME for setup, or --refresh-only for an existing installation')
+    for command in (['python3'] if args.refresh_only else ['java', 'sbx', 'python3']):
         if not shutil.which(command):
             parser.error(f'Missing {command}; install it on the host first')
     path = DEST/'config.json'
+    if args.refresh_only and not path.is_file():
+        parser.error('No installed config; run setup with --sandbox NAME first')
     existing = json.loads(path.read_text()) if path.exists() else {}
     config = configuration(existing, args.sdk)
     sdk = Path(config['sdk'])
@@ -119,7 +124,8 @@ def main():
         if not Path(config[name]).is_absolute():
             parser.error(f'config {name} must be an absolute path')
     # Verify host login/daemon before making changes. No sandbox restart here.
-    run('sbx', 'ls')
+    if args.sandbox:
+        run('sbx', 'ls')
     stop_runners(config)
     DEST.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(config, indent=2)+'\n')
@@ -130,6 +136,11 @@ def main():
         shutil.copyfile(SOURCE/name, DEST/name)
     import hashlib
     (DEST/'runner.sha256').write_text(hashlib.sha256((DEST/'runner.py').read_bytes()).hexdigest()+'\n')
+    if args.refresh_only:
+        if args.sandbox:
+            run('sbx', 'mcp', 'load', 'android-tests', '--sandbox', args.sandbox)
+        print('Runner refreshed. Reconnect host Codex MCP (or restart/resume Codex); confirm health version=3 and the new source hash before testing.')
+        return
     print('Review SDK licenses if prompted.', flush=True)
     run(sdk/'cmdline-tools/latest/bin/sdkmanager', '--licenses')
     image = 'system-images;android-34;google_apis;x86_64'

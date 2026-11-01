@@ -1,9 +1,11 @@
 """Configuration probes; no host tools required."""
 import importlib.util
+import json
 from pathlib import Path
 import unittest
 import subprocess
 import tempfile
+import sys
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('setup', Path(__file__).with_name('setup.py'))
@@ -22,6 +24,25 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(setup.configuration(config, '/other')['sdk'], '/other')
 
 class RefreshTests(unittest.TestCase):
+    def test_code_only_refresh_skips_sdk_provisioning_and_sandbox(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            dest = root/'installed'
+            dest.mkdir()
+            sdk = root/'sdk'
+            for name in ['sdkmanager', 'avdmanager', 'apkanalyzer']:
+                path = sdk/'cmdline-tools/latest/bin'/name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.touch()
+            (dest/'config.json').write_text(json.dumps(dict(sdk=str(sdk), inbox=str(root/'inbox'), state=str(dest/'jobs'), avd='android_tests')))
+            with patch.object(setup, 'DEST', dest), patch.object(sys, 'argv', ['setup.py', '--refresh-only']), patch.object(setup, 'stop_runners'), patch.object(setup, 'run') as run:
+                setup.main()
+            commands = [[str(a) for a in call.args] for call in run.call_args_list]
+            self.assertEqual(len(commands), 2)  # venv and dependencies only
+            self.assertFalse(any('sbx' in c or any('sdkmanager' in a for a in c) for c in commands))
+            self.assertEqual((dest/'runner.py').read_bytes(), (setup.SOURCE/'runner.py').read_bytes())
+            self.assertTrue((dest/'runner.sha256').is_file())
+
     def test_refresh_without_pidfd(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

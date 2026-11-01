@@ -1,5 +1,6 @@
 """Trusted APK-only host runner. Install outside the shared checkout."""
 import hashlib
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -14,6 +15,31 @@ SOURCE_SHA256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 
 RUNNER = PACKAGE + '.test/' + PACKAGE + '.HiltTestRunner'
 
+
+class CommandError(RuntimeError):
+    def __init__(self, args, returncode, output):
+        self.output = output
+        super().__init__(f'Command failed ({returncode}): {" ".join(args)}\n{output[-2000:]}')
+
+
+def install_apks(device, directory, verify, note):
+    """Only reset these two disposable packages on the verified test emulator."""
+    def install():
+        for name in ['app.apk', 'test.apk']:
+            device('install', '-r', str(directory/name))
+    try:
+        install()
+    except CommandError as error:
+        if 'INSTALL_FAILED_UPDATE_INCOMPATIBLE' not in error.output:
+            raise
+        verify()
+        note('Debug signing key changed (host/sandbox build). Resetting only the app and test packages on the dedicated test emulator; its app data is disposable.\n')
+        for package in [PACKAGE+'.test', PACKAGE]:
+            # A missing test package is normal if only the app was installed.
+            if f'package:{package}' in device('shell', 'pm', 'list', 'packages', package).splitlines():
+                device('uninstall', package)
+        install()
+
 class Runner:
     def __init__(self, config):
         self.sdk = Path(config['sdk']).resolve()
@@ -24,14 +50,30 @@ class Runner:
         self.lock = threading.Lock()
         self.active = None
         self.jobs = {}
-        for p in self.state.glob('*/status.json'):
-            job = json.loads(p.read_text())
-            if job['status'] == 'running':
-                job.update(status='interrupted', phase='server restarted')
-            self.jobs[p.parent.name] = job
+        # Host Codex and the sandbox gateway may each have a runner process.
+        # Do not treat another process's live jobs as interrupted.
+        with (self.state/'runner.lock').open('a') as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                pass
+            else:
+                for p in self.state.glob('*/status.json'):
+                    job = json.loads(p.read_text())
+                    if job['status'] == 'running':
+                        job.update(status='interrupted', phase='server restarted')
+                        p.write_text(json.dumps(job))
 
     def health(self):
-        return dict(version=2, pid=os.getpid(), source_sha256=SOURCE_SHA256, state=str(self.state), sdk_available=(self.sdk/'platform-tools/adb').is_file(), avd=self.avd)
+        with (self.state/'runner.lock').open('a') as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                busy = False
+            except BlockingIOError:
+                busy = True
+        tools = ['platform-tools/adb', 'emulator/emulator', 'cmdline-tools/latest/bin/apkanalyzer']
+        missing = [name for name in tools if not (self.sdk/name).is_file()]
+        return dict(version=3, pid=os.getpid(), source_sha256=SOURCE_SHA256, state=str(self.state), inbox=str(self.inbox), sdk_available=not missing, missing_sdk_tools=missing, avd=self.avd, serial='emulator-5580', busy=busy, readiness='Test submission checks emulator identity and boot; health does not prove emulator readiness.')
 
     def save(self, jid):
         p = self.state/jid/'status.json'
@@ -39,54 +81,75 @@ class Runner:
         tmp.write_text(json.dumps(self.jobs[jid]))
         tmp.replace(p)
 
-    def start_test(self, app_sha256, test_sha256, filter=None):
+    def start_test(self, app_sha256: str, test_sha256: str, filter: str | None = None):
         if filter and not re.fullmatch(r'com\.idontremember\.personalcrm\.[A-Za-z0-9_.$]+(?:#[A-Za-z0-9_$]+)?', filter):
             raise ValueError('Invalid test filter')
         with self.lock:
             if self.active:
-                raise ValueError('Runner busy')
-            jid = uuid.uuid4().hex
-            directory = self.state/jid
-            directory.mkdir(mode=0o700)
-            for name, digest in [('app.apk', app_sha256), ('test.apk', test_sha256)]:
-                if not re.fullmatch('[0-9a-f]{64}', digest):
-                    raise ValueError('Invalid hash')
-                fd = os.open(self.inbox/name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-                import stat
-                with os.fdopen(fd, 'rb') as source:
-                    info = os.fstat(source.fileno())
-                    if not stat.S_ISREG(info.st_mode) or info.st_size > 256*1024*1024:
-                        raise ValueError('Invalid APK file')
-                    data = source.read(256*1024*1024+1)
-                if hashlib.sha256(data).hexdigest() != digest:
-                    raise ValueError('APK hash mismatch')
-                (directory/name).write_bytes(data)
-            self.jobs[jid] = dict(status='running', phase='starting')
-            self.active = jid
-            self.cancelled = threading.Event()
-            self.save(jid)
-            threading.Thread(target=self.run, args=(jid, filter), daemon=True).start()
-            return dict(job_id=jid)
+                raise ValueError(f'Runner busy with job {self.active}; wait for cleanup before submitting or restaging.')
+            job_lock = (self.state/'runner.lock').open('a')
+            try:
+                fcntl.flock(job_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                job_lock.close()
+                raise ValueError('Another host/sandbox connection is running tests or cleaning up. Wait before submitting or restaging.')
+            try:
+                return self._start_test(app_sha256, test_sha256, filter, job_lock)
+            except Exception:
+                job_lock.close()
+                raise
 
-    def get_status(self, job_id):
-        return dict(self.jobs[job_id])
+    def _start_test(self, app_sha256, test_sha256, filter, job_lock):
+        jid = uuid.uuid4().hex
+        directory = self.state/jid
+        directory.mkdir(mode=0o700)
+        for name, digest in [('app.apk', app_sha256), ('test.apk', test_sha256)]:
+            if not re.fullmatch('[0-9a-f]{64}', digest):
+                raise ValueError('Invalid hash')
+            fd = os.open(self.inbox/name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            import stat
+            with os.fdopen(fd, 'rb') as source:
+                info = os.fstat(source.fileno())
+                if not stat.S_ISREG(info.st_mode) or info.st_size > 256*1024*1024:
+                    raise ValueError('Invalid APK file')
+                data = source.read(256*1024*1024+1)
+            if hashlib.sha256(data).hexdigest() != digest:
+                raise ValueError('APK hash mismatch')
+            (directory/name).write_bytes(data)
+        self.jobs[jid] = dict(status='running', phase='starting')
+        self.active = jid
+        self.cancelled = threading.Event()
+        self.save(jid)
+        threading.Thread(target=self.run, args=(jid, filter, job_lock), daemon=True).start()
+        return dict(job_id=jid)
 
-    def read_logs(self, job_id, offset=0):
-        if job_id not in self.jobs or offset < 0:
+    def get_status(self, job_id: str):
+        if not re.fullmatch('[0-9a-f]{32}', job_id):
+            raise ValueError('Invalid job ID')
+        # Allow polling a job after reconnecting to another runner process.
+        path = self.state/job_id/'status.json'
+        if not path.is_file():
+            raise ValueError('Unknown job')
+        return json.loads(path.read_text())
+
+    def read_logs(self, job_id: str, offset: int = 0):
+        self.get_status(job_id)
+        if not isinstance(offset, int) or offset < 0:
             raise ValueError('Invalid job or offset')
         p = self.state/job_id/'output.log'
         data = p.read_bytes() if p.exists() else b''
         chunk = data[offset:offset+32768]
         return dict(text=chunk.decode(errors='replace'), next_offset=offset+len(chunk))
 
-    def cancel(self, job_id):
-        if job_id not in self.jobs:
-            raise ValueError('Unknown job')
+    def cancel(self, job_id: str):
+        status = self.get_status(job_id)
+        if status['status'] == 'running' and self.active != job_id:
+            raise ValueError('This job belongs to another connection; cancel through the connection that started it.')
         if self.active == job_id:
             self.cancelled.set()
         return self.get_status(job_id)
 
-    def run(self, jid, filter):
+    def run(self, jid, filter, job_lock):
         directory = self.state/jid
         deadline = time.monotonic()+900
         adb = str(self.sdk/'platform-tools/adb')
@@ -104,10 +167,16 @@ class Runner:
                 output = (directory/'command.log').read_bytes()
                 log.write(output)
                 if p.returncode:
-                    raise RuntimeError('Command failed: '+str(p.returncode))
+                    raise CommandError(args, p.returncode, output.decode(errors='replace'))
                 return output.decode(errors='replace')
         def device(*args):
             return call([adb, '-s', serial, *args])
+        def verify():
+            if device('emu', 'avd', 'name').splitlines()[0] != self.avd:
+                raise ValueError('Emulator identity changed; refusing to modify packages')
+        def note(message):
+            with (directory/'output.log').open('a') as log:
+                log.write(message)
         try:
             analyzer = self.sdk/'cmdline-tools/latest/bin/apkanalyzer'
             for name, expected in [('app.apk', PACKAGE), ('test.apk', PACKAGE+'.test')]:
@@ -134,7 +203,7 @@ class Runner:
                 raise ValueError('Emulator identity changed during boot')
             device_verified = True
             self.jobs[jid]['phase'] = 'install'; self.save(jid)
-            for name in ['app.apk', 'test.apk']: device('install', '-r', str(directory/name))
+            install_apks(device, directory, verify, note)
             if RUNNER not in device('shell', 'pm', 'list', 'instrumentation'): raise ValueError('Unexpected instrumentation runner')
             device('shell', 'pm', 'clear', PACKAGE)
             for permission in ['READ_CONTACTS', 'WRITE_CONTACTS']:
@@ -146,20 +215,24 @@ class Runner:
             output = call(args+[RUNNER], 180)
             if not re.search(r'OK \([1-9][0-9]* tests?\)', output) or 'FAILURES' in output or 'INSTRUMENTATION_FAILED' in output:
                 raise RuntimeError('Tests failed or completion missing')
-            self.jobs[jid].update(status='passed', phase='finished')
+            result = dict(status='passed', phase='finished', test_count=int(re.search(r'OK \(([1-9][0-9]*) tests?\)', output).group(1)))
         except Exception as error:
-            self.jobs[jid].update(status='cancelled' if self.cancelled.is_set() else 'failed', phase='finished', error=str(error))
+            result = dict(status='cancelled' if self.cancelled.is_set() else 'failed', phase='finished', error=str(error))
         finally:
+            self.jobs[jid]['phase'] = 'cleanup'; self.save(jid)
             for args in [('shell', 'am', 'force-stop', PACKAGE+'.test'), ('shell', 'am', 'force-stop', PACKAGE), ('logcat', '-d', '-t', '2000')]:
                 if not device_verified:
                     break
                 try:
+                    verify()
                     with (directory/'output.log').open('ab') as log:
                         subprocess.run([adb, '-s', serial, *args], stdout=log, stderr=log, timeout=15)
                 except Exception: pass
             with self.lock:
+                self.jobs[jid].update(result)
                 self.save(jid)
                 self.active = None
+                job_lock.close()
 
 if __name__ == '__main__':
     import sys
