@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./scripts/run-tests.sh*)",
+      "Bash(./scripts/pre-launch-check.sh*)",
+      "Bash(./scripts/ensure-emulator.sh*)",
+      "Bash(./scripts/capture-crash-logs.sh*)",
+      "Bash(./gradlew *)",
+      "Bash(adb *)",
+      "Bash(./gradlew testDebugUnitTest*)",
+      "Bash(./scripts/pre-launch-check.sh*)"
+    ]
+  }
+}

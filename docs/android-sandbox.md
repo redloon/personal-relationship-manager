@@ -2,7 +2,21 @@
 
 This records the setup attempted in the October 2026 sandbox. The host's Android setup is separate: `local.properties` initially pointed to `/home/user/Android/Sdk`, which was absent inside the sandbox.
 
-## Toolchain installed here
+## Default workflow
+
+Run `mise install` to install the project-managed Java 21 toolchain. Provision the Android SDK separately using the packages below. Use `mise run build`, `mise run unit`, and `mise run check` inside the sandbox; use `mise run test-stage` plus the host `android-tests` MCP tools for emulator/instrumented tests. See the [MCP runbook](../scripts/host-mcp/README.md).
+
+Keep SDK paths environment-specific. A local sandbox shares workspace files with the host, including ignored `local.properties`. Do not overwrite a host SDK path with a sandbox-only path. If the SDK paths differ, use a separate checkout for the sandbox and put its SDK path in that checkout’s ignored `local.properties`. Setting `ANDROID_HOME` alone does not override Gradle’s `sdk.dir`.
+
+## Verified host MCP workflow
+
+The user verified sandbox-built APK execution through the host MCP gateway, including useful test failure diagnosis. The dedicated `android_mcp_probe` AVD uses port 5580. Software graphics (`-gpu swiftshader`) eliminated continuous EGL context errors and tests passed; occasional color-buffer warnings remained. These warnings alone are not test failures.
+
+Keep Gradle and repo scripts inside the sandbox. Only trusted installed runner code operates host ADB/emulator; APKs are copied and hash checked before execution. Do not expose a general command runner or host ADB endpoint. Future host builds require an explicit decision.
+
+The automatic startup command now includes SwiftShader. Refresh the installed snapshot as described in the runbook to apply repo changes. Earlier sandbox emulator experiments below are historical, not the default workflow.
+
+## Toolchain installed in the earlier sandbox
 
 - JDK 21: `sudo apt-get install -y openjdk-21-jdk-headless`. The image had JDK 25, while Gradle requests 21; Gradle's Foojay download returned HTTP 403.
 - Android command line tools: `commandlinetools-linux-13114758_latest.zip` from `dl.google.com/android/repository/`, unpacked under `/home/agent/android-sdk/cmdline-tools/latest`.
@@ -10,15 +24,14 @@ This records the setup attempted in the October 2026 sandbox. The host's Android
 - Emulator runtime libraries: `libx11-6` and `libx11-xcb1` from apt. Without these, the emulator binary failed to load or stopped during startup.
 - AVD: `printf 'no\n' | avdmanager create avd -n pixel_6_api_34 -k 'system-images;android-34;google_apis;x86_64' --device pixel_6 --force`.
 
-Set the ignored `local.properties` to `sdk.dir=/home/agent/android-sdk` in this sandbox. For commands in a fresh shell:
+In a separate sandbox checkout, set its ignored `local.properties` to `sdk.dir=/home/agent/android-sdk`. After `mise install`, for commands in a fresh shell:
 
 ```bash
-export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 export ANDROID_HOME=/home/agent/android-sdk
 export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
-./gradlew testDebugUnitTest assembleDebugAndroidTest
-./scripts/run-tests.sh
-./scripts/pre-launch-check.sh
+mise run unit
+mise run build
+mise run check
 ```
 
 The sandbox had no `/dev/kvm`; `emulator -accel-check` reported acceleration unavailable. `scripts/ensure-emulator.sh` uses `-accel off` when `/dev/kvm` is missing and allows more boot time. A reduced AVD (480×800, 1 CPU, 1 GB RAM, 2 GB data, SwiftShader) launched, but after 148 seconds `adb` still showed `emulator-5554` as `offline` and `sys.boot_completed` could not be read. Instrumented execution is therefore unverified here. If launching manually, detach all three standard streams so the command returns:
@@ -41,6 +54,6 @@ The runner writes each timed command's output to `test-results/` and tails the f
 
 ## Make the next sandbox faster
 
-The reusable setup is JDK 21, Android command line tools, the exact SDK packages above, emulator runtime libraries, and a writable Android SDK and Gradle cache. Docker Sandbox **kits** can package tools and runtime settings; a small Android tool mixin or kit set is a candidate once these versions and commands are proven. Keep the SDK path inside the sandbox stable, or generate the ignored `local.properties` on startup. Cache SDK downloads and Gradle artifacts across sessions if kit data persistence is available.
+Reuse the sandbox to retain installed tools and caches. Defer a custom Android kit and cross-sandbox cache sharing until repeated provisioning is a measured problem. Common CLI tools belong in a personal tools mixin, separate from this repository.
 
 Host acceleration is a separate decision: verify that the Docker Sandbox runtime can expose `/dev/kvm` before changing host settings. If it cannot, keep software emulation or run instrumented tests on the host. The Docker CLI/socket being present inside a sandbox does not itself expose KVM.

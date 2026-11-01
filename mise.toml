@@ -1,3 +1,6 @@
+[tools]
+java = "temurin-21"
+
 [tasks.build]
 description = "Build the debug APK"
 run = "./gradlew assembleDebug"
@@ -33,3 +36,11 @@ run = "./scripts/pull-dogfood-notes.sh 'Dogfooding Lname'"
 [tasks.clean]
 description = "Clean Gradle build outputs"
 run = "./gradlew clean"
+
+[tasks.codex]
+description = "Run codex in sandbox"
+run = "sbx run codex"
+
+[tasks.test-stage]
+description = "Build and stage APKs for the host android-tests MCP runner"
+run = "./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --console=plain && python3 scripts/stage-mcp-apks.py"
