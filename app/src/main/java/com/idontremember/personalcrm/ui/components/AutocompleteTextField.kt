@@ -55,7 +55,9 @@ fun AutocompleteTextField(
     onTagSelected: (AutocompleteTag) -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String? = null,
-    autoFocus: Boolean = false
+    autoFocus: Boolean = false,
+    enableTags: Boolean = true,
+    onCreateContact: ((String) -> Unit)? = null
 ) {
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -77,8 +79,8 @@ fun AutocompleteTextField(
     val cursorPos = value.selection.start
 
     // Find if we're in a trigger context
-    val triggerInfo = remember(text, cursorPos) {
-        detectTrigger(text, cursorPos)
+    val triggerInfo = remember(text, cursorPos, enableTags) {
+        detectTrigger(text, cursorPos)?.takeIf { enableTags || it.type != TriggerType.TAG }
     }
 
     if (triggerInfo != null) {
@@ -90,7 +92,7 @@ fun AutocompleteTextField(
                 val filtered = contacts.filter {
                     it.displayName.contains(triggerQuery, ignoreCase = true)
                 }
-                showContactDropdown = filtered.isNotEmpty()
+                showContactDropdown = filtered.isNotEmpty() || (triggerQuery.isNotBlank() && onCreateContact != null)
                 showTagDropdown = false
 
                 if (showContactDropdown) {
@@ -134,6 +136,9 @@ fun AutocompleteTextField(
                                     onContactSelected(contact)
                                 }
                             )
+                        }
+                        if (triggerQuery.isNotBlank() && filtered.isEmpty() && onCreateContact != null) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.pilot_create_contact, triggerQuery.trim())) }, onClick = { onCreateContact(triggerQuery.trim()) })
                         }
                     }
                 }

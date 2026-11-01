@@ -25,6 +25,8 @@ class ContactRepository @Inject constructor(
 
     fun searchContacts(query: String): Flow<List<Contact>> = contactDao.search(query)
 
+    suspend fun getContactByAndroidId(id: Long): Contact? = contactDao.getByAndroidContactId(id)
+
     suspend fun getContactById(id: Long): Contact? = contactDao.getById(id)
 
     fun getContactByIdFlow(id: Long): Flow<Contact?> = contactDao.getByIdFlow(id)

@@ -132,7 +132,7 @@ class AccessibilitySmokeTest {
         setFontScale(1.3f)
         composeTestRule.activityRule.scenario.recreate()
 
-        composeTestRule.waitUntilTagDisplayed("contacts_list_screen")
+        composeTestRule.navigateToContactsTab()
         composeTestRule.onNodeWithTag("search_field").assertIsDisplayed()
         composeTestRule.waitUntilTagDisplayed("contacts_empty_state")
         composeTestRule.onNodeWithTag("contacts_empty_state").assertIsDisplayed()
@@ -158,7 +158,7 @@ class AccessibilitySmokeTest {
     }
 
     private fun openFirstContactDetail() {
-        composeTestRule.waitUntilTagExists("contacts_list_screen")
+        composeTestRule.navigateToContactsTab()
         composeTestRule.waitUntilTagExists("contact_list_item")
         composeTestRule.onAllNodesWithTag("contact_list_item")[0].performClick()
         composeTestRule.waitUntilTagDisplayed("contact_detail_screen")

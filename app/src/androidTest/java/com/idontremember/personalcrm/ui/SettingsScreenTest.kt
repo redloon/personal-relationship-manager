@@ -61,6 +61,7 @@ class SettingsScreenTest {
 
     @Test
     fun gearOnContactsScreen_opensSettings_andBackReturns() {
+        composeTestRule.navigateToContactsTab()
         composeTestRule.waitUntilTagExists("settings_button")
         composeTestRule.onNodeWithTag("settings_button").assertIsDisplayed()
 
@@ -135,6 +136,7 @@ class SettingsScreenTest {
     // --- helpers ---
 
     private fun openSettingsFromContacts() {
+        composeTestRule.navigateToContactsTab()
         composeTestRule.waitUntilTagExists("settings_button")
         composeTestRule.onNodeWithTag("settings_button").performClick()
         composeTestRule.waitUntilTagDisplayed("settings_screen")

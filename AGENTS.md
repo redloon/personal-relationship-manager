@@ -1,5 +1,7 @@
 # AGENTS.md
 
+- Check `docs/decisions.md` for important, non-obvious product decisions before changing related behavior.
+
 - Always test theories with simple probes/test-scripts to confirm your assumptions about behavior or solutions is correct, for example when stating that a certain bash command combination should work in a particular way, test a simplified version to ensure the real world behavior matches your understanding.
 
 ## context on your human partner

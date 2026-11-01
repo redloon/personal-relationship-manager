@@ -25,7 +25,9 @@ data class BackupSnapshot(
     val events: List<EventRecord>,
     val tags: List<TagRecord>,
     val eventContacts: List<EventContactRecord>,
-    val eventTags: List<EventTagRecord>
+    val eventTags: List<EventTagRecord>,
+    val contactTags: List<ContactTagRecord> = emptyList(),
+    val relationships: List<RelationshipRecord> = emptyList()
 )
 
 @Serializable data class ContactRecord(val id: Long, val androidContactId: Long?, val displayName: String,
@@ -35,6 +37,9 @@ data class BackupSnapshot(
 @Serializable data class TagRecord(val id: Long, val name: String, val createdAt: Long)
 @Serializable data class EventContactRecord(val eventId: Long, val contactId: Long)
 @Serializable data class EventTagRecord(val eventId: Long, val tagId: Long)
+
+@Serializable data class ContactTagRecord(val contactId: Long, val tagId: Long)
+@Serializable data class RelationshipRecord(val contactA: Long, val contactB: Long, val label: String)
 
 /** The small Phase 1 format. Validation happens before any database write. */
 object BackupJson {
@@ -65,6 +70,8 @@ object BackupJson {
             snapshot.eventContacts.distinct().size == snapshot.eventContacts.size) { "Invalid event contact link" }
         require(snapshot.eventTags.all { it.eventId in eventIds && it.tagId in tagIds } &&
             snapshot.eventTags.distinct().size == snapshot.eventTags.size) { "Invalid event tag link" }
+        require(snapshot.contactTags.all { it.contactId in contactIds && it.tagId in tagIds } && snapshot.contactTags.distinct().size == snapshot.contactTags.size) { "Invalid contact tag" }
+        require(snapshot.relationships.all { it.contactA in contactIds && it.contactB in contactIds && it.contactA < it.contactB && it.label.isNotBlank() } && snapshot.relationships.distinct().size == snapshot.relationships.size) { "Invalid relationship" }
         return snapshot
     }
 }
@@ -83,7 +90,9 @@ class DataExporter @Inject constructor(private val database: AppDatabase) {
                 events = database.eventDao().getAllOnce().map { EventRecord(it.id, it.note, it.eventDate, it.createdAt, it.updatedAt) },
                 tags = database.tagDao().getAllOnce().map { TagRecord(it.id, it.name, it.createdAt) },
                 eventContacts = database.eventDao().getAllEventContacts().map { EventContactRecord(it.eventId, it.contactId) },
-                eventTags = database.eventDao().getAllEventTags().map { EventTagRecord(it.eventId, it.tagId) }
+                eventTags = database.eventDao().getAllEventTags().map { EventTagRecord(it.eventId, it.tagId) },
+                contactTags = database.pilotDao().allContactTags().map { ContactTagRecord(it.contactId, it.tagId) },
+                relationships = database.pilotDao().allRelationships().map { RelationshipRecord(it.contactA, it.contactB, it.label) }
             )
         }
         BackupJson.encode(snapshot)
@@ -101,6 +110,8 @@ class DataExporter @Inject constructor(private val database: AppDatabase) {
             snapshot.tags.forEach { database.tagDao().insert(Tag(it.id, it.name, it.createdAt)) }
             snapshot.facts.forEach { database.contactFactDao().insert(ContactFact(it.id, it.contactId, it.text, it.createdAt)) }
             snapshot.eventContacts.forEach { database.eventDao().insertEventContact(EventContact(it.eventId, it.contactId)) }
+            snapshot.contactTags.forEach { database.pilotDao().addTag(ContactTag(it.contactId, it.tagId)) }
+            snapshot.relationships.forEach { database.pilotDao().addRelationship(Relationship(it.contactA, it.contactB, it.label)) }
             snapshot.eventTags.forEach { database.eventDao().insertEventTag(EventTag(it.eventId, it.tagId)) }
         }
     }

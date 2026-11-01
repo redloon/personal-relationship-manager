@@ -10,7 +10,7 @@ import androidx.compose.ui.test.performClick
  *
  * The bottom navigation bar (testTags "nav_tab_contacts" / "nav_tab_events") is
  * the supported way for tests to reach top-level screens: the app starts on the
- * Contacts route, and clicking a tab clears the back stack to that tab's
+ * dashboard, and clicking a tab clears the back stack to that tab's
  * top-level route.
  */
 fun ComposeTestRule.navigateToEventsTab() {

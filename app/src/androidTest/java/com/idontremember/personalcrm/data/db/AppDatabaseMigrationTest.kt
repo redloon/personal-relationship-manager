@@ -36,6 +36,12 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class AppDatabaseMigrationTest : MigrationTestBase() {
 
+    @Test
+    fun productionMigration_preservesPopulatedData() {
+        helper.createDatabase("production-migration", 1).use { it.seedSampleData() }
+        helper.runMigrationsAndValidate("production-migration", 2, true, MIGRATION_1_2).use { it.assertSampleDataPreserved() }
+    }
+
     /**
      * Scratch-schema helper, pointed at `assets/scratch-schemas/`. Kept separate from
      * the inherited production `helper` on purpose — see the class KDoc.

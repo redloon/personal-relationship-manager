@@ -21,6 +21,14 @@ class BackupJsonTest {
         assertEquals(snapshot, BackupJson.decode(text))
     }
 
+    @Test fun oldBackupsAndNewLinksRoundTrip() {
+        val old = BackupJson.encode(snapshot).replace(Regex(",\\s*\"contactTags\"\\s*:\\s*\\[\\s*\\]"), "").replace(Regex(",\\s*\"relationships\"\\s*:\\s*\\[\\s*\\]"), "")
+        assertEquals(snapshot, BackupJson.decode(old))
+        val newer = snapshot.copy(contacts = snapshot.contacts + ContactRecord(5, null, "Bob", null, null, null, 1, 1), contactTags = listOf(ContactTagRecord(1, 4)), relationships = listOf(RelationshipRecord(1, 5, "Friend")))
+        assertEquals(newer, BackupJson.decode(BackupJson.encode(newer)))
+        assertFailure { BackupJson.decode(BackupJson.encode(newer.copy(relationships = listOf(RelationshipRecord(5, 1, "Friend"))))) }
+    }
+
     @Test fun rejectsMissingLinksAndUnknownVersion() {
         assertFailure { BackupJson.decode(BackupJson.encode(snapshot.copy(eventContacts = listOf(EventContactRecord(3, 99))))) }
         assertFailure { BackupJson.decode(BackupJson.encode(snapshot.copy(schemaVersion = 2))) }

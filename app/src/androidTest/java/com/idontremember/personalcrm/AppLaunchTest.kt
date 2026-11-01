@@ -37,13 +37,11 @@ class AppLaunchTest {
     }
 
     @Test
-    fun contactsScreenIsDisplayed() {
-        // The app starts on the contacts route. Assert on the route's testTag:
-        // onNodeWithText("Contacts") is ambiguous (header and bottom-nav tab
-        // both render that label — verified via uiautomator dump).
+    fun dashboardIsDisplayed() {
+        // The discovery dashboard is the initial route.
         composeTestRule.waitUntil(timeoutMillis = 5_000) {
             try {
-                composeTestRule.onNodeWithTag("contacts_list_screen").assertIsDisplayed()
+                composeTestRule.onNodeWithTag("dashboard_screen").assertIsDisplayed()
                 true
             } catch (e: AssertionError) {
                 false
@@ -52,16 +50,16 @@ class AppLaunchTest {
     }
 
     @Test
-    fun contactsListScreenExists() {
-        // Verify the contacts list screen composable is rendered
+    fun dashboardExists() {
+        // Verify the dashboard composable is rendered
         composeTestRule.waitUntil(timeoutMillis = 5_000) {
             try {
-                composeTestRule.onNodeWithTag("contacts_list_screen").assertExists()
+                composeTestRule.onNodeWithTag("dashboard_screen").assertExists()
                 true
             } catch (e: AssertionError) {
-                // Fallback: check for the search field which is always present
+                // Retry after initial composition
                 try {
-                    composeTestRule.onNodeWithTag("search_field").assertExists()
+                    composeTestRule.onNodeWithTag("dashboard_screen").assertExists()
                     true
                 } catch (e2: AssertionError) {
                     false

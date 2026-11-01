@@ -1,5 +1,6 @@
 package com.idontremember.personalcrm.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -22,7 +23,8 @@ import com.idontremember.personalcrm.R
 fun ContactChip(
     name: String,
     modifier: Modifier = Modifier,
-    onRemove: (() -> Unit)? = null
+    onRemove: (() -> Unit)? = null,
+    onClick: (() -> Unit)? = null
 ) {
     if (onRemove != null) {
         InputChip(
@@ -43,13 +45,14 @@ fun ContactChip(
             modifier = modifier
         )
     } else {
+        val chipModifier = modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(MaterialTheme.colorScheme.primaryContainer)
         Text(
             text = "@$name",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onPrimaryContainer,
-            modifier = modifier
-                .clip(RoundedCornerShape(4.dp))
-                .background(MaterialTheme.colorScheme.primaryContainer)
+            modifier = (if (onClick != null) chipModifier.clickable(onClick = onClick) else chipModifier)
                 .padding(horizontal = 6.dp, vertical = 2.dp)
         )
     }

@@ -58,6 +58,7 @@ import com.idontremember.personalcrm.ui.components.formatEventDateText
 fun EventDetailScreen(
     eventId: Long,
     onBack: () -> Unit,
+    onContactClick: (Long) -> Unit,
     viewModel: EventDetailViewModel = hiltViewModel()
 ) {
     LaunchedEffect(eventId) {
@@ -254,7 +255,11 @@ fun EventDetailScreen(
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             contacts.forEach { contact ->
-                                ContactChip(name = contact.displayName)
+                                ContactChip(
+                                    name = contact.displayName,
+                                    modifier = Modifier.testTag("event_contact_chip_${contact.id}"),
+                                    onClick = { onContactClick(contact.id) }
+                                )
                             }
                         }
                     }

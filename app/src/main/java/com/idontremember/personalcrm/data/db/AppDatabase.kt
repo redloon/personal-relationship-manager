@@ -23,12 +23,16 @@
  * Production schema history:
  *   1 = initial schema: contacts, contact_facts, events, event_contacts, tags,
  *       event_tags (see app/schemas/.../1.json for the authoritative snapshot).
+ *   2 = direct contact tags and shared relationships.
  * ============================================================================
  */
 package com.idontremember.personalcrm.data.db
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import com.idontremember.personalcrm.data.db.dao.PilotDao
+import com.idontremember.personalcrm.data.db.entity.ContactTag
+import com.idontremember.personalcrm.data.db.entity.Relationship
 import com.idontremember.personalcrm.data.db.dao.ContactDao
 import com.idontremember.personalcrm.data.db.dao.ContactFactDao
 import com.idontremember.personalcrm.data.db.dao.EventDao
@@ -47,12 +51,15 @@ import com.idontremember.personalcrm.data.db.entity.Tag
         Event::class,
         EventContact::class,
         Tag::class,
-        EventTag::class
+        EventTag::class,
+        ContactTag::class,
+        Relationship::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
+    abstract fun pilotDao(): PilotDao
     abstract fun contactDao(): ContactDao
     abstract fun contactFactDao(): ContactFactDao
     abstract fun eventDao(): EventDao

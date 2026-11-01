@@ -1,5 +1,10 @@
 package com.idontremember.personalcrm.ui.contacts
 
+import android.content.ContentUris
+import android.content.Intent
+import android.provider.ContactsContract
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -53,6 +58,7 @@ import com.idontremember.personalcrm.R
 import com.idontremember.personalcrm.data.db.entity.ContactFact
 import com.idontremember.personalcrm.data.db.entity.Event
 import com.idontremember.personalcrm.data.settings.DateDisplay
+import com.idontremember.personalcrm.ui.pilot.ProfileLinks
 import com.idontremember.personalcrm.ui.components.EmptyState
 import com.idontremember.personalcrm.ui.components.ErrorState
 import com.idontremember.personalcrm.ui.components.LoadingState
@@ -64,12 +70,15 @@ fun ContactDetailScreen(
     contactId: Long,
     onBack: () -> Unit,
     onEventClick: (Long) -> Unit,
+    onContactClick: (Long) -> Unit = {},
     viewModel: ContactDetailViewModel = hiltViewModel()
 ) {
     LaunchedEffect(contactId) {
         viewModel.setContactId(contactId)
     }
 
+    val context = LocalContext.current
+    val contactUnavailableMessage = stringResource(R.string.pilot_contact_unavailable)
     val contact by viewModel.contact.collectAsState()
     val contactLoaded by viewModel.contactLoaded.collectAsState()
     val facts by viewModel.facts.collectAsState()
@@ -171,6 +180,22 @@ fun ContactDetailScreen(
                     }
             }
 
+            currentContact.androidContactId?.let { androidId ->
+                item {
+                    TextButton(onClick = {
+                        val uri = ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, androidId)
+                        try {
+                            val exists = context.contentResolver.query(uri, arrayOf(ContactsContract.Contacts._ID), null, null, null)?.use { it.moveToFirst() } == true
+                            if (exists) context.startActivity(Intent(Intent.ACTION_VIEW, uri)) else error("Contact unavailable")
+                        } catch (_: Exception) {
+                            Toast.makeText(context, contactUnavailableMessage, Toast.LENGTH_SHORT).show()
+                        }
+                    }) { Text(stringResource(R.string.pilot_open_contact)) }
+                }
+            }
+
+            item { ProfileLinks(contactId, onContactClick) }
+
             // Facts section
             item {
                 Row(
@@ -269,11 +294,10 @@ private fun FactItem(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = fact.text,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = fact.text, style = MaterialTheme.typography.bodyLarge)
+                Text(text = stringResource(R.string.pilot_recorded, java.text.DateFormat.getDateInstance().format(java.util.Date(fact.createdAt))), style = MaterialTheme.typography.bodySmall)
+            }
             IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
                 Icon(
                     Icons.Default.Delete,

@@ -1,6 +1,7 @@
 package com.idontremember.personalcrm.ui.navigation
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Person
@@ -12,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -25,6 +27,8 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.idontremember.personalcrm.R
 import com.idontremember.personalcrm.ui.addevent.AddEventSheet
+import com.idontremember.personalcrm.ui.pilot.Dashboard
+import com.idontremember.personalcrm.ui.pilot.TagsScreen
 import com.idontremember.personalcrm.ui.contacts.ContactDetailScreen
 import com.idontremember.personalcrm.ui.contacts.ContactsListScreen
 import com.idontremember.personalcrm.ui.events.EventDetailScreen
@@ -33,6 +37,12 @@ import com.idontremember.personalcrm.ui.settings.SettingsScreen
 import kotlinx.serialization.Serializable
 
 // Route definitions — must be @Serializable and implement NavKey
+@Serializable
+data object DashboardRoute : NavKey
+
+@Serializable
+data object TagsRoute : NavKey
+
 @Serializable
 data object ContactsRoute : NavKey
 
@@ -58,6 +68,7 @@ data object SettingsRoute : NavKey
 private fun activeTab(backStack: List<NavKey>): NavKey? {
     val top = backStack.lastOrNull() ?: return null
     return when (top) {
+        is DashboardRoute -> DashboardRoute
         is ContactsRoute -> ContactsRoute
         is EventsRoute -> EventsRoute
         else -> null // detail screens — no tab highlighted
@@ -66,8 +77,8 @@ private fun activeTab(backStack: List<NavKey>): NavKey? {
 
 @Composable
 fun AppNavigation() {
-    val backStack = rememberNavBackStack(ContactsRoute)
-    var showAddEventSheet by remember { mutableStateOf(false) }
+    val backStack = rememberNavBackStack(DashboardRoute)
+    var showAddEventSheet by rememberSaveable { mutableStateOf(false) }
 
     val currentTab = activeTab(backStack)
 
@@ -76,6 +87,12 @@ fun AppNavigation() {
             // Hide bottom nav on detail screens to give more screen space
             if (currentTab != null) {
                 NavigationBar(modifier = Modifier.testTag("bottom_navigation")) {
+                    NavigationBarItem(
+                        selected = currentTab is DashboardRoute,
+                        onClick = { backStack.clear(); backStack.add(DashboardRoute) },
+                        icon = { Icon(Icons.Default.Person, contentDescription = null) },
+                        label = { Text(stringResource(R.string.pilot_home)) }
+                    )
                     NavigationBarItem(
                         selected = currentTab is ContactsRoute,
                         onClick = {
@@ -106,12 +123,16 @@ fun AppNavigation() {
     ) { innerPadding ->
         NavDisplay(
             backStack = backStack,
-            modifier = Modifier.padding(innerPadding),
+            modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
             entryDecorators = listOf(
                 rememberSaveableStateHolderNavEntryDecorator(),
                 rememberViewModelStoreNavEntryDecorator()
             ),
             entryProvider = fun(route: NavKey): NavEntry<NavKey> = when (route) {
+                is DashboardRoute -> NavEntry(route) {
+                    Dashboard(onContact = { backStack.add(ContactDetailRoute(it)) }, onContacts = { backStack.add(ContactsRoute) }, onEvents = { backStack.add(EventsRoute) }, onTags = { backStack.add(TagsRoute) }, onSettings = { backStack.add(SettingsRoute) }, onAdd = { showAddEventSheet = true })
+                }
+                is TagsRoute -> NavEntry(route) { TagsScreen(onBack = { backStack.removeLastOrNull() }, onContact = { backStack.add(ContactDetailRoute(it)) }) }
                 is ContactsRoute -> NavEntry(route) {
                     ContactsListScreen(
                         onContactClick = { contactId ->
@@ -127,7 +148,8 @@ fun AppNavigation() {
                         onBack = { backStack.removeLastOrNull() },
                         onEventClick = { eventId ->
                             backStack.add(EventDetailRoute(eventId))
-                        }
+                        },
+                        onContactClick = { backStack.add(ContactDetailRoute(it)) }
                     )
                 }
 
@@ -135,6 +157,9 @@ fun AppNavigation() {
                     EventsListScreen(
                         onEventClick = { eventId ->
                             backStack.add(EventDetailRoute(eventId))
+                        },
+                        onContactClick = { contactId ->
+                            backStack.add(ContactDetailRoute(contactId))
                         },
                         onAddEventClick = {
                             showAddEventSheet = true
@@ -152,7 +177,10 @@ fun AppNavigation() {
                 is EventDetailRoute -> NavEntry(route) {
                     EventDetailScreen(
                         eventId = route.eventId,
-                        onBack = { backStack.removeLastOrNull() }
+                        onBack = { backStack.removeLastOrNull() },
+                        onContactClick = { contactId ->
+                            backStack.add(ContactDetailRoute(contactId))
+                        }
                     )
                 }
 

@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performClick
 import com.idontremember.personalcrm.data.repository.EventRepository
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
@@ -105,5 +106,17 @@ class EventsSearchTest {
         }
         composeTestRule.onNodeWithText("No events match your search.", substring = true)
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun clearSearchRestoresEvents() {
+        navigateToEvents()
+        composeTestRule.onNodeWithTag("events_search_field").performTextInput("zzzznope")
+        composeTestRule.waitUntilTagDisplayed("events_empty_state")
+        composeTestRule.onNodeWithTag("clear_events_search_button").performClick()
+        composeTestRule.waitUntilTagDisplayed("events_list")
+        composeTestRule.onNodeWithText("Coffee with Alice about the new project").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Phone call with Bob re: contract").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("clear_events_search_button").assertDoesNotExist()
     }
 }

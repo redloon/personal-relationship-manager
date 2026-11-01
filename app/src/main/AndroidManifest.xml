@@ -32,6 +32,7 @@
         <!-- Transparent activity for Quick Settings tile event entry -->
         <activity
             android:name=".tile.QuickAddEventActivity"
+            android:windowSoftInputMode="adjustResize"
             android:exported="false"
             android:theme="@style/Theme.PersonalCRM.Overlay"
             android:launchMode="singleTop"

@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -133,6 +134,14 @@ fun ContactsListScreen(
                     .testTag("search_field"),
                 placeholder = { Text(stringResource(R.string.search_contacts_hint)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = if (searchQuery.isNotEmpty()) {{
+                    IconButton(
+                        onClick = { viewModel.onSearchQueryChanged("") },
+                        modifier = Modifier.testTag("clear_contacts_search_button")
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_clear_search))
+                    }
+                }} else null,
                 singleLine = true
             )
 

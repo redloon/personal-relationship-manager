@@ -1,5 +1,17 @@
 package com.idontremember.personalcrm.ui.addevent
 
+import android.app.Activity
+import android.content.Intent
+import android.provider.ContactsContract
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -40,6 +52,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -60,11 +74,29 @@ fun AddEventSheet(
     autoFocus: Boolean = true,
     viewModel: AddEventViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
+    val importFailedMessage = stringResource(R.string.pilot_import_failed)
+    val contactsUnavailableMessage = stringResource(R.string.pilot_contacts_unavailable)
+    val createContact = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val id = try {
+                result.data?.data?.let { uri ->
+                    val column = if ("raw_contacts" in uri.pathSegments) ContactsContract.RawContacts.CONTACT_ID else ContactsContract.Contacts._ID
+                    context.contentResolver.query(uri, arrayOf(column), null, null, null)?.use {
+                        if (it.moveToFirst() && !it.isNull(0)) it.getLong(0) else null
+                    }
+                }
+            } catch (_: Exception) { null }
+            if (id != null) viewModel.importCreatedContact(id) { Toast.makeText(context, importFailedMessage, Toast.LENGTH_SHORT).show() }
+            else Toast.makeText(context, importFailedMessage, Toast.LENGTH_SHORT).show()
+        }
+    }
     val noteText by viewModel.noteText.collectAsState()
     val selectedContactIds by viewModel.selectedContactIds.collectAsState()
     val selectedTagNames by viewModel.selectedTagNames.collectAsState()
     val eventDate by viewModel.eventDate.collectAsState()
     val saved by viewModel.saved.collectAsState()
+    val isFact by viewModel.isFact.collectAsState()
     val saving by viewModel.saving.collectAsState()
     val saveFailed by viewModel.saveFailed.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
@@ -74,18 +106,21 @@ fun AddEventSheet(
     var showTimePicker by remember { mutableStateOf(false) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val errorBringIntoView = remember { BringIntoViewRequester() }
+    LaunchedEffect(saveFailed) { if (saveFailed) errorBringIntoView.bringIntoView() }
+
+    LaunchedEffect(Unit) { viewModel.reloadDraft() }
 
     LaunchedEffect(saved) {
         if (saved) {
-            viewModel.reset()
+            viewModel.reset(clearDraft = false)
             onSaved()
         }
     }
 
     ModalBottomSheet(
         onDismissRequest = {
-            viewModel.reset()
-            onDismiss()
+            if (!saving) { viewModel.close(); onDismiss() }
         },
         sheetState = sheetState,
         modifier = Modifier.testTag("add_event_sheet")
@@ -93,6 +128,8 @@ fun AddEventSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 32.dp)
         ) {
@@ -108,14 +145,21 @@ fun AddEventSheet(
                     fontWeight = FontWeight.Bold
                 )
                 IconButton(onClick = {
-                    viewModel.reset()
+                    viewModel.close()
                     onDismiss()
-                }, modifier = Modifier.size(48.dp)) {
+                }, enabled = !saving, modifier = Modifier.size(48.dp)) {
                     Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_close))
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { viewModel.setFact(false) }, modifier = Modifier.semantics { selected = !isFact }) { Text(stringResource(if (!isFact) R.string.pilot_event_selected else R.string.pilot_event)) }
+                TextButton(onClick = { viewModel.setFact(true) }, modifier = Modifier.semantics { selected = isFact }) { Text(stringResource(if (isFact) R.string.pilot_fact_selected else R.string.pilot_fact)) }
+                TextButton(onClick = { viewModel.discard(); onDismiss() }, enabled = !saving) { Text(stringResource(R.string.pilot_discard)) }
+            }
+            if (isFact) Text(stringResource(R.string.pilot_select_one), style = MaterialTheme.typography.bodySmall)
 
             // Note text field with autocomplete
             AutocompleteTextField(
@@ -125,23 +169,28 @@ fun AddEventSheet(
                 tags = viewModel.getAutocompleteTags(),
                 onContactSelected = { viewModel.onContactSelected(it) },
                 onTagSelected = { viewModel.onTagSelected(it) },
-                autoFocus = autoFocus
+                autoFocus = autoFocus,
+                enableTags = !isFact,
+                onCreateContact = { name ->
+                    try { createContact.launch(Intent(Intent.ACTION_INSERT).setType(ContactsContract.Contacts.CONTENT_TYPE).putExtra(ContactsContract.Intents.Insert.NAME, name)) }
+                    catch (_: Exception) { Toast.makeText(context, contactsUnavailableMessage, Toast.LENGTH_SHORT).show() }
+                }
             )
 
             // Show selected contacts and tags as chips
-            if (selectedContactIds.isNotEmpty() || selectedTagNames.isNotEmpty()) {
+            if (selectedContactIds.isNotEmpty() || (!isFact && selectedTagNames.isNotEmpty())) {
                 Spacer(modifier = Modifier.height(8.dp))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    contacts.filter { it.id in selectedContactIds }.forEach { contact ->
+                    selectedContactIds.forEach { id ->
                         ContactChip(
-                            name = contact.displayName,
-                            onRemove = { viewModel.removeContact(contact.id) }
+                            name = contacts.find { it.id == id }?.displayName ?: stringResource(R.string.pilot_unavailable_contact),
+                            onRemove = { viewModel.removeContact(id) }
                         )
                     }
-                    selectedTagNames.forEach { tagName ->
+                    (if (isFact) emptySet() else selectedTagNames).forEach { tagName ->
                         TagChip(
                             name = tagName,
                             onRemove = { viewModel.removeTag(tagName) }
@@ -153,7 +202,7 @@ fun AddEventSheet(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Date/time display and pickers
-            Row(
+            if (!isFact) Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -196,13 +245,13 @@ fun AddEventSheet(
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
                     .testTag("save_event_button"),
-                enabled = noteText.text.isNotBlank() && !saving
+                enabled = noteText.text.isNotBlank() && !saving && (!isFact || selectedContactIds.size == 1)
             ) {
-                Text(stringResource(R.string.action_save_event), style = MaterialTheme.typography.labelLarge)
+                Text(if (isFact) stringResource(R.string.pilot_save_fact) else stringResource(R.string.action_save_event), style = MaterialTheme.typography.labelLarge)
             }
             if (saveFailed) {
                 Text(stringResource(R.string.event_save_error), color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.testTag("event_save_error"))
+                    modifier = Modifier.bringIntoViewRequester(errorBringIntoView).testTag("event_save_error"))
             }
         }
     }

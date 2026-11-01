@@ -3,6 +3,7 @@ package com.idontremember.personalcrm
 import android.content.Context
 import androidx.room.Room
 import com.idontremember.personalcrm.data.db.AppDatabase
+import com.idontremember.personalcrm.data.db.dao.PilotDao
 import com.idontremember.personalcrm.data.db.dao.ContactDao
 import com.idontremember.personalcrm.data.db.dao.ContactFactDao
 import com.idontremember.personalcrm.data.db.dao.EventDao
@@ -33,6 +34,9 @@ object TestDatabaseModule {
             AppDatabase::class.java
         ).allowMainThreadQueries().build()
     }
+
+    @Provides
+    fun providePilotDao(db: AppDatabase): PilotDao = db.pilotDao()
 
     @Provides
     fun provideContactDao(db: AppDatabase): ContactDao = db.contactDao()

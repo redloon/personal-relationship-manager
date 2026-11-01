@@ -31,6 +31,8 @@ sbx run codex
 
 Ask Codex to read the newest `ignored/dogfood-notes-*.md` and plan changes from it. Each pull creates a new UTC timestamped file and refuses to overwrite one; earlier notes remain available. The pull requires an installed debug build, briefly stops the app, and writes only linked event notes. It ignores emulators when choosing a device; if multiple phones are connected, run `./scripts/pull-dogfood-notes.sh 'Dogfooding Lname' SERIAL` instead. Launch the sandbox from a checkout that contains the generated file. This development note pull does not replace the JSON backup.
 
+After review, record each actionable item as a fix, deferred idea in `roadmap.md`, or decision in `docs/decisions.md`; then delete reviewed dogfood events from the phone if desired. The timestamped pull remains available after deletion.
+
 After three weeks, check the success signals and stop conditions in [product-intent.md](docs/product-intent.md). Keep new feature ideas parked until the capture and recall loop proves useful.
 
 For sandbox build and emulator setup, see [android-sandbox.md](docs/android-sandbox.md).

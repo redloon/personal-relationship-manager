@@ -41,6 +41,7 @@ class ContactsListScreenTest {
             // the empty state.
             contactDao.getAll().first().forEach { contactDao.delete(it) }
         }
+        composeTestRule.navigateToContactsTab()
     }
 
     @Test
@@ -125,5 +126,18 @@ class ContactsListScreenTest {
                 false
             }
         }
+    }
+
+    @Test
+    fun clearSearchRestoresContacts() {
+        runBlocking {
+            contactDao.insert(com.idontremember.personalcrm.data.db.entity.Contact(displayName = "Alice"))
+        }
+        composeTestRule.waitUntilTagDisplayed("contact_list_item")
+        composeTestRule.onNodeWithTag("search_field").performTextInput("nobody")
+        composeTestRule.waitUntilTagDisplayed("contacts_empty_state")
+        composeTestRule.onNodeWithTag("clear_contacts_search_button").performClick()
+        composeTestRule.waitUntilTagDisplayed("contact_list_item")
+        composeTestRule.onNodeWithTag("clear_contacts_search_button").assertDoesNotExist()
     }
 }

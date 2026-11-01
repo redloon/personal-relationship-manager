@@ -36,6 +36,7 @@
     <string name="cd_edit_event">Edit</string>
     <string name="cd_delete_event">Delete</string>
     <string name="cd_close">Close</string>
+    <string name="cd_clear_search">Clear search</string>
     <string name="cd_remove_contact">Remove contact</string>
     <string name="cd_remove_tag">Remove tag</string>
 
@@ -144,4 +145,43 @@
         <item quantity="one">In %1$d year</item>
         <item quantity="other">In %1$d years</item>
     </plurals>
+    <string name="pilot_home">Home</string>
+    <string name="pilot_open_contact">Open Android contact</string>
+    <string name="pilot_discard">Discard</string>
+    <string name="pilot_select_one">Select exactly one person using @</string>
+    <string name="pilot_people">People</string>
+    <string name="pilot_settings">Settings</string>
+    <string name="pilot_search">Search people</string>
+    <string name="pilot_all_contacts">All contacts</string>
+    <string name="pilot_events">Events</string>
+    <string name="pilot_tags">Tags</string>
+    <string name="pilot_back">Back</string>
+    <string name="pilot_new_tag">New tag</string>
+    <string name="pilot_add">Add</string>
+    <string name="pilot_delete">Delete</string>
+    <string name="pilot_delete_explanation">This removes its links. Event notes are kept.</string>
+    <string name="pilot_cancel">Cancel</string>
+    <string name="pilot_remove">Remove</string>
+    <string name="pilot_relationships">Relationships</string>
+    <string name="pilot_add_tag">Add tag</string>
+    <string name="pilot_done">Done</string>
+    <string name="pilot_add_relationship">Add relationship</string>
+    <string name="pilot_label">Label</string>
+    <string name="pilot_quick_capture">Quick capture</string>
+    <string name="pilot_create_contact">Create contact: %1$s</string>
+    <string name="pilot_delete_tag">Delete %1$s?</string>
+    <string name="pilot_relation_display">%1$s: %2$s</string>
+    <string name="pilot_unknown">Unknown</string>
+    <string name="pilot_recent">Recently encountered</string>
+    <string name="pilot_search_results">Search results</string>
+    <string name="pilot_recorded">Recorded %1$s</string>
+    <string name="pilot_contact_unavailable">Contact unavailable</string>
+    <string name="pilot_import_failed">Could not import contact</string>
+    <string name="pilot_contacts_unavailable">Contacts app unavailable</string>
+    <string name="pilot_unavailable_contact">Unavailable contact</string>
+    <string name="pilot_fact">Fact</string>
+    <string name="pilot_event">Event</string>
+    <string name="pilot_fact_selected">✓ Fact</string>
+    <string name="pilot_event_selected">✓ Event</string>
+    <string name="pilot_save_fact">Save fact</string>
 </resources>

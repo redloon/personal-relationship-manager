@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
@@ -50,6 +51,7 @@ import com.idontremember.personalcrm.ui.components.formatEventDateText
 @Composable
 fun EventsListScreen(
     onEventClick: (Long) -> Unit,
+    onContactClick: (Long) -> Unit,
     onAddEventClick: () -> Unit,
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -102,6 +104,14 @@ fun EventsListScreen(
                     .testTag("events_search_field"),
                 placeholder = { Text(stringResource(R.string.search_events_hint)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = if (searchQuery.isNotEmpty()) {{
+                    IconButton(
+                        onClick = { viewModel.onSearchQueryChanged("") },
+                        modifier = Modifier.testTag("clear_events_search_button")
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_clear_search))
+                    }
+                }} else null,
                 singleLine = true
             )
 
@@ -138,7 +148,8 @@ fun EventsListScreen(
                         EventListItem(
                             displayItem = displayItem,
                             dateDisplay = dateDisplay,
-                            onClick = { onEventClick(displayItem.event.id) }
+                            onClick = { onEventClick(displayItem.event.id) },
+                            onContactClick = onContactClick
                         )
                     }
                 }
@@ -152,7 +163,8 @@ fun EventsListScreen(
 private fun EventListItem(
     displayItem: EventDisplayItem,
     dateDisplay: DateDisplay,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onContactClick: (Long) -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -179,7 +191,11 @@ private fun EventListItem(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     displayItem.contacts.forEach { contact ->
-                        ContactChip(name = contact.displayName)
+                        ContactChip(
+                            name = contact.displayName,
+                            modifier = Modifier.testTag("event_contact_chip_${contact.id}"),
+                            onClick = { onContactClick(contact.id) }
+                        )
                     }
                     displayItem.tags.forEach { tag ->
                         TagChip(name = tag.name)

@@ -13,7 +13,7 @@ import org.junit.Test
 /**
  * UI tests for navigation.
  *
- * Verifies the app starts on the Contacts route (first in the nav backstack),
+ * Verifies the app starts on the dashboard,
  * that the initial screen renders without crashing, and that the bottom nav
  * bar switches between the top-level screens. Shared helpers for tab
  * navigation live in TestNavHelpers.kt.
@@ -33,13 +33,11 @@ class NavigationTest {
     }
 
     @Test
-    fun appStartsOnContactsScreen() {
-        // The app should start on the Contacts route (first in the nav backstack).
-        // Assert on the route's testTag: onNodeWithText("Contacts") is ambiguous
-        // (header and bottom-nav tab both render that label).
+    fun appStartsOnDashboard() {
+        // The dashboard is the initial route.
         composeTestRule.waitUntil(timeoutMillis = 5_000) {
             try {
-                composeTestRule.onNodeWithTag("contacts_list_screen").assertIsDisplayed()
+                composeTestRule.onNodeWithTag("dashboard_screen").assertIsDisplayed()
                 true
             } catch (e: AssertionError) {
                 false
@@ -49,6 +47,7 @@ class NavigationTest {
 
     @Test
     fun contactsScreenRendersFully() {
+        composeTestRule.navigateToContactsTab()
         // Verify the contacts screen renders all expected elements
         // (testTag instead of the ambiguous "Contacts" text — see above)
         composeTestRule.waitUntil(timeoutMillis = 5_000) {
