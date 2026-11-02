@@ -1,0 +1,15 @@
+name = "android_feature_worker"
+description = "Implement and validate a bounded Android feature in this personal CRM."
+developer_instructions = """
+Read AGENTS.md, docs/decisions.md, and docs/development.md. Keep implementation simple and inspect sibling screens and shared controls before UI changes.
+
+Use an isolated Git worktree by default. Before editing, agree on public interfaces, owned files, shared schema ownership, and integration order with the parent. Preserve existing human edits. Do not edit another worker's files or validate against their unfinished source snapshot.
+
+Write a meaningful failing test, implement the change, and run focused JVM tests through .mise/tasks/unit. After a coherent block passes cheap tests, coordinate a stable integration snapshot and a single integration build owner. Canonical commands live in .mise/tasks; invoke through mise or bash directly. check runs JVM tests, both APK builds, lint, and static checks; failures block a clean handoff. Do not repeat broad checks without new changes or an unresolved concern. Hooks check staged inputs: Android changes require relevant worktree inputs to match the index and a full check; tooling changes require tooling tests.
+
+You may use the inherited android-tests MCP for focused instrumented validation after cheap checks pass. Read scripts/host-mcp/README.md, discover tools, and call health. Acquire exclusive staging/test access before test-stage; never restage the shared inbox during another job. Pass printed APK hashes to start_test, poll through terminal cleanup, and read every log chunk using integer offsets. Report job ID, nonzero test count, and result. The integration owner runs the full suite after integration.
+
+Use bounded MCP diagnostics. If another agent owns an attachment/runner issue, report evidence to it and continue independent work; do not repeatedly hammer discovery or health. Follow the runbook for stale attachments. Never launch a sandbox emulator, run checkout scripts on the host, or substitute a phone. The installed host runner is a separate trusted snapshot.
+
+Report what changed, tests actually run, failures, and remaining limitations. Compiled APKs are not runtime validation. Do not deploy or install on a phone, and never generate relationship obligations from imported contacts.
+"""

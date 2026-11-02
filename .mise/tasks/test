@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Run local host tests; sandbox agents must use Android MCP"
+set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/task-env.sh"
+exec "$TASK_ROOT/.mise/tasks/test-local" "$@"

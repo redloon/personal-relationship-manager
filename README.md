@@ -5,21 +5,18 @@ An Android app for tracking contacts, interactions, and personal facts. Built wi
 ## Quick Start
 
 ```bash
-# Install the project Java 21 toolchain
-mise install
-
-# Common commands (see mise.toml)
-mise run build
-mise run phone-install # host: single connected physical phone
+mise install                  # Java 21
+mise run hooks-install
 mise run unit
-mise run test
-mise run test-class -- com.idontremember.personalcrm.AppLaunchTest
 mise run check
+mise run test-stage           # then submit APK hashes through Android MCP
 ```
 
-Provision the Android SDK packages listed in [android-sandbox.md](docs/android-sandbox.md). Use the sandbox for builds, lint, and JVM tests. For instrumented tests, run `mise run test-stage` and submit the APK hashes through the host `android-tests` MCP tools; see the [MCP runbook](scripts/host-mcp/README.md).
+Canonical commands live in `.mise/tasks/`; without mise, use `bash .mise/tasks/TASK`. See [development.md](docs/development.md) for focused tests, hooks, and parallel-agent workflow.
 
-Gradle tasks discover the SDK per environment through `scripts/android-sdk-env.sh` (`ANDROID_HOME` / `ANDROID_SDK_ROOT`, tools on PATH, or `~/Android/Sdk`). Keep `sdk.dir` out of shared `local.properties`; it overrides environment discovery. Use the host MCP installer to provision the dedicated `android_tests` emulator. The legacy `test` / `test-class` commands above run a local emulator; sandbox agents should use `test-stage` and MCP instead.
+Provision the SDK packages listed in [android-sandbox.md](docs/android-sandbox.md). Build, lint, and run JVM tests in the sandbox; use the host `android-tests` MCP for instrumented tests. Follow the [MCP runbook](scripts/host-mcp/README.md) for setup and execution. The legacy local-emulator `test` / `test-class` helpers are host-only and reject Docker execution.
+
+Tasks discover JDK 21 and the SDK per environment (`ANDROID_HOME` / `ANDROID_SDK_ROOT`, tools on PATH, `~/android-sdk`, or `~/Android/Sdk`). Keep `sdk.dir` out of shared `local.properties`; it overrides environment discovery. Use `mise run phone-install` only for an explicitly requested physical-phone install.
 
 ## Phase 1 dogfood loop
 
@@ -70,75 +67,17 @@ app/src/main/java/com/idontremember/personalcrm/
 - **Navigation3**: Uses `NavDisplay` with `SaveableStateHolderNavEntryDecorator` + `ViewModelStoreNavEntryDecorator`. Both decorators are required — omitting SaveableStateHolder causes a runtime crash.
 - **Hilt DI**: Test modules (`TestDatabaseModule`, `TestRepositoryModule`) replace production modules with in-memory Room DB.
 - **Preferences**: one process-wide Preferences DataStore (`di/SettingsModule.kt`, created via the `preferencesDataStore` delegate — required because Hilt rebuilds its component per instrumented test and DataStore refuses two live instances over one file). `data/settings/SettingsRepository` exposes typed Flows + suspend setters; keys are named constants in `SettingsKeys`. `MainActivity` collects theme prefs into `PersonalCRMTheme` — theme changes apply without restart.
-- **Strings & a11y (P2)**: every user-visible string lives in `res/values/strings.xml` (including icon `contentDescription`s, SimpleDateFormat patterns like `date_pattern_event`, and relative-date copy resolved via `RelativeDateStrings` in `ui/components/DateFormatting.kt`). `scripts/pre-launch-check.sh` fails on `Text("` or `contentDescription = "` literals under `ui/` — always extract there. All empty/loading/error states render through the shared `EmptyState` / `LoadingState` / `ErrorState` composables in `ui/components/` (each takes a snake_case `testTag`).
+- **Strings & a11y (P2)**: every user-visible string lives in `res/values/` XML (`strings.xml` or a feature-specific strings file) (including icon `contentDescription`s, SimpleDateFormat patterns like `date_pattern_event`, and relative-date copy resolved via `RelativeDateStrings` in `ui/components/DateFormatting.kt`). `mise run check` fails on `Text("` or `contentDescription = "` literals under `ui/` — always extract there. All empty/loading/error states render through the shared `EmptyState` / `LoadingState` / `ErrorState` composables in `ui/components/` (each takes a snake_case `testTag`).
 - **Contacts Sync**: `ContactsSyncManager` reads from Android's `ContactsContract` and upserts into Room. Local-only fields (facts, events) are preserved across syncs.
 - **Room schema discipline (P4)**: every DB change ships as version bump + explicit `Migration` + committed schema JSON (`app/schemas/<db-class>/<version>.json`, exported via the `room.schemaLocation` KSP arg in `app/build.gradle.kts`) + a `MigrationTestHelper` migration test — all four, always. The policy comment at the top of `data/db/AppDatabase.kt` has the checklist; `androidTest/data/db/MigrationTestBase.kt`'s KDoc has the step-by-step recipe for adding a column. Migration tests read the committed schemas back from the test APK's assets (`androidTest.assets.srcDir("$projectDir/schemas")`). Never `fallbackToDestructiveMigration()` in release.
 
-## Testing
+## Development and testing
 
-```
-app/src/androidTest/
-├── AppLaunchTest.kt              # Smoke: does the app start?
-├── ContactsSyncStressTest.kt     # 400+ contacts, idempotent sync, edge cases
-├── testdata/RandomContactGenerator.kt  # Generates test datasets
-├── ui/
-│   ├── ContactsListScreenTest.kt # Contacts list renders, search + sync work
-│   ├── EventsListScreenTest.kt   # Events screen via bottom nav (search, FAB, empty state)
-│   ├── EventsSearchTest.kt       # Events search: nav via bottom bar, filter by note
-│   ├── SettingsScreenTest.kt     # Settings: gear entry (both lists), theme flip + persistence
-│   ├── AccessibilitySmokeTest.kt # TalkBack order (semantics traversal), shared empty states, max font scale + 48dp targets
-│   ├── AddEventSheetTest.kt      # Add event sheet: open via FAB, save event end-to-end
-│   ├── NavigationTest.kt         # Start route + bottom-nav tab switching
-│   └── TestNavHelpers.kt         # Shared bottom-nav navigation helpers for UI tests
-└── data/db/
-    ├── AppDatabaseTest.kt          # Room DAO unit tests
-    ├── MigrationTestBase.kt        # Migration harness: helper rule, seed/assert helpers, add-a-column recipe
-    └── AppDatabaseMigrationTest.kt # v1 schema smoke + worked v1→v2→v3 scratch-column round trip (P4)
-```
+Follow [development.md](docs/development.md). Workers use isolated worktrees and focused red-green JVM tests; one integration owner validates a stable combined source snapshot. `mise run check` runs JVM tests, builds both APKs, lint, and static checks. Failures block a clean handoff.
 
-JVM unit tests (`./gradlew testDebugUnitTest`, no emulator):
-- `app/src/test/.../data/settings/SettingsRepositoryTest.kt` — prefs defaults, round-trip, persistence across a DataStore restart
-- `app/src/test/.../ui/components/DateFormattingTest.kt` — absolute/relative date rendering (P1 date-display preference)
+Android runtime validation uses [Android MCP](scripts/host-mcp/README.md): focused tests after a coherent block, then the full suite after integration. Report job IDs, test counts, and outcomes. A build is not a runtime test pass. Avoid repeating broad checks without new changes or unresolved failures.
 
-### Test Tags (for Compose UI tests)
-
-All key composables have `Modifier.testTag(...)`:
-- `contacts_list_screen`, `events_list_screen`, `contact_detail_screen`, `event_detail_screen`
-- `sync_button`, `search_field`, `save_event_button`, `fact_add_button`, `fact_text_field`
-- `note_text_field`, `contacts_list`, `events_list`, `add_event_fab`, `add_event_sheet`
-- `events_search_field`, `events_empty_state`
-- `bottom_navigation`, `nav_tab_contacts`, `nav_tab_events`
-- `settings_button`, `settings_screen`, `settings_back_button`
-- `contact_list_item`, `contacts_empty_state`, `contacts_loading_state`, `contacts_error_state`, `contacts_error_retry_button`
-- `events_loading_state`, `events_error_state`, `events_error_retry_button`
-- `facts_empty_state`, `contact_events_empty_state`, `contact_detail_loading_state`, `contact_detail_error_state`
-- `event_links_empty_state`, `event_detail_loading_state`, `event_detail_error_state`, `event_detail_error_retry_button`
-- shared state composables take a `testTag` param (defaults: `empty_state`, `loading_state`, `error_state`, `error_retry_button`)
-- `settings_section_data`, `export_json_button`, `import_json_button`, `restore_confirmation_dialog`, `confirm_restore_button`
-- `event_person_search`, `event_person_option_<id>`, `edit_event_button`, `save_event_edit_button`, `event_save_error`
-- `settings_section_appearance`, `settings_section_date_time`
-- `theme_mode_selector`, `theme_mode_system`, `theme_mode_light`, `theme_mode_dark`
-- `dynamic_color_toggle`
-- `date_display_selector`, `date_display_absolute`, `date_display_relative`
-- `default_event_time_selector`, `default_event_time_now`, `default_event_time_last_used`
-
-### Running on Emulator
-
-The test runner (`scripts/run-tests.sh`) handles emulator lifecycle:
-1. Checks for running emulator, starts headless one if needed
-2. Builds and installs debug + test APKs
-3. Runs instrumented tests
-4. Captures logcat for crash diagnosis
-
-## Scripts
-
-| Script | Purpose |
-|--------|---------|
-| `scripts/run-tests.sh` | Full test cycle (build → install → test → logs) |
-| `scripts/ensure-emulator.sh` | Start headless emulator if none running |
-| `scripts/capture-crash-logs.sh` | Extract crash logs from logcat |
-| `scripts/pre-launch-check.sh` | Static checks (build, lint, pattern scan) |
-| `scripts/install-hooks.sh` | Install git pre-commit hook |
+Tests live in `app/src/test` (JVM) and `app/src/androidTest` (Android). Shared navigation helpers in `ui/TestNavHelpers.kt` preserve current Home/People navigation semantics; use the test tags defined by the screens and their behavioral tests.
 
 ## Known Limitations
 
@@ -148,11 +87,6 @@ The test runner (`scripts/run-tests.sh`) handles emulator lifecycle:
 
 ## For Future Agents
 
-- Run `./scripts/pre-launch-check.sh` before committing to catch runtime crashes statically.
-- **Never launch the emulator (or any long-lived background process) from a script with inherited stdout/stderr** — the background process keeps the caller's output pipe open and the run appears hung long after the work finished (this actually happened: tests finished in 65s while the tool call sat for 30+ minutes). `ensure-emulator.sh` redirects emulator output to `test-results/emulator-*.log` and closes stdin; keep it that way.
-- `run-tests.sh` bounds every blocking step with `timeout` (override via `TEST_TIMEOUT` / `BUILD_TIMEOUT` env vars) and prints total wall time, so a wedged gradle/adb/emulator fails loudly instead of stalling.
-- The Navigation3 decorator pattern is a known footgun — always include both `rememberSaveableStateHolderNavEntryDecorator()` and `rememberViewModelStoreNavEntryDecorator()`.
-- Test DI modules are in `app/src/androidTest/.../TestDatabaseModule.kt` and `TestRepositoryModule.kt`. They use `@TestInstallIn` to replace production modules.
-- The `HiltTestRunner` in `app/src/androidTest/.../HiltTestRunner.kt` must use `ClassLoader?` (not `Context?`) for the first parameter of `newApplication`.
-- **The in-memory test Room DB is a process-wide Hilt singleton** — it is shared by every test class in one instrumentation run. The `-e clearPackageData true` flag in `run-tests.sh` is a **no-op without the Android Test Orchestrator** (not installed here); `run-tests.sh` compensates with an explicit `adb shell pm clear` before each run, but tests within a run still share state. UI/data tests must clear the tables they assert on in `@Before` (all current UI tests do), or cross-test data will leak (e.g. `ContactsListScreenTest`'s "No contacts yet." assertion breaks if `AppDatabaseTest` ran first and inserted contacts).
-- Events screen in tests: click `onNodeWithTag("nav_tab_events")` (or use `navigateToEventsTab()` from `ui/TestNavHelpers.kt`), then assert on `events_list` / `events_empty_state`.
+Read [AGENTS.md](AGENTS.md), [decisions.md](docs/decisions.md), and [development.md](docs/development.md). Reuse shared controls, preserve data, and coordinate interfaces and file ownership before parallel edits. The reusable worker is [android-feature-worker.toml](.codex/agents/android-feature-worker.toml).
+
+Use bounded MCP diagnostics and defer to the agent owning attachment/host issues. Keep independent work moving, and report blocked runtime validation honestly rather than repeatedly probing unchanged infrastructure.

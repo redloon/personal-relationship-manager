@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Run Codex in the sandbox"
+set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/task-env.sh"
+exec sbx run codex "$@"

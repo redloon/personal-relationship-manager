@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+#MISE description="Run Gradle with SDK/JDK discovery, a build lock, and source validation"
+set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/task-env.sh"
+source "$TASK_ROOT/scripts/android-sdk-env.sh"
+source "$TASK_ROOT/.mise/lib/java-env.sh"
+command -v flock >/dev/null || { echo 'Install flock (util-linux) to coordinate Gradle builds.' >&2; exit 1; }
+mkdir -p "$TASK_ROOT/.gradle"
+exec flock --close --timeout "${BUILD_LOCK_TIMEOUT:-300}" "$TASK_ROOT/.gradle/agent-build.lock" python3 "$TASK_ROOT/.mise/lib/run-gradle.py" "$@"

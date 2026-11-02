@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Run deterministic development workflow regression tests"
+set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/task-env.sh"
+exec python3 -m unittest discover -s "$TASK_ROOT/tests/tooling" -p "test_*.py" "$@"

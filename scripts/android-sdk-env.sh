@@ -23,7 +23,7 @@ if command -v emulator >/dev/null 2>&1; then
         _SDK_CANDIDATES+=("${_SDK_EMULATOR_PATH%/emulator/emulator}")
 fi
 
-_SDK_CANDIDATES+=("$HOME/Android/Sdk" "$HOME/Android/sdk")
+_SDK_CANDIDATES+=("$HOME/Android/Sdk" "$HOME/Android/sdk" "$HOME/android-sdk")
 for _SDK_CANDIDATE in "${_SDK_CANDIDATES[@]}"; do
     if [[ -d "$_SDK_CANDIDATE" && ( -d "$_SDK_CANDIDATE/platform-tools" || -d "$_SDK_CANDIDATE/emulator" || -d "$_SDK_CANDIDATE/cmdline-tools" ) ]]; then
         ANDROID_HOME="$_SDK_CANDIDATE"

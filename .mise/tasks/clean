@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Clean Gradle outputs"
+set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/task-env.sh"
+exec "$TASK_ROOT/.mise/tasks/gradle" clean "$@"

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Install tracked pre-commit hooks without replacing custom hooks"
+set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/task-env.sh"
+exec bash "$TASK_ROOT/scripts/install-hooks.sh" "$@"

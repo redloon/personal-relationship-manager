@@ -1,46 +1,4 @@
 [tools]
 java = "temurin-21"
 
-[tasks.build]
-description = "Build the debug APK"
-run = "bash scripts/gradle.sh assembleDebug"
-
-[tasks.phone-install]
-description = "Build and install debug APK on the single connected physical phone"
-run = "bash scripts/phone-install.sh"
-
-[tasks.unit]
-description = "Run JVM unit tests (no emulator required)"
-run = "bash scripts/gradle.sh testDebugUnitTest"
-
-[tasks.test]
-description = "Build, install, and run the full instrumented test suite"
-run = "./scripts/run-tests.sh"
-
-[tasks.test-class]
-description = "Run one instrumented test class; pass its fully qualified name after --"
-run = "./scripts/run-tests.sh {{arg(name='class')}}"
-
-[tasks.check]
-description = "Run build, lint, and static pre-launch checks"
-run = "./scripts/pre-launch-check.sh"
-
-[tasks.emulator]
-description = "Start or wait for the configured Android emulator"
-run = "./scripts/ensure-emulator.sh"
-
-[tasks.pull-dogfood]
-description = "Pull events linked to Dogfooding Lname from the phone"
-run = "./scripts/pull-dogfood-notes.sh 'Dogfooding Lname'"
-
-[tasks.clean]
-description = "Clean Gradle build outputs"
-run = "bash scripts/gradle.sh clean"
-
-[tasks.codex]
-description = "Run codex in sandbox"
-run = "sbx run codex"
-
-[tasks.test-stage]
-description = "Build and stage APKs for the host android-tests MCP runner"
-run = "bash scripts/gradle.sh assembleDebug assembleDebugAndroidTest --no-daemon --console=plain && python3 scripts/stage-mcp-apks.py"
+# Executable file tasks live in .mise/tasks and also run directly without Mise.

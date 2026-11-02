@@ -1,0 +1,218 @@
+#!/usr/bin/env bash
+#MISE description="Run instrumented tests on a local host emulator"
+set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/task-env.sh"
+if [[ -e /.dockerenv || -d /var/run/sbx ]]; then
+    echo 'Sandbox instrumented tests require android-tests MCP. Run .mise/tasks/test-stage after health; see scripts/host-mcp/README.md.' >&2
+    exit 1
+fi
+SCRIPT_DIR="$TASK_ROOT/scripts"
+source "$SCRIPT_DIR/android-sdk-env.sh"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+RESULTS_DIR="$PROJECT_DIR/test-results"
+mkdir -p "$RESULTS_DIR"
+
+# Parse arguments
+FILTER="${1:-}"   # Optional: specific test class or method
+TIMEOUT="${TEST_TIMEOUT:-180}"    # Instrumented-test timeout in seconds
+BUILD_TIMEOUT="${BUILD_TIMEOUT:-120}"  # Per-gradle-step timeout in seconds
+START_TIME=$SECONDS
+ACTIVE_TIMEOUT_PID=""
+ACTIVE_TAIL_PID=""
+
+# Keep the timed command's output on a regular file, then tail that file for
+# live progress. This avoids a Gradle child retaining a pipe to tee after the
+# build has printed BUILD SUCCESSFUL. Track the timeout's process group so an
+# interrupt also stops its isolated command group.
+stop_active_command() {
+    if [ -n "$ACTIVE_TIMEOUT_PID" ]; then
+        kill -TERM -- "-$ACTIVE_TIMEOUT_PID" 2>/dev/null || \
+            kill -TERM "$ACTIVE_TIMEOUT_PID" 2>/dev/null || true
+        wait "$ACTIVE_TIMEOUT_PID" 2>/dev/null || true
+    fi
+    if [ -n "$ACTIVE_TAIL_PID" ]; then
+        kill -TERM "$ACTIVE_TAIL_PID" 2>/dev/null || true
+        wait "$ACTIVE_TAIL_PID" 2>/dev/null || true
+    fi
+    ACTIVE_TIMEOUT_PID=""
+    ACTIVE_TAIL_PID=""
+}
+
+handle_interrupt() {
+    stop_active_command
+    exit "$1"
+}
+trap 'handle_interrupt 130' INT
+trap 'handle_interrupt 143' TERM
+
+run_logged_command() {
+    local limit="$1" log_file="$2" result=0
+    shift 2
+    timeout "$limit" "$@" >"$log_file" 2>&1 &
+    ACTIVE_TIMEOUT_PID=$!
+    tail --pid="$ACTIVE_TIMEOUT_PID" -n +1 -f "$log_file" &
+    ACTIVE_TAIL_PID=$!
+
+    if wait "$ACTIVE_TIMEOUT_PID"; then
+        result=0
+    else
+        result=$?
+    fi
+    # GNU tail exits shortly after the timed process exits. Waiting for it
+    # flushes the final log lines before the next step starts.
+    wait "$ACTIVE_TAIL_PID" 2>/dev/null || true
+    ACTIVE_TIMEOUT_PID=""
+    ACTIVE_TAIL_PID=""
+    return "$result"
+}
+
+echo "============================================"
+echo "  Personal CRM — Automated Test Runner"
+echo "============================================"
+echo ""
+
+# Step 1: Ensure emulator is running
+echo "▶ Step 1/6: Ensuring emulator is available..."
+if ! bash "$SCRIPT_DIR/ensure-emulator.sh"; then
+    echo "FATAL: Could not start emulator"
+    exit 1
+fi
+
+# Never run pm clear or instrumentation against a connected physical phone.
+EMULATOR_SERIAL=$(adb devices | awk '$1 ~ /^emulator-[0-9]+$/ && $2 == "device" { print $1; exit }')
+if [ -z "$EMULATOR_SERIAL" ]; then
+    echo "FATAL: No online emulator found"
+    exit 1
+fi
+export ANDROID_SERIAL="$EMULATOR_SERIAL"
+echo "Using $ANDROID_SERIAL"
+
+# Wait a moment for the emulator to fully settle
+sleep 3
+
+# Step 2: Build APKs. Stream output so a Gradle wait/download/lock is visible,
+# while keeping a complete log for diagnosis if the bounded step fails.
+echo ""
+echo "▶ Step 2/6: Building debug APK..."
+cd "$PROJECT_DIR"
+BUILD_LOG="$RESULTS_DIR/build-${TIMESTAMP:-$(date +%Y%m%d_%H%M%S)}.log"
+if run_logged_command "$BUILD_TIMEOUT" "$BUILD_LOG" \
+    "$TASK_ROOT/.mise/tasks/gradle" assembleDebug assembleDebugAndroidTest --no-daemon --console=plain; then
+    BUILD_EXIT=0
+else
+    BUILD_EXIT=$?
+fi
+if [ "$BUILD_EXIT" -ne 0 ]; then
+    if [ "$BUILD_EXIT" -eq 124 ]; then
+        echo "❌ Build timed out after ${BUILD_TIMEOUT}s"
+    else
+        echo "❌ Build failed (exit ${BUILD_EXIT})"
+    fi
+    echo "Build log: $BUILD_LOG"
+    exit 1
+fi
+echo "✓ Build complete ($((SECONDS - START_TIME))s elapsed)"
+
+# Step 3: Install APKs
+echo ""
+echo "▶ Step 3/6: Installing APKs on emulator..."
+INSTALL_LOG="$RESULTS_DIR/install-$(date +%Y%m%d_%H%M%S).log"
+if run_logged_command "$BUILD_TIMEOUT" "$INSTALL_LOG" \
+    "$TASK_ROOT/.mise/tasks/gradle" installDebug installDebugAndroidTest --no-daemon --console=plain; then
+    INSTALL_EXIT=0
+else
+    INSTALL_EXIT=$?
+fi
+if [ "$INSTALL_EXIT" -ne 0 ]; then
+    if [ "$INSTALL_EXIT" -eq 124 ]; then
+        echo "❌ Install timed out after ${BUILD_TIMEOUT}s"
+    else
+        echo "❌ Install failed (exit ${INSTALL_EXIT})"
+    fi
+    echo "Install log: $INSTALL_LOG"
+    exit 1
+fi
+echo "✓ APKs installed ($((SECONDS - START_TIME))s elapsed)"
+
+# Start from a clean app state each run. NOTE: the `-e clearPackageData true`
+# instrumentation arg used below is a no-op without the Android Test
+# Orchestrator (not installed here), so we clear explicitly.
+# pm clear also resets runtime permissions, so it must run before the grants.
+adb shell pm clear com.idontremember.personalcrm 2>/dev/null || true
+
+# Grant runtime permissions (factory-state AVDs have none granted; the system
+# permission dialog otherwise covers the UI and compose tests time out).
+for perm in READ_CONTACTS WRITE_CONTACTS; do
+    adb shell pm grant com.idontremember.personalcrm android.permission.$perm 2>/dev/null || true
+done
+
+# Step 4: Clear logcat before test run
+echo ""
+echo "▶ Step 4/6: Clearing logcat..."
+adb logcat -c 2>/dev/null || true
+
+# Step 5: Run instrumented tests
+echo ""
+echo "▶ Step 5/6: Running instrumented tests..."
+
+TEST_COMMAND=(adb shell am instrument -w -e clearPackageData true)
+
+if [ -n "$FILTER" ]; then
+    TEST_COMMAND+=(-e class "$FILTER")
+fi
+
+TEST_COMMAND+=(com.idontremember.personalcrm.test/com.idontremember.personalcrm.HiltTestRunner)
+
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+TEST_OUTPUT="$RESULTS_DIR/test-output-${TIMESTAMP}.txt"
+
+printf '  Command:'
+printf ' %q' "${TEST_COMMAND[@]}"
+printf '\n'
+echo "  Output:  $TEST_OUTPUT"
+echo ""
+
+# Run tests with timeout and live output from the file-backed log.
+if run_logged_command "$TIMEOUT" "$TEST_OUTPUT" "${TEST_COMMAND[@]}"; then
+    TEST_EXIT=0
+else
+    TEST_EXIT=$?
+fi
+
+# A successful adb exit alone does not mean instrumentation ran.
+RESULT_VALID=0
+python3 "$TASK_ROOT/.mise/lib/check-instrumentation.py" "$TEST_OUTPUT" || RESULT_VALID=$?
+
+echo ""
+echo "============================================"
+echo "  Test Results"
+echo "============================================"
+
+if [ "$TEST_EXIT" -eq 124 ]; then
+    echo "⚠ Tests TIMED OUT after ${TIMEOUT}s"
+fi
+if [ "$RESULT_VALID" -ne 0 ] || [ "$TEST_EXIT" -ne 0 ]; then
+    echo "❌ Some tests FAILED"
+    echo ""
+
+    # Step 6: Capture crash logs on failure
+    echo "▶ Step 6/6: Capturing crash logs..."
+    bash "$SCRIPT_DIR/capture-crash-logs.sh" "$RESULTS_DIR" || true
+
+    echo ""
+    echo "Wall time: $((SECONDS - START_TIME))s"
+    echo "Test output: $TEST_OUTPUT"
+    exit 1
+else
+    echo "✅ All tests PASSED"
+    echo ""
+
+    # Still capture logs for reference
+    echo "▶ Step 6/6: Capturing logs for reference..."
+    bash "$SCRIPT_DIR/capture-crash-logs.sh" "$RESULTS_DIR" || true
+
+    echo ""
+    echo "Wall time: $((SECONDS - START_TIME))s"
+    echo "Test output: $TEST_OUTPUT"
+    exit 0
+fi

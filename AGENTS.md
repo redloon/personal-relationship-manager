@@ -7,12 +7,21 @@
 ## Sandbox environment
 
 - Usually you will be inside a Docker Sandbox environment.
-- If you don't have access to `mise` command, you can read `mise.toml` to get the direct commands to run.
+- Canonical commands live in `.mise/tasks/`; if `mise` is unavailable, run the task with `bash .mise/tasks/TASK`. See `docs/development.md`.
 
 ## Development
 
+- Red-green TDD: write tests first so you can quickly find out if something actually works.
 - Validation is key: if you can't prove that your code works, then assume it doesn't.
 - Assume most code doesn't need to handle migrations. Too often you've overbuilt migration code for features which are still in progress, and therefore had no users yet.
+
+## Parallel development and validation
+
+- Use isolated Git worktrees by default for parallel implementation. Agree on interfaces, file ownership, and integration order before editing; one owner coordinates shared schema changes.
+- Workers run focused red-green JVM checks in their own worktree. One integration owner freezes the combined source snapshot and runs `check`, staging, and Android MCP jobs; no concurrent edits or competing Gradle builds in that checkout.
+- Run `mise run check` before handoff or committing Android changes. It runs JVM tests, builds both APKs, lint, and static checks; any failure blocks a clean-validation claim. Repeat broad checks only after new changes or an unresolved failure.
+- Hooks validate staged inputs, not an unrelated working tree. Android commits require relevant worktree inputs to match the index and a full check; tooling commits run tooling tests. See `docs/development.md`.
+- Reusable worker instructions live in `.codex/agents/android-feature-worker.toml`. Give each worker a bounded task and require exact validation evidence; building an APK does not prove runtime behavior.
 
 ## UI conventions
 
@@ -21,12 +30,11 @@
 
 ## Android tests in a sandbox
 
-- Use `android-tests` MCP for instrumented tests; build inside the sandbox and run APKs on the dedicated host emulator. Read `scripts/host-mcp/README.md` for setup and the tool contract.
-- Call `health`, then `mise run test-stage`; pass the printed hashes to `start_test` with an optional fully qualified class/method filter. Poll status and read all log chunks. Do not restage while another agent/job is using the inbox.
-- Run a focused test while iterating and the full suite before reporting instrumented validation. Report job ID, test count, and result; a build alone is not a test pass.
-- Discover gateway tools if needed. If MCP is unavailable, diagnose attachment/setup using the runbook; do not silently fall back to launching an emulator inside the sandbox or executing checkout scripts on the host.
-- The installed host runner is a separate trusted snapshot. Repo edits do not update it; host setup/refresh uses `python3 scripts/host-mcp/setup.py --sandbox NAME`; setup refreshes idle host runner processes; a sandbox restart alone does not reload them. Confirm health PID/hash and AVD after refresh. Never broaden it to host builds without the user's agreement.
-- For code-only runner refresh, use `bash scripts/host-mcp/install.sh --refresh-only` (optionally `--sandbox NAME`), then reconnect MCP. Version 3 serializes jobs across host/sandbox connections and resets incompatible debug signatures only on the verified dedicated emulator. Never apply that reset to a phone. Pass log offsets as integers; terminal status includes completed cleanup.
+- Use `android-tests` MCP for instrumented tests; build inside the sandbox and execute APKs on the dedicated host emulator. Follow `scripts/host-mcp/README.md`; never substitute a sandbox emulator, a phone, or host execution of checkout scripts.
+- After focused JVM checks pass for a coherent block, coordinate exclusive staging/test access, call `health`, run `mise run test-stage`, and submit its APK hashes to `start_test`. Do not restage while another job uses the shared inbox.
+- Run focused tests while iterating, then the full suite before reporting instrumented validation. Poll through cleanup and read all log chunks using integer offsets. Report job ID, nonzero test count, and result; a build alone is not a test pass.
+- Diagnose unavailable MCP with bounded probes from the runbook. For stale attachment errors (`client is closing: EOF` / `connection closed`), follow its recovery path. If another agent owns the issue, give it the evidence and continue independent work instead of repeatedly calling discovery/health. Report any remaining runtime-validation block explicitly.
+- The installed host runner is a separate trusted snapshot; repo edits or sandbox restarts do not reload it. Use the runbook's setup/refresh procedure and confirm health PID/hash and dedicated AVD afterward. Never broaden it to host builds without the user's agreement or reset signatures on a phone.
 
 ## context on your human partner
 
