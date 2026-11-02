@@ -3,6 +3,7 @@ package com.idontremember.personalcrm.ui
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -135,7 +136,9 @@ class AddEventSheetTest {
     fun factCaptureRequiresPersonAndSavesFact() {
         val id = runBlocking { contactDao.insert(Contact(displayName = "Fact Person")) }
         openAddEventSheet()
-        composeTestRule.onNodeWithText("Fact").performClick()
+        composeTestRule.onNodeWithTag("note_text_field").performClick()
+        composeTestRule.waitForKeyboard(visible = true)
+        composeTestRule.onNodeWithText("Fact").performScrollTo().performClick().assertIsSelected()
         composeTestRule.onNodeWithTag("note_text_field").performTextInput("Likes tea ")
         composeTestRule.onNodeWithTag("save_event_button").assertIsNotEnabled()
         composeTestRule.onNodeWithTag("note_text_field").performTextInput("@Fact")

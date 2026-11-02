@@ -1,5 +1,8 @@
 package com.idontremember.personalcrm.ui
 
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.view.accessibility.AccessibilityWindowInfo
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -44,5 +47,22 @@ fun ComposeTestRule.waitUntilTagDisplayed(tag: String, timeoutMillis: Long = 5_0
         } catch (e: AssertionError) {
             false
         }
+    }
+}
+
+/** Dialog sheets own a different window from the Activity; inspect the actual IME. */
+fun ComposeTestRule.waitForKeyboard(visible: Boolean, timeoutMillis: Long = 10_000) {
+    val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+    val originalFlags = automation.serviceInfo.flags
+    try {
+        automation.serviceInfo = automation.serviceInfo.apply {
+            flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        }
+        waitUntil(timeoutMillis) {
+            automation.windows.any { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD } == visible
+        }
+        waitForIdle()
+    } finally {
+        automation.serviceInfo = automation.serviceInfo.apply { flags = originalFlags }
     }
 }
