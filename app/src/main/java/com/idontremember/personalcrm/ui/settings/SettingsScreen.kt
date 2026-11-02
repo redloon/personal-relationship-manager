@@ -47,6 +47,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.idontremember.personalcrm.ui.components.exposeTestTags
 import com.idontremember.personalcrm.R
 import com.idontremember.personalcrm.data.settings.DateDisplay
 import com.idontremember.personalcrm.data.settings.DefaultEventTime
@@ -86,6 +87,10 @@ fun SettingsScreen(
     ) { uri ->
         if (uri != null) viewModel.exportTo(context.contentResolver, uri)
     }
+
+    val safetyLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri -> if (uri != null) viewModel.backupAndRestore(context.contentResolver, uri) }
 
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -241,6 +246,8 @@ fun SettingsScreen(
                     testTag = "import_json_button"
                 )
             }
+            BackupRecoverySection(viewModel)
+            com.idontremember.personalcrm.ui.followups.ReminderPreferences()
         }
     }
 
@@ -249,17 +256,24 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = viewModel::cancelRestore,
             title = { Text(stringResource(R.string.settings_restore_confirm_title)) },
-            text = { Text(stringResource(R.string.settings_restore_confirm_body,
-                preview.contacts.size, preview.facts.size, preview.events.size, preview.tags.size)) },
+            text = { Column {
+                Text(stringResource(R.string.settings_restore_confirm_body,
+                    preview.contacts.size, preview.facts.size, preview.events.size, preview.tags.size))
+                Text(stringResource(R.string.reliability_restore_followups, preview.followUps.size))
+                Text(stringResource(R.string.reliability_restore_explanation), modifier = Modifier.padding(top = 12.dp))
+            } },
             confirmButton = {
-                TextButton(onClick = viewModel::confirmRestore, modifier = Modifier.testTag("confirm_restore_button")) {
-                    Text(stringResource(R.string.settings_restore_action))
+                TextButton(onClick = {
+                    val ts = SimpleDateFormat("yyyy-MM-dd-HHmmss", Locale.US).format(Date())
+                    safetyLauncher.launch("personal-crm-before-restore-$ts.json")
+                }, modifier = Modifier.testTag("confirm_restore_button")) {
+                    Text(stringResource(R.string.reliability_restore_safety))
                 }
             },
             dismissButton = {
                 TextButton(onClick = viewModel::cancelRestore) { Text(stringResource(R.string.action_cancel)) }
             },
-            modifier = Modifier.testTag("restore_confirmation_dialog")
+            modifier = Modifier.exposeTestTags().testTag("restore_confirmation_dialog")
         )
     }
 }

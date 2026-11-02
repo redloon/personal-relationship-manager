@@ -65,6 +65,23 @@ class SettingsRepositoryTest {
     private fun newFile(name: String): File = File(tempFolder.root, name)
 
     @Test
+    fun reminderOptInIsExplicitAndDecliningDoesNotKeepPrompting() = runBlocking {
+        val repository = SettingsRepository(newStore(newFile("reminders.preferences_pb")))
+        assertEquals(false, repository.followUpRemindersEnabled.first())
+        assertEquals(false, repository.followUpReminderPrompted.first())
+        assertEquals(9, repository.reminderHour.first())
+        repository.setFollowUpReminderPrompted()
+        assertEquals(true, repository.followUpReminderPrompted.first())
+        assertEquals(false, repository.followUpRemindersEnabled.first())
+        repository.setFollowUpRemindersEnabled(true)
+        repository.setReminderHour(100)
+        assertEquals(true, repository.followUpRemindersEnabled.first())
+        assertEquals(19, repository.reminderHour.first())
+        repository.setReminderHour(-5)
+        assertEquals(6, repository.reminderHour.first())
+    }
+
+    @Test
     fun defaultsMatchDocumentedDefaults() = runBlocking {
         val repository = SettingsRepository(newStore(newFile("defaults.preferences_pb")))
 

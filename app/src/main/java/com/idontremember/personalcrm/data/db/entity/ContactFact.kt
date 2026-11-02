@@ -31,5 +31,7 @@ data class ContactFact(
     val text: String,
 
     @ColumnInfo(name = "created_at")
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+
+    @ColumnInfo(name = "deleted_at") val deletedAt: Long? = null
 )

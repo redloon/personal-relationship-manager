@@ -1,5 +1,9 @@
 # Product Intent
 
+## Current phase — November 2026
+
+The capture/recall loop has demonstrated enough value to expand beyond the original pilot restrictions below. Prioritize forgotten-context search, frictionless shared capture, personal profiles/Home, portable backup/recovery, and explicit opt-in follow-ups. Simplicity means low user effort. Do not build conversation-preparation workflows, introduction views, relationship scores, or automatically generated outreach obligations. The original phase gates below are historical context; see decisions.md for current behavior.
+
 ## Core Bet
 
 My memory is the bottleneck between how much I care about people and how well I show up for them. A tool that makes capturing and recalling personal details near-frictionless will close that gap — and staying in touch is an asymmetric habit: low effort, unlimited upside.

@@ -46,12 +46,29 @@ class ContactsSyncManager @Inject constructor(
         }
 
         val systemContacts = readSystemContacts()
+        val attachedByLookup = contactDao.getAllOnce().filter { it.lookupKey != null }.associateBy { it.lookupKey }
         var added = 0
         var updated = 0
 
         for (sysContact in systemContacts) {
-            val existing = contactDao.getByAndroidContactId(sysContact.androidContactId!!)
+            val attached = attachedByLookup[sysContact.lookupKey] ?: contactDao.getByAndroidContactId(sysContact.androidContactId!!)
+            // A provider ID can be reused for a different person. Preserve the old profile.
+            val resolvedOldId = attached?.lookupKey?.takeIf { it != sysContact.lookupKey }?.let { key ->
+                val uri = ContactsContract.Contacts.getLookupUri(attached.androidContactId ?: 0L, key)
+                ContactsContract.Contacts.lookupContact(context.contentResolver, uri)?.lastPathSegment?.toLongOrNull()
+            }
+            val identityChanged = attached != null && (
+                (attached.lookupKey == null && !legacyAttachmentMatches(attached, sysContact)) ||
+                (attached.lookupKey != null && attached.lookupKey != sysContact.lookupKey && resolvedOldId != sysContact.androidContactId))
+            val existing = if (identityChanged) {
+                contactDao.update(attached!!.copy(androidContactId = null, lookupKey = null, photoUri = null))
+                null
+            } else attached
 
+            val occupyingId = contactDao.getByAndroidContactId(sysContact.androidContactId!!)
+            if (occupyingId != null && occupyingId.id != existing?.id) {
+                contactDao.update(occupyingId.copy(androidContactId = null, lookupKey = null, photoUri = null))
+            }
             if (existing == null) {
                 // New contact — insert
                 contactDao.insert(sysContact)
@@ -61,15 +78,17 @@ class ContactsSyncManager @Inject constructor(
                 val needsUpdate = existing.displayName != sysContact.displayName ||
                     existing.phoneNumber != sysContact.phoneNumber ||
                     existing.email != sysContact.email ||
-                    existing.photoUri != sysContact.photoUri
+                    existing.androidContactId != sysContact.androidContactId || existing.photoUri != sysContact.photoUri || existing.lookupKey != sysContact.lookupKey
 
                 if (needsUpdate) {
                     contactDao.update(
                         existing.copy(
                             displayName = sysContact.displayName,
+                            androidContactId = sysContact.androidContactId,
                             phoneNumber = sysContact.phoneNumber,
                             email = sysContact.email,
                             photoUri = sysContact.photoUri,
+                            lookupKey = sysContact.lookupKey,
                             updatedAt = System.currentTimeMillis()
                         )
                     )
@@ -85,6 +104,11 @@ class ContactsSyncManager @Inject constructor(
         )
     }
 
+    suspend fun getSystemContact(androidId: Long): Contact? = withContext(Dispatchers.IO) {
+        if (!hasPermission()) throw SecurityException("READ_CONTACTS permission not granted")
+        readSystemContacts().find { it.androidContactId == androidId }
+    }
+
     private fun readSystemContacts(): List<Contact> {
         val contacts = mutableMapOf<Long, Contact>()
         val contentResolver: ContentResolver = context.contentResolver
@@ -95,7 +119,8 @@ class ContactsSyncManager @Inject constructor(
             arrayOf(
                 ContactsContract.Contacts._ID,
                 ContactsContract.Contacts.DISPLAY_NAME_PRIMARY,
-                ContactsContract.Contacts.PHOTO_URI
+                ContactsContract.Contacts.PHOTO_URI,
+                ContactsContract.Contacts.LOOKUP_KEY
             ),
             null,
             null,
@@ -106,6 +131,7 @@ class ContactsSyncManager @Inject constructor(
             val idIdx = c.getColumnIndex(ContactsContract.Contacts._ID)
             val nameIdx = c.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME_PRIMARY)
             val photoIdx = c.getColumnIndex(ContactsContract.Contacts.PHOTO_URI)
+            val lookupIdx = c.getColumnIndex(ContactsContract.Contacts.LOOKUP_KEY)
 
             while (c.moveToNext()) {
                 val id = c.getLong(idIdx)
@@ -115,7 +141,8 @@ class ContactsSyncManager @Inject constructor(
                 contacts[id] = Contact(
                     androidContactId = id,
                     displayName = name,
-                    photoUri = photoUri
+                    photoUri = photoUri,
+                    lookupKey = c.getString(lookupIdx)
                 )
             }
         }

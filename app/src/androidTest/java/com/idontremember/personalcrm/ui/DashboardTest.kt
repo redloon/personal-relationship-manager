@@ -32,12 +32,16 @@ class DashboardTest {
         ui.waitUntilTagDisplayed("dashboard_person_$alice", 10_000)
         ui.onNodeWithTag("dashboard_person_$alice").performClick()
         ui.waitUntilTagDisplayed("contact_detail_screen", 10_000)
+        ui.onNodeWithTag("person_management").performScrollTo().performClick()
         ui.onNodeWithTag("relationship_add").performScrollTo().performClick()
+        ui.onNodeWithTag("add_event_sheet").assertDoesNotExist()
+        ui.waitUntilTagDisplayed("relationship_label", 10_000)
         ui.onNodeWithTag("relationship_label").performTextInput("Friend")
         ui.onNodeWithText("Bob Relationship").performScrollTo().performClick()
         ui.onNodeWithTag("relationship_confirm").performClick()
         ui.waitUntilTagExists("relationship_person_$bob", 10_000)
         ui.onNodeWithTag("relationship_person_$bob").performScrollTo().performClick()
+        ui.onNodeWithTag("person_management").performScrollTo().performClick()
         ui.waitUntilTagExists("relationship_person_$alice", 10_000)
         ui.onNodeWithTag("relationship_remove_$alice").performScrollTo().performClick()
         ui.waitUntil(10_000) { ui.onAllNodesWithTag("relationship_person_$alice").fetchSemanticsNodes().isEmpty() }
@@ -50,7 +54,7 @@ class DashboardTest {
             val event = db.eventDao().insert(Event(note = "Met", eventDate = 100))
             db.eventDao().insertEventContact(EventContact(event, recent))
         }
-        ui.waitUntil(10000) { ui.onAllNodesWithText("Recent Alice").fetchSemanticsNodes().isNotEmpty() }
+        ui.waitUntil(10000) { ui.onAllNodesWithText("Recent Alice", substring = true).fetchSemanticsNodes().isNotEmpty() }
         ui.onNodeWithText("Hidden Bob").assertDoesNotExist()
         ui.onNodeWithTag("clear_dashboard_search_button").assertDoesNotExist()
         ui.onNodeWithTag("dashboard_search").performTextInput("Bob")
@@ -60,8 +64,37 @@ class DashboardTest {
             it.config[SemanticsProperties.EditableText].text.isEmpty()
         })
         ui.onNodeWithTag("clear_dashboard_search_button").assertDoesNotExist()
-        ui.waitUntil(10000) { ui.onAllNodesWithText("Recent Alice").fetchSemanticsNodes().isNotEmpty() }
+        ui.waitUntil(10000) { ui.onAllNodesWithText("Recent Alice", substring = true).fetchSemanticsNodes().isNotEmpty() }
         ui.onNodeWithText("Hidden Bob").assertDoesNotExist()
+    }
+
+    @Test fun forgottenFactCanBeFoundAndEditedWithoutKnowingName() {
+        val factId = runBlocking {
+            val person = db.contactDao().insert(Contact(displayName = "Morgan Recall"))
+            db.contactFactDao().insert(ContactFact(contactId = person, text = "Enjoys climbing outdoors"))
+        }
+        ui.waitUntilTagDisplayed("dashboard_search", 10_000)
+        ui.onNodeWithTag("dashboard_search").performTextInput("climbing")
+        ui.waitUntilTagDisplayed("recall_fact_$factId", 10_000)
+        ui.onNodeWithTag("recall_fact_$factId").performClick()
+        ui.waitUntilTagDisplayed("add_event_sheet", 10_000)
+        ui.onNodeWithTag("note_text_field").assertTextContains("Enjoys climbing outdoors", substring = true)
+    }
+
+    @Test fun factsAppearInRecentContextAndSearchSurvivesOpeningProfile() {
+        val personId = runBlocking {
+            val person = db.contactDao().insert(Contact(displayName = "Fact Only Person"))
+            db.contactFactDao().insert(ContactFact(contactId = person, text = "Likes 100% chocolate"))
+            person
+        }
+        ui.waitUntil(10_000) { ui.onAllNodesWithText("Likes 100% chocolate").fetchSemanticsNodes().isNotEmpty() }
+        ui.onNodeWithTag("dashboard_search").performTextInput("Fact Only")
+        ui.waitUntilTagDisplayed("dashboard_person_$personId", 10_000)
+        ui.onNodeWithTag("dashboard_person_$personId").performClick()
+        ui.waitUntilTagDisplayed("contact_detail_screen", 10_000)
+        ui.runOnUiThread { ui.activity.onBackPressedDispatcher.onBackPressed() }
+        ui.waitUntilTagDisplayed("dashboard_search", 10_000)
+        ui.onNodeWithTag("dashboard_search").assertTextContains("Fact Only", substring = true)
     }
 
     @Test fun settingsOpensFromDashboard() {

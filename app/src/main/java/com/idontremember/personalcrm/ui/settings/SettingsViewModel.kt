@@ -4,6 +4,9 @@ import android.content.ContentResolver
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.idontremember.personalcrm.data.backup.AutomaticBackup
+import com.idontremember.personalcrm.data.recovery.RecoveryRepository
+import com.idontremember.personalcrm.data.recovery.TrashKind
 import com.idontremember.personalcrm.data.backup.BackupJson
 import com.idontremember.personalcrm.data.backup.BackupSnapshot
 import com.idontremember.personalcrm.data.backup.DataExporter
@@ -28,7 +31,9 @@ enum class RestoreState { IDLE, LOADING, READY, RESTORING, DONE, ERROR }
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
-    private val dataExporter: DataExporter
+    private val dataExporter: DataExporter,
+    private val automaticBackup: AutomaticBackup,
+    private val recovery: RecoveryRepository
 ) : ViewModel() {
     val themeMode: StateFlow<ThemeMode> = settingsRepository.themeMode
         .stateIn(viewModelScope, SharingStarted.Eagerly, ThemeMode.SYSTEM)
@@ -38,6 +43,46 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, DateDisplay.ABSOLUTE)
     val defaultEventTime: StateFlow<DefaultEventTime> = settingsRepository.defaultEventTime
         .stateIn(viewModelScope, SharingStarted.Eagerly, DefaultEventTime.NOW)
+
+    val backupStatus = automaticBackup.status.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000),
+        com.idontremember.personalcrm.data.backup.BackupStatus(null, null, false))
+    val deletedItems = recovery.observeDeleted().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val _backupBusy = MutableStateFlow(false)
+    val backupBusy: StateFlow<Boolean> = _backupBusy
+    private val _recoveryFailed = MutableStateFlow(false)
+    val recoveryFailed: StateFlow<Boolean> = _recoveryFailed
+
+    init { viewModelScope.launch {
+        try { recovery.purgeExpired() }
+        catch(e: CancellationException) { throw e }
+        catch(_: Exception) { _recoveryFailed.value = true }
+    } }
+
+    fun setBackupFolder(uri: Uri?) {
+        viewModelScope.launch {
+            try { automaticBackup.setFolder(uri); if(uri != null) backUpNow() }
+            catch(e: CancellationException) { throw e }
+            catch(_: Exception) { _exportState.value = ExportState.ERROR }
+        }
+    }
+
+    fun backUpNow() {
+        if(_backupBusy.value) return
+        _backupBusy.value = true
+        viewModelScope.launch {
+            try { automaticBackup.backUpNow() }
+            finally { _backupBusy.value = false }
+        }
+    }
+
+    fun recover(kind: TrashKind, id: Long) {
+        viewModelScope.launch {
+            try { recovery.restore(kind, id) }
+            catch(e: CancellationException) { throw e }
+            catch(_: Exception) { _recoveryFailed.value = true }
+        }
+    }
+    fun clearRecoveryError() { _recoveryFailed.value = false }
 
     private val _exportState = MutableStateFlow(ExportState.IDLE)
     val exportState: StateFlow<ExportState> = _exportState
@@ -84,12 +129,20 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun confirmRestore() {
+    fun backupAndRestore(resolver: ContentResolver, safetyUri: Uri) {
         val snapshot = _restorePreview.value ?: return
         if (_restoreState.value != RestoreState.READY) return
         _restoreState.value = RestoreState.RESTORING
         viewModelScope.launch {
             try {
+                val safety = dataExporter.exportToJson()
+                withContext(Dispatchers.IO) {
+                    val output = resolver.openOutputStream(safetyUri, "wt") ?: error("Cannot open safety backup")
+                    output.use { it.write(safety.toByteArray(Charsets.UTF_8)); it.flush() }
+                    val saved = resolver.openInputStream(safetyUri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                        ?: error("Cannot verify safety backup")
+                    require(BackupJson.decode(saved) == BackupJson.decode(safety))
+                }
                 dataExporter.restore(snapshot)
                 _restorePreview.value = null
                 _restoreState.value = RestoreState.DONE

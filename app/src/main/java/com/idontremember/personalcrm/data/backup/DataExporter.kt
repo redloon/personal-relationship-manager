@@ -1,6 +1,12 @@
 package com.idontremember.personalcrm.data.backup
 
+import android.content.Context
+import androidx.core.app.NotificationManagerCompat
+import dagger.hilt.android.qualifiers.ApplicationContext
+import com.idontremember.personalcrm.data.settings.SettingsRepository
 import androidx.room.withTransaction
+import com.idontremember.personalcrm.data.followups.ReminderDeliveryLock
+import kotlinx.coroutines.sync.withLock
 import com.idontremember.personalcrm.data.db.AppDatabase
 import com.idontremember.personalcrm.data.db.entity.*
 import kotlinx.coroutines.Dispatchers
@@ -17,7 +23,7 @@ import javax.inject.Singleton
 
 @Serializable
 data class BackupSnapshot(
-    val schemaVersion: Int = 1,
+    val schemaVersion: Int = 2,
     val app: String = "personal-crm",
     val exportedAt: String,
     val contacts: List<ContactRecord>,
@@ -27,23 +33,33 @@ data class BackupSnapshot(
     val eventContacts: List<EventContactRecord>,
     val eventTags: List<EventTagRecord>,
     val contactTags: List<ContactTagRecord> = emptyList(),
-    val relationships: List<RelationshipRecord> = emptyList()
+    val relationships: List<RelationshipRecord> = emptyList(),
+    val followUps: List<FollowUpRecord> = emptyList()
 )
 
 @Serializable data class ContactRecord(val id: Long, val androidContactId: Long?, val displayName: String,
     val phoneNumber: String?, val email: String?, val photoUri: String?, val createdAt: Long, val updatedAt: Long)
-@Serializable data class FactRecord(val id: Long, val contactId: Long, val text: String, val createdAt: Long)
-@Serializable data class EventRecord(val id: Long, val note: String, val eventDate: Long, val createdAt: Long, val updatedAt: Long)
+@Serializable data class FactRecord(val id: Long, val contactId: Long, val text: String, val createdAt: Long, val deletedAt: Long? = null)
+@Serializable data class EventRecord(val id: Long, val note: String, val eventDate: Long, val createdAt: Long, val updatedAt: Long, val deletedAt: Long? = null)
 @Serializable data class TagRecord(val id: Long, val name: String, val createdAt: Long)
 @Serializable data class EventContactRecord(val eventId: Long, val contactId: Long)
 @Serializable data class EventTagRecord(val eventId: Long, val tagId: Long)
 
+@Serializable data class FollowUpRecord(val id: Long, val contactId: Long, val text: String,
+    val dueDate: String?, val completedAt: Long?, val notifiedAt: Long?, val createdAt: Long,
+    val updatedAt: Long, val deletedAt: Long? = null)
+
 @Serializable data class ContactTagRecord(val contactId: Long, val tagId: Long)
 @Serializable data class RelationshipRecord(val contactA: Long, val contactB: Long, val label: String)
 
-/** The small Phase 1 format. Validation happens before any database write. */
+/** Portable versioned JSON. Validate all IDs and links before changing the database. */
 object BackupJson {
     private val json = Json { prettyPrint = true; encodeDefaults = true }
+
+    private fun validDate(value: String): Boolean = runCatching {
+        val format = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+        value.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) && format.format(format.parse(value)!!) == value
+    }.getOrDefault(false)
 
     fun encode(snapshot: BackupSnapshot): String = json.encodeToString(BackupSnapshot.serializer(), snapshot)
 
@@ -51,7 +67,7 @@ object BackupJson {
         val fields = json.parseToJsonElement(source).jsonObject
         require("schemaVersion" in fields && "app" in fields) { "Missing backup header" }
         val snapshot = json.decodeFromString(BackupSnapshot.serializer(), source)
-        require(snapshot.schemaVersion == 1 && snapshot.app == "personal-crm") { "Unsupported backup" }
+        require(snapshot.schemaVersion in 1..2 && snapshot.app == "personal-crm") { "Unsupported backup" }
         require(snapshot.exportedAt.isNotBlank()) { "Missing export time" }
         fun <T> ids(items: List<T>, id: (T) -> Long): Set<Long> {
             val values = items.map(id)
@@ -60,6 +76,8 @@ object BackupJson {
         }
         val contactIds = ids(snapshot.contacts) { it.id }
         ids(snapshot.facts) { it.id }
+        ids(snapshot.followUps) { it.id }
+        require(snapshot.followUps.all { it.contactId in contactIds && it.text.isNotBlank() && (it.dueDate == null || validDate(it.dueDate)) }) { "Invalid follow-up" }
         val eventIds = ids(snapshot.events) { it.id }
         val tagIds = ids(snapshot.tags) { it.id }
         require(snapshot.contacts.mapNotNull { it.androidContactId }.distinct().size ==
@@ -77,7 +95,8 @@ object BackupJson {
 }
 
 @Singleton
-class DataExporter @Inject constructor(private val database: AppDatabase) {
+class DataExporter @Inject constructor(private val database: AppDatabase,
+    @ApplicationContext private val context: Context, private val settingsRepository: SettingsRepository) {
     suspend fun exportToJson(): String = withContext(Dispatchers.IO) {
         val snapshot = database.withTransaction {
             BackupSnapshot(
@@ -86,33 +105,41 @@ class DataExporter @Inject constructor(private val database: AppDatabase) {
                 }.format(Date()),
                 contacts = database.contactDao().getAllOnce().map { ContactRecord(it.id, it.androidContactId, it.displayName,
                     it.phoneNumber, it.email, it.photoUri, it.createdAt, it.updatedAt) },
-                facts = database.contactFactDao().getAllOnce().map { FactRecord(it.id, it.contactId, it.text, it.createdAt) },
-                events = database.eventDao().getAllOnce().map { EventRecord(it.id, it.note, it.eventDate, it.createdAt, it.updatedAt) },
+                facts = database.contactFactDao().getAllOnce().map { FactRecord(it.id, it.contactId, it.text, it.createdAt, it.deletedAt) },
+                events = database.eventDao().getAllOnce().map { EventRecord(it.id, it.note, it.eventDate, it.createdAt, it.updatedAt, it.deletedAt) },
                 tags = database.tagDao().getAllOnce().map { TagRecord(it.id, it.name, it.createdAt) },
                 eventContacts = database.eventDao().getAllEventContacts().map { EventContactRecord(it.eventId, it.contactId) },
                 eventTags = database.eventDao().getAllEventTags().map { EventTagRecord(it.eventId, it.tagId) },
                 contactTags = database.pilotDao().allContactTags().map { ContactTagRecord(it.contactId, it.tagId) },
-                relationships = database.pilotDao().allRelationships().map { RelationshipRecord(it.contactA, it.contactB, it.label) }
+                relationships = database.pilotDao().allRelationships().map { RelationshipRecord(it.contactA, it.contactB, it.label) },
+                followUps = database.followUpDao().getAllOnce().map { FollowUpRecord(it.id, it.contactId, it.text,
+                    it.dueDate, it.completedAt, null, it.createdAt, it.updatedAt, it.deletedAt) }
             )
         }
         BackupJson.encode(snapshot)
     }
 
-    suspend fun restore(snapshot: BackupSnapshot) = withContext(Dispatchers.IO) {
+    suspend fun restore(snapshot: BackupSnapshot) = withContext(Dispatchers.IO) { ReminderDeliveryLock.mutex.withLock {
         BackupJson.decode(BackupJson.encode(snapshot))
+        settingsRepository.setFollowUpRemindersEnabled(false)
         database.withTransaction {
             database.eventDao().deleteAll()
             database.contactDao().deleteAll()
             database.tagDao().deleteAll()
-            snapshot.contacts.forEach { database.contactDao().insert(Contact(it.id, it.androidContactId, it.displayName,
-                it.phoneNumber, it.email, it.photoUri, it.createdAt, it.updatedAt)) }
-            snapshot.events.forEach { database.eventDao().insert(Event(it.id, it.note, it.eventDate, it.createdAt, it.updatedAt)) }
+            snapshot.contacts.forEach { database.contactDao().insert(Contact(it.id, null, it.displayName,
+                it.phoneNumber, it.email, null, it.createdAt, it.updatedAt)) }
+            snapshot.events.forEach { database.eventDao().insert(Event(it.id, it.note, it.eventDate, it.createdAt, it.updatedAt, it.deletedAt)) }
             snapshot.tags.forEach { database.tagDao().insert(Tag(it.id, it.name, it.createdAt)) }
-            snapshot.facts.forEach { database.contactFactDao().insert(ContactFact(it.id, it.contactId, it.text, it.createdAt)) }
+            snapshot.facts.forEach { database.contactFactDao().insert(ContactFact(it.id, it.contactId, it.text, it.createdAt, it.deletedAt)) }
+            snapshot.followUps.forEach { database.followUpDao().insert(FollowUp(it.id, it.contactId, it.text,
+                it.dueDate, it.completedAt, null, it.createdAt, it.updatedAt, it.deletedAt)) }
             snapshot.eventContacts.forEach { database.eventDao().insertEventContact(EventContact(it.eventId, it.contactId)) }
             snapshot.contactTags.forEach { database.pilotDao().addTag(ContactTag(it.contactId, it.tagId)) }
             snapshot.relationships.forEach { database.pilotDao().addRelationship(Relationship(it.contactA, it.contactB, it.label)) }
             snapshot.eventTags.forEach { database.eventDao().insertEventTag(EventTag(it.eventId, it.tagId)) }
         }
-    }
+        NotificationManagerCompat.from(context).cancel(803)
+        context.getSharedPreferences("capture_draft", Context.MODE_PRIVATE).edit().clear().apply()
+        context.getSharedPreferences("capture_drafts", Context.MODE_PRIVATE).edit().clear().apply()
+    } }
 }

@@ -10,8 +10,21 @@ import threading
 import time
 import uuid
 
+from sessions import SessionTools, InteractiveSession
+
 PACKAGE = 'com.idontremember.personalcrm'
-SOURCE_SHA256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+def source_fingerprint():
+    names = ['runner.py', 'sessions.py', 'interaction.py', 'captures.py', 'requirements.txt']
+    digest = hashlib.sha256()
+    for name in names:
+        path = Path(__file__).with_name(name)
+        digest.update(name.encode()+b'\0')
+        if path.is_file():
+            digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+SOURCE_SHA256 = source_fingerprint()
 
 RUNNER = PACKAGE + '.test/' + PACKAGE + '.HiltTestRunner'
 
@@ -40,12 +53,16 @@ def install_apks(device, directory, verify, note):
                 device('uninstall', package)
         install()
 
-class Runner:
+class Runner(SessionTools):
     def __init__(self, config):
         self.sdk = Path(config['sdk']).resolve()
         self.inbox = Path(config['inbox']).resolve()
         self.state = Path(config['state']).resolve()
         self.avd = config['avd']
+        if self.avd != 'android_tests':
+            raise ValueError('Only the dedicated android_tests AVD is supported')
+        self.outbox = Path(config.get('outbox', self.inbox.parent/'mcp-artifacts')).absolute()
+        self.sessions = {}
         self.state.mkdir(parents=True, exist_ok=True)
         self.lock = threading.Lock()
         self.active = None
@@ -73,17 +90,20 @@ class Runner:
                 busy = True
         tools = ['platform-tools/adb', 'emulator/emulator', 'cmdline-tools/latest/bin/apkanalyzer']
         missing = [name for name in tools if not (self.sdk/name).is_file()]
-        return dict(version=3, pid=os.getpid(), source_sha256=SOURCE_SHA256, state=str(self.state), inbox=str(self.inbox), sdk_available=not missing, missing_sdk_tools=missing, avd=self.avd, serial='emulator-5580', busy=busy, readiness='Test submission checks emulator identity and boot; health does not prove emulator readiness.')
+        return dict(version=4, pid=os.getpid(), source_sha256=SOURCE_SHA256, state=str(self.state), inbox=str(self.inbox), sdk_available=not missing, missing_sdk_tools=missing, avd=self.avd, serial='emulator-5580', busy=busy, capabilities=['tests', 'interactive', 'batch', 'screenshots', 'recording'], outbox=str(self.outbox), readiness='Test submission checks emulator identity and boot; health does not prove emulator readiness.')
 
     def save(self, jid):
         p = self.state/jid/'status.json'
-        tmp = p.with_suffix('.tmp')
+        tmp = p.with_name('status.'+uuid.uuid4().hex+'.tmp')
         tmp.write_text(json.dumps(self.jobs[jid]))
         tmp.replace(p)
 
     def start_test(self, app_sha256: str, test_sha256: str, filter: str | None = None):
         if filter and not re.fullmatch(r'com\.idontremember\.personalcrm\.[A-Za-z0-9_.$]+(?:#[A-Za-z0-9_$]+)?', filter):
             raise ValueError('Invalid test filter')
+        return self._submit(app_sha256, test_sha256, filter)
+
+    def _submit(self, app_sha256, test_sha256, filter, interactive=False):
         with self.lock:
             if self.active:
                 raise ValueError(f'Runner busy with job {self.active}; wait for cleanup before submitting or restaging.')
@@ -94,12 +114,12 @@ class Runner:
                 job_lock.close()
                 raise ValueError('Another host/sandbox connection is running tests or cleaning up. Wait before submitting or restaging.')
             try:
-                return self._start_test(app_sha256, test_sha256, filter, job_lock)
+                return self._start_test(app_sha256, test_sha256, filter, job_lock, interactive)
             except Exception:
                 job_lock.close()
                 raise
 
-    def _start_test(self, app_sha256, test_sha256, filter, job_lock):
+    def _start_test(self, app_sha256, test_sha256, filter, job_lock, interactive=False):
         jid = uuid.uuid4().hex
         directory = self.state/jid
         directory.mkdir(mode=0o700)
@@ -116,12 +136,16 @@ class Runner:
             if hashlib.sha256(data).hexdigest() != digest:
                 raise ValueError('APK hash mismatch')
             (directory/name).write_bytes(data)
-        self.jobs[jid] = dict(status='running', phase='starting')
+        self.jobs[jid] = dict(status='running', phase='starting', app_sha256=app_sha256, test_sha256=test_sha256)
+        if interactive:
+            self.jobs[jid]['kind'] = 'session'
         self.active = jid
         self.cancelled = threading.Event()
+        if interactive:
+            self.sessions[jid] = InteractiveSession(self, jid)
         self.save(jid)
         threading.Thread(target=self.run, args=(jid, filter, job_lock), daemon=True).start()
-        return dict(job_id=jid)
+        return dict(job_id=jid, **({'session_id': jid} if interactive else {}))
 
     def get_status(self, job_id: str):
         if not re.fullmatch('[0-9a-f]{32}', job_id):
@@ -143,6 +167,12 @@ class Runner:
 
     def cancel(self, job_id: str):
         status = self.get_status(job_id)
+        if status.get('kind') == 'batch' and status['status'] == 'running':
+            session = self.sessions.get(status['session_id'])
+            if session is None:
+                raise ValueError('Cancel through the connection owning this session')
+            session.batch_cancelled.set()
+            return self.get_status(job_id)
         if status['status'] == 'running' and self.active != job_id:
             raise ValueError('This job belongs to another connection; cancel through the connection that started it.')
         if self.active == job_id:
@@ -151,7 +181,8 @@ class Runner:
 
     def run(self, jid, filter, job_lock):
         directory = self.state/jid
-        deadline = time.monotonic()+900
+        interactive = self.jobs[jid].get('kind') == 'session'
+        deadline = time.monotonic()+(2880 if interactive else 900)
         adb = str(self.sdk/'platform-tools/adb')
         serial = 'emulator-5580'
         device_verified = False
@@ -209,6 +240,35 @@ class Runner:
             for permission in ['READ_CONTACTS', 'WRITE_CONTACTS']:
                 device('shell', 'pm', 'grant', PACKAGE, 'android.permission.'+permission)
             device('logcat', '-c')
+            if interactive:
+                launch = device('shell', 'am', 'start', '-W', '-n', PACKAGE+'/.ui.MainActivity')
+                if re.search(r'Error|Exception', launch):
+                    raise RuntimeError('App launch failed: '+launch[-2000:])
+                def device_binary(*args):
+                    # Every interactive device operation, including cleanup,
+                    # re-verifies the emulator and keeps stdout binary-safe.
+                    identity = subprocess.run([adb, '-s', serial, 'emu', 'avd', 'name'],
+                                              stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                              stderr=subprocess.PIPE, check=True, timeout=10).stdout
+                    if identity.decode(errors='replace').splitlines()[0] != self.avd:
+                        raise ValueError('Emulator identity changed; refusing operation')
+                    completed = subprocess.run([adb, '-s', serial, *args], stdin=subprocess.DEVNULL,
+                                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20)
+                    if completed.returncode:
+                        raise CommandError(args, completed.returncode, completed.stderr.decode(errors='replace'))
+                    return completed.stdout
+                try:
+                    self.sessions[jid].run(device_binary)
+                except RuntimeError as error:
+                    if str(error) == 'session cancelled':
+                        result = dict(status='passed' if self.jobs[jid].get('end_requested') else 'cancelled', phase='finished')
+                    elif 'timeout' in str(error) or 'duration' in str(error):
+                        result = dict(status='expired', phase='finished', error=str(error))
+                    else:
+                        raise
+                else:
+                    result = dict(status='passed', phase='finished')
+                return
             self.jobs[jid]['phase'] = 'tests'; self.save(jid)
             args = [adb, '-s', serial, 'shell', 'am', 'instrument', '-w']
             if filter: args += ['-e', 'class', filter]
@@ -219,15 +279,36 @@ class Runner:
         except Exception as error:
             result = dict(status='cancelled' if self.cancelled.is_set() else 'failed', phase='finished', error=str(error))
         finally:
+            if not interactive and device_verified and 'result' in locals() and result.get('status') == 'failed':
+                try:
+                    from captures import Captures
+                    def capture_device(*args):
+                        verify()
+                        return subprocess.run([adb, '-s', serial, *args], check=True,
+                                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15).stdout
+                    Captures(directory, self.outbox, jid, self.jobs[jid].get('app_sha256', ''),
+                             self.jobs[jid].get('test_sha256', ''), capture_device).screenshot('test-failure')
+                except Exception as error:
+                    result['capture_error'] = str(error)
+            if interactive:
+                try:
+                    self.sessions[jid].close()
+                except Exception as error:
+                    result['cleanup_error'] = str(error)
             self.jobs[jid]['phase'] = 'cleanup'; self.save(jid)
             for args in [('shell', 'am', 'force-stop', PACKAGE+'.test'), ('shell', 'am', 'force-stop', PACKAGE), ('logcat', '-d', '-t', '2000')]:
                 if not device_verified:
                     break
                 try:
-                    verify()
+                    identity = subprocess.run([adb, '-s', serial, 'emu', 'avd', 'name'],
+                                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10, check=True).stdout
+                    if identity.decode(errors='replace').splitlines()[0] != self.avd:
+                        break
                     with (directory/'output.log').open('ab') as log:
                         subprocess.run([adb, '-s', serial, *args], stdout=log, stderr=log, timeout=15)
                 except Exception: pass
+            if self.jobs[jid].get('capture_errors') and result.get('status') == 'passed':
+                result.update(status='failed', error='Recording cleanup failed; see capture_errors')
             with self.lock:
                 self.jobs[jid].update(result)
                 self.save(jid)
@@ -239,6 +320,20 @@ if __name__ == '__main__':
     from mcp.server.fastmcp import FastMCP
     runner = Runner(json.loads(Path(sys.argv[1]).read_text()))
     server = FastMCP('android-tests')
-    for name in ['health', 'start_test', 'get_status', 'read_logs', 'cancel']:
+    for name in ['health', 'start_test', 'get_status', 'read_logs', 'cancel',
+                 'start_session', 'end_session', 'inspect', 'execute_steps',
+                 'start_recording', 'stop_recording', 'list_artifacts', 'get_artifact']:
         server.tool()(getattr(runner, name))
-    server.run(transport='stdio')
+    import signal
+    def shutdown(signum, frame):
+        raise SystemExit(0)
+    signal.signal(signal.SIGTERM, shutdown)
+    signal.signal(signal.SIGINT, shutdown)
+    try:
+        server.run(transport='stdio')
+    finally:
+        if runner.active:
+            runner.cancelled.set()
+            until = time.monotonic()+45
+            while runner.active and time.monotonic() < until:
+                time.sleep(.1)

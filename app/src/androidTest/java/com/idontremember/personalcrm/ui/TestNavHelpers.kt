@@ -8,12 +8,12 @@ import androidx.compose.ui.test.performClick
 /**
  * Shared navigation helpers for UI tests.
  *
- * The bottom navigation bar (testTags "nav_tab_contacts" / "nav_tab_events") is
- * the supported way for tests to reach top-level screens: the app starts on the
- * dashboard, and clicking a tab clears the back stack to that tab's
- * top-level route.
+ * Home and People retain separate histories. Reselecting a tab returns to its root.
+ * Event history is a secondary Home action (nav_tab_events).
  */
 fun ComposeTestRule.navigateToEventsTab() {
+    onNodeWithTag("nav_tab_home").performClick()
+    onNodeWithTag("nav_tab_home").performClick() // Reselect restores the Home root if its history was retained.
     waitUntilTagExists("nav_tab_events")
     onNodeWithTag("nav_tab_events").performClick()
     waitUntilTagDisplayed("events_list_screen")

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Generate a Markdown review pack from verified Android QA captures"
+set -euo pipefail
+TASK_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+exec python3 "$TASK_ROOT/scripts/qa-report.py" "$@"

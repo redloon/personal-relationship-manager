@@ -1,13 +1,11 @@
 package com.idontremember.personalcrm.ui.addevent
 
 import android.content.Context
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
-import dagger.hilt.android.qualifiers.ApplicationContext
-import org.json.JSONArray
-import org.json.JSONObject
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.idontremember.personalcrm.data.db.dao.ContactFactDao
 import com.idontremember.personalcrm.data.db.entity.Contact
 import com.idontremember.personalcrm.data.db.entity.Tag
 import com.idontremember.personalcrm.data.repository.ContactRepository
@@ -18,12 +16,17 @@ import com.idontremember.personalcrm.data.settings.SettingsRepository
 import com.idontremember.personalcrm.ui.components.AutocompleteContact
 import com.idontremember.personalcrm.ui.components.AutocompleteTag
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 import javax.inject.Inject
 
 @HiltViewModel
@@ -32,116 +35,166 @@ class AddEventViewModel @Inject constructor(
     private val contactRepository: ContactRepository,
     private val tagRepository: TagRepository,
     private val settingsRepository: SettingsRepository,
+    private val factDao: ContactFactDao,
     @ApplicationContext context: Context
 ) : ViewModel() {
-
-    private var acceptingChanges = true
     private val draftPrefs = context.getSharedPreferences("capture_draft", Context.MODE_PRIVATE)
-    private val draft = runCatching { JSONObject(draftPrefs.getString("draft", null) ?: "{}") }.getOrDefault(JSONObject())
+    private var draftKey = "draft"
+    private var existingEventId: Long? = null
+    private var existingFactId: Long? = null
+    private var acceptingChanges = false
+    private var loadJob: Job? = null
+    private var pendingSharedText: String? = null
+    private var pendingContactId: Long? = null
+    private var pendingIsFact = false
+    private var creatingPerson = false
 
-    val contacts: StateFlow<List<Contact>> = contactRepository
-        .getAllContacts()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val contacts = contactRepository.getAllContacts()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList<Contact>())
+    val tags = tagRepository.getAllTags()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList<Tag>())
 
-    val tags: StateFlow<List<Tag>> = tagRepository
-        .getAllTags()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    private val _noteText = MutableStateFlow(draft.optString("note", "").let { TextFieldValue(it, selection = TextRange(it.length)) })
+    private val _noteText = MutableStateFlow(TextFieldValue(""))
     val noteText: StateFlow<TextFieldValue> = _noteText
-
-    private val _selectedContactIds = MutableStateFlow<Set<Long>>(draft.optJSONArray("contacts").toLongSet())
+    private val _selectedContactIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedContactIds: StateFlow<Set<Long>> = _selectedContactIds
-
-    private val _selectedTagNames = MutableStateFlow<Set<String>>(draft.optJSONArray("tags").toStringSet())
+    private val _selectedTagNames = MutableStateFlow<Set<String>>(emptySet())
     val selectedTagNames: StateFlow<Set<String>> = _selectedTagNames
-
-    private val _eventDate = MutableStateFlow(draft.optLong("date", System.currentTimeMillis()))
+    private val _eventDate = MutableStateFlow(System.currentTimeMillis())
     val eventDate: StateFlow<Long> = _eventDate
-
-    private val _isFact = MutableStateFlow(draft.optBoolean("fact", false))
+    private val _isFact = MutableStateFlow(false)
     val isFact: StateFlow<Boolean> = _isFact
-
     private val _saved = MutableStateFlow(false)
     val saved: StateFlow<Boolean> = _saved
-
     private val _saving = MutableStateFlow(false)
     val saving: StateFlow<Boolean> = _saving
     private val _saveFailed = MutableStateFlow(false)
     val saveFailed: StateFlow<Boolean> = _saveFailed
+    private val _ready = MutableStateFlow(false)
+    val ready: StateFlow<Boolean> = _ready
+    private val _sharedDraftConflict = MutableStateFlow(false)
+    val sharedDraftConflict: StateFlow<Boolean> = _sharedDraftConflict
 
-    init {
-        // P1 "default event time" preference: now vs. the timestamp used last time.
-        if (!draft.has("date")) applyDefaultEventTime()
-    }
-
-    fun reloadDraft() {
-        acceptingChanges = true
-        val stored = draftPrefs.getString("draft", null)
-        if (stored == null) { reset(); return }
-        val value = runCatching { JSONObject(stored) }.getOrElse { return }
-        val note = value.optString("note", "")
-        _noteText.value = TextFieldValue(note, selection = TextRange(note.length))
-        _selectedContactIds.value = value.optJSONArray("contacts").toLongSet()
-        _selectedTagNames.value = value.optJSONArray("tags").toStringSet()
-        _eventDate.value = value.optLong("date", System.currentTimeMillis())
-        _isFact.value = value.optBoolean("fact", false)
+    fun initialize(eventId: Long? = null, factId: Long? = null, contactId: Long? = null, sharedText: String? = null, initialIsFact: Boolean = false) {
+        loadJob?.cancel()
+        existingEventId = eventId
+        existingFactId = factId
+        draftKey = captureDraftKey(eventId, factId)
+        acceptingChanges = false
+        _ready.value = false
         _saved.value = false
         _saveFailed.value = false
-    }
-
-    fun onNoteChanged(value: TextFieldValue) {
-        if (_saving.value || !acceptingChanges) return
-        _noteText.value = value
-        persistDraft()
-    }
-
-    fun onContactSelected(contact: AutocompleteContact) {
-        if (_saving.value || !acceptingChanges) return
-        _selectedContactIds.value = _selectedContactIds.value + contact.id
-        persistDraft()
-    }
-
-    fun importCreatedContact(androidId: Long, onFailure: () -> Unit) {
-        viewModelScope.launch {
+        _saving.value = false
+        _sharedDraftConflict.value = false
+        pendingSharedText = sharedText?.takeIf { it.isNotBlank() }
+        pendingContactId = contactId
+        pendingIsFact = initialIsFact
+        loadJob = viewModelScope.launch {
             try {
-                contactRepository.syncContacts()
-                val contact = contactRepository.getContactByAndroidId(androidId) ?: error("Contact unavailable")
-                _selectedContactIds.value = _selectedContactIds.value + contact.id
-                persistDraft()
-            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-            catch (_: Exception) { onFailure() }
+                val stored = draftPrefs.getString(draftKey, null)?.let { runCatching { JSONObject(it) }.getOrNull() }
+                if (stored != null) {
+                    readDraft(stored)
+                    if (pendingSharedText != null || (eventId == null && factId == null &&
+                        ((contactId != null && _selectedContactIds.value != setOf(contactId)) ||
+                        ((contactId != null || initialIsFact) && _isFact.value != initialIsFact)))) _sharedDraftConflict.value = true
+                } else if (eventId != null) {
+                    val meta = eventRepository.getEventWithMeta(eventId) ?: error("Note unavailable")
+                    _noteText.value = meta.event.note.asTextField()
+                    _selectedContactIds.value = meta.contacts.map { it.id }.toSet()
+                    _selectedTagNames.value = meta.tags.map { it.name }.toSet()
+                    _eventDate.value = meta.event.eventDate
+                    _isFact.value = false
+                } else if (factId != null) {
+                    val fact = factDao.getById(factId) ?: error("Fact unavailable")
+                    _noteText.value = fact.text.asTextField()
+                    _selectedContactIds.value = setOf(fact.contactId)
+                    _selectedTagNames.value = emptySet()
+                    _eventDate.value = fact.createdAt
+                    _isFact.value = true
+                } else {
+                    freshCapture(contactId, pendingSharedText.orEmpty())
+                    _isFact.value = initialIsFact
+                    if (!pendingSharedText.isNullOrBlank() || contactId != null) persistDraft()
+                }
+                acceptingChanges = true
+                _ready.value = true
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { _saveFailed.value = true }
         }
     }
 
-    fun onTagSelected(tag: AutocompleteTag) {
-        if (_saving.value || !acceptingChanges) return
-        _selectedTagNames.value = _selectedTagNames.value + tag.name
-        persistDraft()
+    fun reloadDraft() = initialize()
+
+    fun resolveSharedDraft(resume: Boolean) {
+        val incoming = pendingSharedText.orEmpty()
+        if (!resume) {
+            acceptingChanges = false
+            _ready.value = false
+            loadJob = viewModelScope.launch {
+                freshCapture(pendingContactId, incoming)
+                _isFact.value = pendingIsFact
+                persistDraft()
+                acceptingChanges = true
+                _ready.value = true
+            }
+        }
+        pendingSharedText = null
+        _sharedDraftConflict.value = false
     }
 
-    fun removeContact(id: Long) {
-        if (_saving.value || !acceptingChanges) return
-        _selectedContactIds.value = _selectedContactIds.value - id
-        persistDraft()
+    private suspend fun freshCapture(contactId: Long?, text: String) {
+        _noteText.value = text.asTextField()
+        _selectedContactIds.value = contactId?.let { setOf(it) }.orEmpty()
+        _selectedTagNames.value = emptySet()
+        _isFact.value = false
+        _eventDate.value = when (settingsRepository.defaultEventTime.first()) {
+            DefaultEventTime.NOW -> System.currentTimeMillis()
+            DefaultEventTime.LAST_USED -> settingsRepository.lastUsedEventTimestamp.first().takeIf { it > 0 } ?: System.currentTimeMillis()
+        }
     }
 
-    fun removeTag(name: String) {
-        if (_saving.value || !acceptingChanges) return
-        _selectedTagNames.value = _selectedTagNames.value - name
-        persistDraft()
+    private fun readDraft(value: JSONObject) {
+        _noteText.value = value.optString("note", "").asTextField()
+        _selectedContactIds.value = value.optJSONArray("contacts").toLongSet()
+        _selectedTagNames.value = value.optJSONArray("tags").toStringSet()
+        _eventDate.value = value.optLong("date", System.currentTimeMillis())
+        _isFact.value = value.optBoolean("fact", existingFactId != null)
     }
 
-    fun onDateChanged(dateMillis: Long) {
-        if (_saving.value || !acceptingChanges) return
-        _eventDate.value = dateMillis
+    private inline fun change(block: () -> Unit) {
+        if (_saving.value || !acceptingChanges || _sharedDraftConflict.value) return
+        block()
+        _saveFailed.value = false
         persistDraft()
     }
+    fun onNoteChanged(value: TextFieldValue) = change { _noteText.value = value }
+    fun onContactSelected(contact: AutocompleteContact) = change {
+        _selectedContactIds.value = if (_isFact.value) setOf(contact.id) else _selectedContactIds.value + contact.id
+    }
+    fun onTagSelected(tag: AutocompleteTag) = change {
+        val name = tag.name.trim().removePrefix("#").lowercase()
+        if (name.isNotBlank()) _selectedTagNames.value = _selectedTagNames.value + name
+    }
+    fun removeContact(id: Long) = change { _selectedContactIds.value = _selectedContactIds.value - id }
+    fun removeTag(name: String) = change { _selectedTagNames.value = _selectedTagNames.value - name }
+    fun onDateChanged(date: Long) = change { _eventDate.value = date }
+    fun setFact(value: Boolean) = change {
+        if (existingEventId == null && existingFactId == null) _isFact.value = value
+    }
 
-    fun setFact(value: Boolean) {
-        if (_saving.value || !acceptingChanges) return
-        _isFact.value = value
-        persistDraft()
+    fun createPerson(name: String, onCreated: () -> Unit = {}) {
+        if (name.isBlank() || _saving.value || !acceptingChanges || creatingPerson) return
+        creatingPerson = true
+        viewModelScope.launch {
+            try {
+                val id = contactRepository.createLocalContact(name.trim())
+                check(id > 0)
+                onContactSelected(AutocompleteContact(id, name.trim()))
+                onCreated()
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { _saveFailed.value = true }
+            finally { creatingPerson = false }
+        }
     }
 
     private fun persistDraft() {
@@ -149,88 +202,55 @@ class AddEventViewModel @Inject constructor(
             .put("contacts", JSONArray(_selectedContactIds.value.toList()))
             .put("tags", JSONArray(_selectedTagNames.value.toList()))
             .put("date", _eventDate.value).put("fact", _isFact.value)
-        draftPrefs.edit().putString("draft", value.toString()).apply()
+        draftPrefs.edit().putString(draftKey, value.toString()).apply()
     }
 
     fun save() {
         val note = _noteText.value.text
-        if (note.isBlank() || _saving.value || _saved.value || (_isFact.value && _selectedContactIds.value.size != 1)) return
-
+        if (note.isBlank() || !acceptingChanges || !_ready.value || _sharedDraftConflict.value || _saving.value || _saved.value || (_isFact.value && _selectedContactIds.value.size != 1)) return
         _saving.value = true
         _saveFailed.value = false
         viewModelScope.launch {
             try {
-                if (_isFact.value) {
-                    contactRepository.addFact(_selectedContactIds.value.single(), note)
-                } else eventRepository.createEvent(
-                    note = note,
-                    contactIds = _selectedContactIds.value.toList(),
-                    tagNames = _selectedTagNames.value.toList(),
-                    eventDate = _eventDate.value
-                )
-                close()
-                draftPrefs.edit().remove("draft").apply()
+                when {
+                    existingFactId != null -> {
+                        val fact = factDao.getById(existingFactId!!) ?: error("Fact unavailable")
+                        factDao.update(fact.copy(text = note, contactId = _selectedContactIds.value.single()))
+                    }
+                    existingEventId != null -> {
+                        check(eventRepository.getEventById(existingEventId!!) != null)
+                        eventRepository.updateEvent(existingEventId!!, note, _selectedContactIds.value.toList(), _selectedTagNames.value.toList(), _eventDate.value)
+                    }
+                    _isFact.value -> contactRepository.addFact(_selectedContactIds.value.single(), note)
+                    else -> eventRepository.createEvent(note, _selectedContactIds.value.toList(), _selectedTagNames.value.toList(), _eventDate.value)
+                }
+                acceptingChanges = false
+                draftPrefs.edit().remove(draftKey).apply()
                 _saved.value = true
                 try { if (!_isFact.value) settingsRepository.setLastUsedEventTimestamp(_eventDate.value) }
-                catch (_: Exception) { /* Event already saved. */ }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                _saveFailed.value = true
-            } finally {
-                _saving.value = false
-            }
+                catch (_: Exception) { /* Save has already committed. */ }
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { _saveFailed.value = true }
+            finally { _saving.value = false }
         }
     }
 
-    fun getAutocompleteContacts(): List<AutocompleteContact> {
-        return contacts.value.map {
-            AutocompleteContact(
-                id = it.id,
-                displayName = it.displayName,
-                phoneNumber = it.phoneNumber
-            )
-        }
-    }
-
-    fun getAutocompleteTags(): List<AutocompleteTag> {
-        return tags.value.map {
-            AutocompleteTag(id = it.id, name = it.name)
-        }
-    }
-
-    fun close() { acceptingChanges = false }
-
-    fun discard() {
-        close()
-        reset()
-    }
-
+    fun getAutocompleteContacts() = contacts.value.map { AutocompleteContact(it.id, it.displayName, it.phoneNumber) }
+    fun getAutocompleteTags() = tags.value.map { AutocompleteTag(it.id, it.name) }
+    fun close() { acceptingChanges = false; loadJob?.cancel() }
+    fun discard() { close(); reset() }
     fun reset(clearDraft: Boolean = true) {
-        if (clearDraft) draftPrefs.edit().remove("draft").apply()
-        _isFact.value = false
+        if (clearDraft) draftPrefs.edit().remove(draftKey).apply()
         _noteText.value = TextFieldValue("")
         _selectedContactIds.value = emptySet()
         _selectedTagNames.value = emptySet()
-        applyDefaultEventTime()
+        _isFact.value = false
         _saved.value = false
         _saving.value = false
         _saveFailed.value = false
     }
-
-    private fun applyDefaultEventTime() {
-        viewModelScope.launch {
-            val defaultDate = when (settingsRepository.defaultEventTime.first()) {
-                DefaultEventTime.NOW -> System.currentTimeMillis()
-                DefaultEventTime.LAST_USED -> {
-                    val lastUsed = settingsRepository.lastUsedEventTimestamp.first()
-                    if (lastUsed > 0L) lastUsed else System.currentTimeMillis()
-                }
-            }
-            if (!draftPrefs.contains("draft")) _eventDate.value = defaultDate
-        }
-    }
 }
 
-private fun JSONArray?.toLongSet(): Set<Long> = if (this == null) emptySet() else (0 until length()).map { optLong(it) }.toSet()
-private fun JSONArray?.toStringSet(): Set<String> = if (this == null) emptySet() else (0 until length()).map { optString(it) }.toSet()
+private fun String.asTextField() = TextFieldValue(this, TextRange(length))
+private fun JSONArray?.toLongSet(): Set<Long> = if (this == null) emptySet() else (0 until length()).mapNotNull { optLong(it).takeIf { id -> id > 0 } }.toSet()
+private fun JSONArray?.toStringSet(): Set<String> = if (this == null) emptySet() else (0 until length()).map { optString(it) }.filter { it.isNotBlank() }.toSet()

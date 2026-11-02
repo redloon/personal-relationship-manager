@@ -4,6 +4,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.assertTextContains
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import org.junit.Before
@@ -61,7 +64,7 @@ class NavigationTest {
         // Verify search field is present
         composeTestRule.waitUntil(timeoutMillis = 3_000) {
             try {
-                composeTestRule.onNodeWithText("Search contacts...").assertExists()
+                composeTestRule.onNodeWithTag("search_field").assertExists()
                 true
             } catch (e: AssertionError) {
                 false
@@ -79,4 +82,15 @@ class NavigationTest {
         composeTestRule.navigateToContactsTab()
         composeTestRule.onNodeWithTag("contacts_list_screen").assertIsDisplayed()
     }
+    @Test
+    fun reselectingHomeReturnsFromHistoryAndKeepsSearch() {
+        composeTestRule.waitUntilTagDisplayed("dashboard_search")
+        composeTestRule.onNodeWithTag("dashboard_search").performTextInput("climbing")
+        composeTestRule.onNodeWithTag("nav_tab_events").performClick()
+        composeTestRule.waitUntilTagDisplayed("events_list_screen")
+        composeTestRule.onNodeWithTag("nav_tab_home").performClick()
+        composeTestRule.waitUntilTagDisplayed("dashboard_search")
+        composeTestRule.onNodeWithTag("dashboard_search").assertTextContains("climbing", substring = true)
+    }
+
 }

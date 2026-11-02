@@ -58,21 +58,12 @@ class EventsListViewModel @Inject constructor(
     /** P2: null until the first query emission — drives the shared `LoadingState`. */
     val events: StateFlow<List<EventDisplayItem>?> = combine(refreshTrigger, _searchQuery) { _, query -> query }
         .flatMapLatest { query ->
-            val source = if (query.isBlank()) {
-                eventRepository.getAllEvents()
-            } else {
-                eventRepository.searchEvents(query)
-            }
-            source.map { eventList ->
-                eventList.map { event ->
-                    val contactIds = eventDao.getContactIdsForEvent(event.id)
-                    val tagIds = eventDao.getTagIdsForEvent(event.id)
-                    val contacts = contactIds.mapNotNull { contactDao.getById(it) }
-                    val tags = tagIds.mapNotNull { tagId ->
-                        tagDao.getAllOnce().find { it.id == tagId }
-                    }
-                    EventDisplayItem(event = event, contacts = contacts, tags = tags)
-                }
+            eventRepository.observeEventsWithMeta().map { entries ->
+                val terms = query.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+                entries.filter { entry ->
+                    val searchable = entry.event.note + " " + entry.contacts.joinToString(" ") { it.displayName } + " " + entry.tags.joinToString(" ") { it.name }
+                    terms.all { searchable.contains(it, ignoreCase = true) }
+                }.map { EventDisplayItem(it.event, it.contacts, it.tags) }
             }
         }
         .onEach { _loadError.value = null }

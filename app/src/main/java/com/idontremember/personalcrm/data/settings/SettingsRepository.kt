@@ -31,6 +31,17 @@ class SettingsRepository @Inject constructor(
     private val dataStore: DataStore<Preferences>
 ) {
 
+    val followUpReminderPrompted: Flow<Boolean> = dataStore.data.map { it[SettingsKeys.FOLLOW_UP_REMINDER_PROMPTED] ?: false }
+    suspend fun setFollowUpReminderPrompted(prompted: Boolean = true) { dataStore.edit { it[SettingsKeys.FOLLOW_UP_REMINDER_PROMPTED] = prompted } }
+
+    val followUpRemindersEnabled: Flow<Boolean> = dataStore.data.map { it[SettingsKeys.FOLLOW_UP_REMINDERS_ENABLED] ?: false }
+    val reminderHour: Flow<Int> = dataStore.data.map { (it[SettingsKeys.REMINDER_HOUR] ?: 9L).toInt().coerceIn(6, 19) }
+    val lastReminderDay: Flow<String?> = dataStore.data.map { it[SettingsKeys.LAST_REMINDER_DAY] }
+
+    suspend fun setFollowUpRemindersEnabled(enabled: Boolean) { dataStore.edit { it[SettingsKeys.FOLLOW_UP_REMINDERS_ENABLED] = enabled } }
+    suspend fun setReminderHour(hour: Int) { dataStore.edit { it[SettingsKeys.REMINDER_HOUR] = hour.coerceIn(6, 19).toLong() } }
+    suspend fun setLastReminderDay(day: String?) { dataStore.edit { if (day == null) it.remove(SettingsKeys.LAST_REMINDER_DAY) else it[SettingsKeys.LAST_REMINDER_DAY] = day } }
+
     val themeMode: Flow<ThemeMode> = dataStore.data.map { prefs ->
         enumValueOrDefault(prefs[SettingsKeys.THEME_MODE], ThemeMode.SYSTEM)
     }
@@ -78,6 +89,10 @@ class SettingsRepository @Inject constructor(
  * never inline `stringPreferencesKey("...")` at call sites.
  */
 object SettingsKeys {
+    val FOLLOW_UP_REMINDER_PROMPTED = booleanPreferencesKey("followup_reminder_prompted")
+    val FOLLOW_UP_REMINDERS_ENABLED = booleanPreferencesKey("followup_reminders_enabled")
+    val REMINDER_HOUR = longPreferencesKey("reminder_hour")
+    val LAST_REMINDER_DAY = stringPreferencesKey("last_reminder_day")
     val THEME_MODE = stringPreferencesKey("theme_mode")
     val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
     val DATE_DISPLAY = stringPreferencesKey("date_display")

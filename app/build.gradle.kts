@@ -46,6 +46,12 @@ android {
         }
     }
 
+    compileOptions {
+        isCoreLibraryDesugaringEnabled = true
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+
     buildFeatures {
         compose = true
         aidl = false
@@ -99,6 +105,8 @@ dependencies {
     androidTestImplementation(composeBom)
 
     // Core Android dependencies
+    implementation(libs.androidx.work.runtime.ktx)
+    coreLibraryDesugaring(libs.android.desugar)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

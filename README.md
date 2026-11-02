@@ -18,11 +18,17 @@ Provision the SDK packages listed in [android-sandbox.md](docs/android-sandbox.m
 
 Tasks discover JDK 21 and the SDK per environment (`ANDROID_HOME` / `ANDROID_SDK_ROOT`, tools on PATH, `~/android-sdk`, or `~/Android/Sdk`). Keep `sdk.dir` out of shared `local.properties`; it overrides environment discovery. Use `mise run phone-install` only for an explicitly requested physical-phone install.
 
-## Phase 1 dogfood loop
+## Everyday use
 
-Create people in Android Contacts, grant this app Contacts access, then tap the refresh icon in the Contacts tab. Add freeform facts on a person's detail page. Use the Quick Settings **Add Event** tile to jot a note immediately; select a person with `@` if convenient, or open the saved event later and attach them in Edit. Look up the person's facts and event history before or after a conversation.
+Home searches across people, facts, notes, linked people, tags, and follow-ups. Try a detail you remember, such as “climbing,” rather than a name. Recent context includes facts and notes. People supports name-only profiles; importing Android Contacts is optional and creates no follow-ups.
 
-Use **Settings → Data → Export data** weekly and before installing a development build that changes storage. Keep the plain JSON file outside the app and treat it as private. **Restore data** replaces all current app records after confirmation; it does not restore preferences or merge records. Confirm the export success message and that the file exists before relying on it.
+Use **Add a note**, the Quick Settings tile, the launcher shortcut, or Android text sharing to capture. The shared editor also supports facts, follow-ups, and editing saved notes. Closing preserves unfinished work; Discard removes it. Profiles provide person-scoped search and capture.
+
+Follow-ups are voluntary. Add a date if you want an optional quiet morning reminder. Each item is notified once; unfinished items do not repeat. Android may delay delivery. Reminders and their time are controlled in Settings.
+
+Use **Settings → Data → Export data** for a portable JSON copy, or choose a folder for daily backups. Automatic backup retains seven verified copies. Restore replaces current records after a safety export and confirmation; it detaches Android contact links for safe use on another phone. Link profiles explicitly afterward and re-enable reminders if wanted. Preferences, drafts, and folder permissions are not restored. Deleted notes, facts, and follow-ups can be recovered for 30 days in Settings.
+
+### Development feedback
 
 To review dogfooding notes, link events to a fake Android contact. On the host, save any open note, plug in the phone, and run from this repo:
 
@@ -35,7 +41,7 @@ Ask Codex to read the newest `ignored/dogfood-notes-*.md` and plan changes from 
 
 After review, record each actionable item as a fix, deferred idea in `roadmap.md`, or decision in `docs/decisions.md`; then delete reviewed dogfood events from the phone if desired. The timestamped pull remains available after deletion.
 
-After three weeks, check the success signals and stop conditions in [product-intent.md](docs/product-intent.md). Keep new feature ideas parked until the capture and recall loop proves useful.
+The original pilot gates are historical. Current scope prioritizes forgotten-context recall and voluntary follow-ups; see [product-intent.md](docs/product-intent.md) and [decisions.md](docs/decisions.md).
 
 For sandbox build and emulator setup, see [android-sandbox.md](docs/android-sandbox.md).
 
@@ -81,7 +87,7 @@ Tests live in `app/src/test` (JVM) and `app/src/androidTest` (Android). Shared n
 
 ## Known Limitations
 
-- **Bottom navigation bar exists** — `AppNavigation` wraps `NavDisplay` in a `Scaffold` with a `NavigationBar` (`nav_tab_contacts` / `nav_tab_events`). Tests can navigate between top-level screens by clicking those tabs.
+- **Navigation** — Home and People are the primary tabs (`nav_tab_home` / `nav_tab_contacts`), each preserving its own history. Event history is a secondary Home action (`nav_tab_events`); use `navigateToEventsTab()` in existing tests.
 - **ContactsSyncStressTest encodes Contacts Provider semantics** — expected counts come from the provider *after* aggregation (same-name raw contacts seeded on purpose merge into one `ContactsContract.Contacts` row), names are compared against `DISPLAY_NAME_PRIMARY` (the provider's name splitter reorders CJK names on read-back), and system-side lookups always use the aggregated contact id (`Contact.androidContactId == ContactsContract.Contacts._ID` — never the generator's synthetic ids or display names). Read the class doc in `ContactsSyncStressTest.kt` before changing it.
 - **ContactsSyncStressTest requires emulator** — it seeds the real Android Contacts Provider and can't run on a host JVM. It needs WRITE_CONTACTS too, which only the debug build declares (`app/src/debug/AndroidManifest.xml`).
 

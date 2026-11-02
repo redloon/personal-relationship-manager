@@ -6,6 +6,8 @@ import com.idontremember.personalcrm.data.db.entity.Contact
 import com.idontremember.personalcrm.data.db.entity.ContactFact
 import com.idontremember.personalcrm.data.db.entity.Event
 import com.idontremember.personalcrm.data.repository.ContactRepository
+import com.idontremember.personalcrm.data.recovery.RecoveryRepository
+import com.idontremember.personalcrm.data.recovery.TrashKind
 import com.idontremember.personalcrm.data.settings.DateDisplay
 import com.idontremember.personalcrm.data.settings.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -19,6 +21,7 @@ import javax.inject.Inject
 @HiltViewModel
 class ContactDetailViewModel @Inject constructor(
     private val contactRepository: ContactRepository,
+    private val recovery: RecoveryRepository,
     settingsRepository: SettingsRepository
 ) : ViewModel() {
 
@@ -87,9 +90,43 @@ class ContactDetailViewModel @Inject constructor(
         }
     }
 
+    private val _deletedFact = MutableStateFlow<Long?>(null)
+    val deletedFact: StateFlow<Long?> = _deletedFact
+    private val _operationError = MutableStateFlow(false)
+    val operationError: StateFlow<Boolean> = _operationError
+    private val _linking = MutableStateFlow(false)
+    val linking: StateFlow<Boolean> = _linking
+
     fun deleteFact(fact: ContactFact) {
         viewModelScope.launch {
-            contactRepository.deleteFact(fact)
+            try { recovery.delete(TrashKind.FACT, fact.id); _deletedFact.value = fact.id }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { _operationError.value = true }
+        }
+    }
+    fun consumeDeletedFact() { _deletedFact.value = null }
+    fun restoreFact(id: Long) { viewModelScope.launch {
+        try { recovery.restore(TrashKind.FACT, id) }
+        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { _operationError.value = true }
+    } }
+    fun clearOperationError() { _operationError.value = false }
+    fun rename(name: String, onSaved: () -> Unit) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            try { contactRepository.renameLocalContact(contactId, name.trim()); onSaved() }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { _operationError.value = true }
+        }
+    }
+    fun linkAndroidContact(androidId: Long) {
+        if (_linking.value) return
+        _linking.value = true
+        viewModelScope.launch {
+            try { contactRepository.linkAndroidContact(contactId, androidId) }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { _operationError.value = true }
+            finally { _linking.value = false }
         }
     }
 }

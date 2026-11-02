@@ -9,6 +9,9 @@ import shutil
 import subprocess
 import signal
 import time
+import fcntl
+
+RUNTIME_FILES = ['runner.py', 'sessions.py', 'interaction.py', 'captures.py', 'requirements.txt']
 
 SOURCE = Path(__file__).resolve().parent
 ROOT = SOURCE.parent.parent
@@ -126,20 +129,35 @@ def main():
     # Verify host login/daemon before making changes. No sandbox restart here.
     if args.sandbox:
         run('sbx', 'ls')
+    # Exclude submissions across every host/sandbox connection during refresh.
+    state = Path(config['state'])
+    state.mkdir(parents=True, exist_ok=True)
+    refresh_lock = (state/'runner.lock').open('a')
+    try:
+        fcntl.flock(refresh_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        refresh_lock.close()
+        raise RuntimeError('Runner busy; finish/cancel the job or session before refresh')
     stop_runners(config)
     DEST.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(config, indent=2)+'\n')
     Path(config['inbox']).mkdir(parents=True, exist_ok=True)
     run('python3', '-m', 'venv', DEST/'venv')
     run(DEST/'venv/bin/pip', 'install', '-r', SOURCE/'requirements.txt')
-    for name in ['runner.py', 'requirements.txt']:
+    for name in RUNTIME_FILES:
         shutil.copyfile(SOURCE/name, DEST/name)
     import hashlib
-    (DEST/'runner.sha256').write_text(hashlib.sha256((DEST/'runner.py').read_bytes()).hexdigest()+'\n')
+    digest = hashlib.sha256()
+    for name in RUNTIME_FILES:
+        digest.update(name.encode()+b'\0')
+        digest.update((DEST/name).read_bytes())
+    (DEST/'runner.sha256').write_text(digest.hexdigest()+'\n')
+    refresh_lock.close()
+
     if args.refresh_only:
         if args.sandbox:
             run('sbx', 'mcp', 'load', 'android-tests', '--sandbox', args.sandbox)
-        print('Runner refreshed. Reconnect host Codex MCP (or restart/resume Codex); confirm health version=3 and the new source hash before testing.')
+        print('Runner refreshed. Reconnect host Codex MCP (or restart/resume Codex); confirm health version=4 and the new source hash before testing.')
         return
     print('Review SDK licenses if prompted.', flush=True)
     run(sdk/'cmdline-tools/latest/bin/sdkmanager', '--licenses')

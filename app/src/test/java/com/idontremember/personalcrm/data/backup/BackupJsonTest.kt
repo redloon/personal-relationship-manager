@@ -22,8 +22,9 @@ class BackupJsonTest {
     }
 
     @Test fun oldBackupsAndNewLinksRoundTrip() {
-        val old = BackupJson.encode(snapshot).replace(Regex(",\\s*\"contactTags\"\\s*:\\s*\\[\\s*\\]"), "").replace(Regex(",\\s*\"relationships\"\\s*:\\s*\\[\\s*\\]"), "")
-        assertEquals(snapshot, BackupJson.decode(old))
+        val oldSnapshot = snapshot.copy(schemaVersion = 1)
+        val old = BackupJson.encode(oldSnapshot).replace(Regex(",\\s*\"contactTags\"\\s*:\\s*\\[\\s*\\]"), "").replace(Regex(",\\s*\"relationships\"\\s*:\\s*\\[\\s*\\]"), "")
+        assertEquals(oldSnapshot, BackupJson.decode(old))
         val newer = snapshot.copy(contacts = snapshot.contacts + ContactRecord(5, null, "Bob", null, null, null, 1, 1), contactTags = listOf(ContactTagRecord(1, 4)), relationships = listOf(RelationshipRecord(1, 5, "Friend")))
         assertEquals(newer, BackupJson.decode(BackupJson.encode(newer)))
         assertFailure { BackupJson.decode(BackupJson.encode(newer.copy(relationships = listOf(RelationshipRecord(5, 1, "Friend"))))) }
@@ -31,8 +32,26 @@ class BackupJsonTest {
 
     @Test fun rejectsMissingLinksAndUnknownVersion() {
         assertFailure { BackupJson.decode(BackupJson.encode(snapshot.copy(eventContacts = listOf(EventContactRecord(3, 99))))) }
-        assertFailure { BackupJson.decode(BackupJson.encode(snapshot.copy(schemaVersion = 2))) }
+        assertFailure { BackupJson.decode(BackupJson.encode(snapshot.copy(schemaVersion = 99))) }
         assertFailure { BackupJson.decode("{}") }
+    }
+
+    @Test fun versionTwoKeepsDeletedRecordsAndFollowUps() {
+        val expanded = snapshot.copy(schemaVersion = 2,
+            facts = snapshot.facts.map { it.copy(deletedAt = 100) },
+            events = snapshot.events.map { it.copy(deletedAt = 101) },
+            followUps = listOf(FollowUpRecord(9, 1, "Ask about the move", "2026-11-03", null, 80, 10, 20, null)))
+        assertEquals(expanded, BackupJson.decode(BackupJson.encode(expanded)))
+    }
+
+    @Test fun rejectsOrphanFollowUpBeforeWriting() {
+        assertFailure { BackupJson.decode(BackupJson.encode(snapshot.copy(
+            followUps = listOf(FollowUpRecord(9, 999, "Ask", null, null, null, 1, 1, null))))) }
+    }
+
+    @Test fun rejectsInvalidFollowUpDate() {
+        assertFailure { BackupJson.decode(BackupJson.encode(snapshot.copy(
+            followUps = listOf(FollowUpRecord(9, 1, "Ask", "2026-02-31", null, null, 1, 1, null))))) }
     }
 
     private fun assertFailure(block: () -> Unit) {

@@ -38,7 +38,7 @@
 
 ## context on your human partner
 
-I tend to over-engineer and build too many features, for now it's your job to help keep this project constrained to the MVP. We only want to build features which help us test core hypotheses, not little quality of life things which don't move the needle.
+The capture/recall loop has proved useful. We are now investing in excellent usability, forgotten-context recall, voluntary follow-ups, and reliable recovery; see docs/product-intent.md and docs/decisions.md. Keep solutions simple and avoid speculative infrastructure or automatically generated relationship obligations.
 
 ## text
 

@@ -31,6 +31,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -38,6 +42,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.idontremember.personalcrm.ui.addevent.AddEventSheet
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -70,21 +76,24 @@ fun EventDetailScreen(
     val eventLoaded by viewModel.eventLoaded.collectAsState()
     val dateDisplay by viewModel.dateDisplay.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
-    val availableContacts by viewModel.availableContacts.collectAsState()
-    val editContactIds by viewModel.editContactIds.collectAsState()
     val tags by viewModel.tags.collectAsState()
-    val isEditing by viewModel.isEditing.collectAsState()
-    val editNote by viewModel.editNote.collectAsState()
-    val editSaveFailed by viewModel.editSaveFailed.collectAsState()
+    var isEditing by rememberSaveable { mutableStateOf(false) }
     val saved by viewModel.saved.collectAsState()
+    val mutationFailed by viewModel.mutationFailed.collectAsState()
+    val snackbar = remember { SnackbarHostState() }
+    val deletedText = stringResource(R.string.capture_deleted_note)
+    val undoText = stringResource(R.string.capture_undo)
     var showDeleteDialog by remember { mutableStateOf(false) }
-    var personQuery by remember { mutableStateOf("") }
 
     LaunchedEffect(saved) {
-        if (saved) onBack()
+        if (saved) {
+            if (snackbar.showSnackbar(deletedText, undoText, duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) viewModel.undoDelete()
+            else onBack()
+        }
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.title_event)) },
@@ -94,9 +103,9 @@ fun EventDetailScreen(
                     }
                 },
                 actions = {
-                    if (!isEditing) {
+                    if (!isEditing && !saved) {
                         IconButton(
-                            onClick = { personQuery = ""; viewModel.startEditing() },
+                            onClick = { isEditing = true },
                             modifier = Modifier.size(48.dp).testTag("edit_event_button")
                         ) {
                             Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.cd_edit_event))
@@ -143,68 +152,11 @@ fun EventDetailScreen(
                     .verticalScroll(rememberScrollState())
                     .testTag("event_detail_screen")
             ) {
-                if (isEditing) {
-                    // Edit mode
-                    OutlinedTextField(
-                        value = editNote,
-                        onValueChange = { viewModel.onNoteChanged(it) },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 3,
-                        maxLines = 10,
-                        label = { Text(stringResource(R.string.field_note)) }
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    SearchField(
-                        query = personQuery,
-                        onQueryChange = { personQuery = it },
-                        hint = stringResource(R.string.event_search_person),
-                        clearTag = "clear_event_person_search_button",
-                        modifier = Modifier.fillMaxWidth().testTag("event_person_search")
-                    )
-                    if (personQuery.isNotBlank()) {
-                        availableContacts.filter {
-                            it.id !in editContactIds && it.displayName.contains(personQuery, ignoreCase = true)
-                        }.take(5).forEach { person ->
-                            TextButton(onClick = {
-                                viewModel.addEditContact(person.id)
-                                personQuery = ""
-                            }, modifier = Modifier.testTag("event_person_option_${person.id}")) {
-                                Text(person.displayName)
-                            }
-                        }
+                run {
+                    if (mutationFailed) {
+                        Text(stringResource(R.string.capture_mutation_failed), color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("event_mutation_error"))
+                        TextButton(onClick = { if (saved) viewModel.undoDelete() else viewModel.deleteEvent() }) { Text(stringResource(R.string.action_retry)) }
                     }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        availableContacts.filter { it.id in editContactIds }.forEach { person ->
-                            ContactChip(name = person.displayName,
-                                onRemove = { viewModel.removeEditContact(person.id) })
-                        }
-                    }
-                    if (editSaveFailed) {
-                        Text(stringResource(R.string.event_edit_error), color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.testTag("event_edit_error"))
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(
-                            onClick = { personQuery = ""; viewModel.cancelEditing() },
-                            modifier = Modifier.heightIn(min = 48.dp)
-                        ) {
-                            Text(stringResource(R.string.action_cancel))
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        TextButton(onClick = {
-                            viewModel.saveEdit(
-                                editNote,
-                                tags.map { it.name }
-                            )
-                        }, modifier = Modifier.heightIn(min = 48.dp).testTag("save_event_edit_button")) {
-                            Text(stringResource(R.string.action_save))
-                        }
-                    }
-                } else {
                     // View mode
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -287,6 +239,12 @@ fun EventDetailScreen(
             }
         }
     }
+
+    if (isEditing) AddEventSheet(
+        existingEventId = eventId,
+        onDismiss = { isEditing = false },
+        onSaved = { isEditing = false; viewModel.retryLoad() }
+    )
 
     // Delete confirmation dialog
     if (showDeleteDialog) {

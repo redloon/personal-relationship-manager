@@ -25,6 +25,8 @@ class QuickAddActivityTest {
 
     @Before fun setup() {
         hiltRule.inject()
+        composeRule.activity.getSharedPreferences("capture_draft", android.content.Context.MODE_PRIVATE).edit().clear().commit()
+        composeRule.activityRule.scenario.recreate()
         runBlocking { events.getAllEvents().first().forEach { events.deleteEvent(it) } }
     }
 

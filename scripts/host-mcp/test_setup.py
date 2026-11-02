@@ -42,6 +42,13 @@ class RefreshTests(unittest.TestCase):
             self.assertFalse(any('sbx' in c or any('sdkmanager' in a for a in c) for c in commands))
             self.assertEqual((dest/'runner.py').read_bytes(), (setup.SOURCE/'runner.py').read_bytes())
             self.assertTrue((dest/'runner.sha256').is_file())
+            import hashlib
+            digest = hashlib.sha256()
+            for name in setup.RUNTIME_FILES:
+                self.assertEqual((dest/name).read_bytes(), (setup.SOURCE/name).read_bytes())
+                digest.update(name.encode()+b'\0')
+                digest.update((dest/name).read_bytes())
+            self.assertEqual((dest/'runner.sha256').read_text().strip(), digest.hexdigest())
 
     def test_refresh_without_pidfd(self):
         with tempfile.TemporaryDirectory() as directory:

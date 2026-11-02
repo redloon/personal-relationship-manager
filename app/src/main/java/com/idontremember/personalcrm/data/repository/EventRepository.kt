@@ -11,6 +11,7 @@ import com.idontremember.personalcrm.data.db.entity.EventContact
 import com.idontremember.personalcrm.data.db.entity.EventTag
 import com.idontremember.personalcrm.data.db.entity.Tag
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,6 +28,18 @@ class EventRepository @Inject constructor(
     private val tagDao: TagDao,
     private val database: AppDatabase
 ) {
+
+    fun observeEventsWithMeta(): Flow<List<EventWithMeta>> = combine(
+        eventDao.getAll(), contactDao.getAll(), tagDao.getAll(), eventDao.observeEventContacts(), eventDao.observeEventTags()
+    ) { events, people, tags, personLinks, tagLinks ->
+        val peopleById = people.associateBy { it.id }
+        val tagsById = tags.associateBy { it.id }
+        val peopleByEvent = personLinks.groupBy { it.eventId }
+        val tagsByEvent = tagLinks.groupBy { it.eventId }
+        events.map { event -> EventWithMeta(event,
+            peopleByEvent[event.id].orEmpty().mapNotNull { peopleById[it.contactId] },
+            tagsByEvent[event.id].orEmpty().mapNotNull { tagsById[it.tagId] }) }
+    }
 
     fun getAllEvents(): Flow<List<Event>> = eventDao.getAll()
 
@@ -101,7 +114,7 @@ class EventRepository @Inject constructor(
         }
     }
 
-    suspend fun deleteEvent(event: Event) = eventDao.delete(event)
+    suspend fun deleteEvent(event: Event) = eventDao.update(event.copy(deletedAt = System.currentTimeMillis()))
 
     suspend fun getEventWithMeta(eventId: Long): EventWithMeta? {
         val event = eventDao.getById(eventId) ?: return null

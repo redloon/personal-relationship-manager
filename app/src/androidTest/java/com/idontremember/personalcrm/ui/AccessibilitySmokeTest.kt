@@ -94,24 +94,20 @@ class AccessibilitySmokeTest {
         // TalkBack order for a vertical layout = texts sorted top-to-bottom.
         val readingOrder = readingOrder()
         val texts = readingOrder.map { it.first }
-        // NAME shows twice (top-bar title + header card); the header copy must be
-        // the one just before the phone/email lines of the merged header node.
-        val iName = texts.lastIndexOf(NAME)
-        val iPhone = texts.indexOf(PHONE)
-        val iEmail = texts.indexOf(EMAIL)
+        // The compact profile prioritizes remembered context. Contact details are
+        // available through the Android contact card in secondary management.
+        val iName = texts.indexOf(NAME)
         val iFacts = texts.indexOf("Facts")
         val iFact = texts.indexOf(FACT_TEXT)
-        val iEvents = texts.indexOf("Events")
+        val iEvents = texts.indexOf("Recent notes")
         val iNote = texts.indexOf(NOTE_TEXT)
-
         assertTrue(
-            "Expected all content in the semantics tree, got: $readingOrder",
-            listOf(iName, iPhone, iEmail, iFacts, iFact, iEvents, iNote).all { it >= 0 }
+            "Expected remembered context in the semantics tree, got: $readingOrder",
+            listOf(iName, iFacts, iFact, iEvents, iNote).all { it >= 0 }
         )
         assertTrue(
-            "TalkBack order should be name → phone → email → Facts → fact → Events → note, got: $readingOrder",
-            iName < iPhone && iPhone < iEmail && iEmail < iFacts &&
-                iFacts < iFact && iFact < iEvents && iEvents < iNote
+            "TalkBack order should be name → Facts → fact → Recent notes → note, got: $readingOrder",
+            iName < iFacts && iFacts < iFact && iFact < iEvents && iEvents < iNote
         )
     }
 

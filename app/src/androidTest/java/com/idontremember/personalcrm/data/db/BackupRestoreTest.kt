@@ -4,6 +4,12 @@ import com.idontremember.personalcrm.data.backup.BackupJson
 import com.idontremember.personalcrm.data.backup.DataExporter
 import com.idontremember.personalcrm.data.db.entity.*
 import com.idontremember.personalcrm.data.repository.EventRepository
+import com.idontremember.personalcrm.data.repository.ContactRepository
+import com.idontremember.personalcrm.data.recovery.RecoveryRepository
+import com.idontremember.personalcrm.data.recovery.TrashKind
+import com.idontremember.personalcrm.data.settings.SettingsRepository
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.runBlocking
@@ -20,6 +26,9 @@ class BackupRestoreTest {
     @get:Rule val hiltRule = HiltAndroidRule(this)
     @Inject lateinit var database: AppDatabase
     @Inject lateinit var exporter: DataExporter
+    @Inject lateinit var recovery: RecoveryRepository
+    @Inject lateinit var contacts: ContactRepository
+    @Inject lateinit var settings: SettingsRepository
     @Inject lateinit var eventRepository: EventRepository
 
     @Before fun setup() {
@@ -60,6 +69,57 @@ class BackupRestoreTest {
         try { exporter.restore(invalid); throw AssertionError("Expected failure") }
         catch (_: IllegalArgumentException) { }
         assertTrue(database.contactDao().getById(contactId) != null)
+    }
+
+    @Test fun portableRestoreDetachesDeviceIdentityAndKeepsTrash() = runBlocking {
+        val person = database.contactDao().insert(Contact(displayName = "Alice", androidContactId = 42,
+            photoUri = "content://old-device/photo", lookupKey = "old-device-key"))
+        val now = System.currentTimeMillis()
+        val fact = database.contactFactDao().insert(ContactFact(contactId = person, text = "Climbing", deletedAt = now))
+        val event = database.eventDao().insert(Event(note = "Coffee", deletedAt = now))
+        val follow = database.followUpDao().insert(FollowUp(contactId = person, text = "Ask about trip", dueDate = "2026-11-03", notifiedAt = now))
+        settings.setFollowUpRemindersEnabled(true)
+        val snapshot = BackupJson.decode(exporter.exportToJson())
+        assertEquals(now, snapshot.facts.single().deletedAt)
+        exporter.restore(snapshot)
+        val restored = database.contactDao().getById(person)!!
+        assertNull(restored.androidContactId)
+        assertNull(restored.lookupKey)
+        assertNull(restored.photoUri)
+        assertFalse(settings.followUpRemindersEnabled.first())
+        assertNull(database.followUpDao().getById(follow)?.notifiedAt)
+        assertTrue(database.contactFactDao().getByContactIdOnce(person).isEmpty())
+        recovery.restore(TrashKind.FACT, fact)
+        recovery.restore(TrashKind.EVENT, event)
+        assertEquals("Climbing", database.contactFactDao().getByContactIdOnce(person).single().text)
+        assertNull(database.eventDao().getById(event)?.deletedAt)
+    }
+
+    @Test fun recoverableDeletionSurvivesQueriesAndExpiresAfterThirtyDays() = runBlocking {
+        val person = contacts.createLocalContact("  Alice  ")
+        val sameName = contacts.createLocalContact("Alice")
+        assertTrue(person != sameName) // A name is not a portable identity.
+        assertEquals("Alice", database.contactDao().getById(person)?.displayName)
+        val fact = contacts.addFact(person, "Climbing")
+        recovery.delete(TrashKind.FACT, fact)
+        assertTrue(database.contactFactDao().getByContactIdOnce(person).isEmpty())
+        assertEquals(fact, recovery.observeDeleted().first().single().id)
+        recovery.restore(TrashKind.FACT, fact)
+        assertEquals(fact, database.contactFactDao().getByContactIdOnce(person).single().id)
+        recovery.delete(TrashKind.FACT, fact)
+        recovery.purgeExpired(System.currentTimeMillis() + RecoveryRepository.RETENTION_MILLIS + 1_000)
+        assertTrue(database.contactFactDao().getAllOnce().isEmpty())
+    }
+
+    @Test fun localRenamePreservesFactsEventProseAndLinks() = runBlocking {
+        val person = contacts.createLocalContact("Alice")
+        val fact = contacts.addFact(person, "Likes climbing")
+        val event = eventRepository.createEvent("@Alice at the park", listOf(person), emptyList())
+        contacts.renameLocalContact(person, "  Alicia  ")
+        assertEquals("Alicia", database.contactDao().getById(person)?.displayName)
+        assertEquals(fact, database.contactFactDao().getByContactIdOnce(person).single().id)
+        assertEquals("@Alice at the park", database.eventDao().getById(event)?.note)
+        assertEquals(listOf(person), database.eventDao().getContactIdsForEvent(event))
     }
 
     @Test fun tagMembershipAndRelationshipsAreReciprocal() = runBlocking {

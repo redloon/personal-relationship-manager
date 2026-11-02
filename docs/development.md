@@ -12,6 +12,7 @@ Executable tasks in `.mise/tasks/` are the source of truth. Use `mise run TASK`,
 | `check` | `bash .mise/tasks/check` | JVM tests, app and test APKs, lint, and static checks |
 | `test-stage` | `bash .mise/tasks/test-stage` | Build and hash APKs for Android MCP |
 | `hooks-install` | `bash .mise/tasks/hooks-install` | Install the project Git hooks |
+| `qa-report` | `bash .mise/tasks/qa-report MANIFEST [--evidence JSON]` | Generate a verified screenshot/video review pack |
 | `tooling-test` | `bash .mise/tasks/tooling-test` | Test task, hook, and development-tool behavior |
 
 Run a focused JVM test during implementation:
@@ -67,3 +68,25 @@ Resolve a failing hook or input mismatch instead of bypassing it. Stage a cohere
 | A working-tree fix could hide broken staged code; hook installer assumed `.git` was a directory | Parse index contents, require a coherent build snapshot, use Git's worktree-aware hook configuration |
 | An adb exit of zero could report success without any tests running | Require an explicit instrumentation success with a nonzero test count |
 | Repeated MCP attachment probes consumed time without changing the failing state | Assign one recovery owner; retry after a relevant state change |
+
+## Exploratory QA and demos
+
+Runner v4 adds batched ADB interactions and captures; see the MCP runbook for
+interfaces. Use the normally launched debug app with fictional data, stable
+selectors, and explicit assertions. Inspect keyboard-open layouts, Back/cancel,
+empty results and long content. Return screenshots and a short recorded journey
+with a qa-report pack for significant UX work. Existing Compose tests remain the
+regression gate; exploratory evidence is additional validation.
+
+The integration owner holds one session through terminal cleanup before staging
+or running tests. Tooling checks include SDK-free host-runner tests. The real
+stdio protocol test also runs when the host-mcp Python requirements are installed;
+otherwise unittest reports its explicit skip. No host SDK/emulator is needed for
+that fake-SDK protocol test.
+
+When reading a report written by a host agent through the shared filesystem,
+size/mtime may update while cached contents remain stale or appear NUL-padded.
+If host and sandbox disagree, reopen after `os.posix_fadvise(fd, 0, 0,
+os.POSIX_FADV_DONTNEED)` and verify the contents before assuming an action was
+not performed. This recovered the completed host cleanup log during live QA.
+Do not overwrite another agent's report based on stale cached contents.

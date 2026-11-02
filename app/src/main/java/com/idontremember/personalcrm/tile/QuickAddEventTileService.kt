@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import com.idontremember.personalcrm.R
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -15,8 +16,8 @@ class QuickAddEventTileService : TileService() {
         super.onStartListening()
         qsTile?.let {
             it.state = Tile.STATE_ACTIVE
-            it.label = "Add Event"
-            it.contentDescription = "Add a new CRM event"
+            it.label = getString(R.string.capture_add_note)
+            it.contentDescription = getString(R.string.capture_shortcut_long)
             it.updateTile()
         }
     }

@@ -15,9 +15,8 @@ import org.junit.runner.RunWith
 /**
  * Packet P4 worked example: migration scaffolding + schema discipline.
  *
- * Production `AppDatabase` **stays at version 1** — this test exercises the full
- * migration workflow against scratch versions 2 and 3 that exist only as test
- * fixtures (`app/src/androidTest/assets/scratch-schemas/`):
+ * The worked example exercises the migration workflow against scratch versions
+ * 2 and 3 that exist only as test fixtures (`app/src/androidTest/assets/scratch-schemas/`):
  *
  * - v1→v2 adds a scratch column `contact_facts.scratch_note`,
  * - v2→v3 removes it again via the table-rebuild pattern,

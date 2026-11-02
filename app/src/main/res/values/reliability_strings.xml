@@ -1,0 +1,24 @@
+<resources>
+    <string name="reliability_daily_backup">Automatic backups</string>
+    <string name="reliability_backup_description">Choose a folder for daily backups. Keeps the latest seven verified files. Android may delay background backups.</string>
+    <string name="reliability_choose_folder">Choose backup folder</string>
+    <string name="reliability_change_folder">Change backup folder</string>
+    <string name="reliability_backup_now">Back up now</string>
+    <string name="reliability_backing_up">Backing up…</string>
+    <string name="reliability_disable_backup">Turn off automatic backups</string>
+    <string name="reliability_backup_never">No automatic backup yet</string>
+    <string name="reliability_last_backup">Last backup: %1$s</string>
+    <string name="reliability_backup_failed">Backup could not be completed. Check folder access and try again.</string>
+    <string name="reliability_recently_deleted">Recently deleted</string>
+    <string name="reliability_trash_description">Deleted notes, facts, and follow-ups stay here for 30 days.</string>
+    <string name="reliability_trash_empty">Nothing recently deleted</string>
+    <string name="reliability_recover">Restore</string>
+    <string name="reliability_recovery_failed">Could not restore this item. Try again.</string>
+    <string name="reliability_restore_followups">Follow-ups: %1$d</string>
+    <string name="reliability_restore_safety">Save safety backup and restore</string>
+    <string name="reliability_restore_explanation">Restoring replaces your saved data. First choose where to save a safety copy. People will be restored without Android contact links, and reminders will be turned off.</string>
+    <string name="reliability_portable_backup">Backups contain private, unencrypted notes. Keep the folder somewhere you trust. Android system backup is disabled; use these files to move to another phone.</string>
+    <string name="reliability_trash_note">Note</string>
+    <string name="reliability_trash_fact">Fact</string>
+    <string name="reliability_trash_follow_up">Follow-up</string>
+</resources>

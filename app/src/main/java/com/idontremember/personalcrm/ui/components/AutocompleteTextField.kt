@@ -79,8 +79,8 @@ fun AutocompleteTextField(
     val cursorPos = value.selection.start
 
     // Find if we're in a trigger context
-    val triggerInfo = remember(text, cursorPos, enableTags) {
-        detectTrigger(text, cursorPos)?.takeIf { enableTags || it.type != TriggerType.TAG }
+    val triggerInfo = remember(text, cursorPos, enableTags, contacts) {
+        detectTrigger(text, cursorPos, contacts.map { it.displayName })?.takeIf { enableTags || it.type != TriggerType.TAG }
     }
 
     if (triggerInfo != null) {
@@ -260,7 +260,7 @@ data class AutocompleteTag(
 /**
  * Detect if the cursor is right after a @ or # trigger with a partial query.
  */
-fun detectTrigger(text: String, cursorPos: Int): TriggerInfo? {
+fun detectTrigger(text: String, cursorPos: Int, contactNames: List<String> = emptyList()): TriggerInfo? {
     if (cursorPos <= 0 || cursorPos > text.length) return null
 
     // Look backwards from cursor to find a trigger character
@@ -283,7 +283,13 @@ fun detectTrigger(text: String, cursorPos: Int): TriggerInfo? {
     // Check there's no space between trigger and cursor (the query shouldn't contain spaces)
     val queryStart = triggerIdx + 1
     val query = text.substring(queryStart, cursorPos)
-    if (query.contains(' ') || query.contains('\n')) return null
+    if (query.any { it == '\n' || it == '\t' } || query.lastOrNull()?.isWhitespace() == true) return null
+    if (text[triggerIdx] == '#' && query.any { it.isWhitespace() }) return null
+
+    // A complete known name followed by prose is no longer an active mention.
+    // Keep longer matching names available when a shorter name shares their prefix.
+    if (text[triggerIdx] == '@' && contactNames.none { it.startsWith(query, ignoreCase = true) } &&
+        contactNames.any { query.startsWith("$it ", ignoreCase = true) }) return null
 
     val type = if (text[triggerIdx] == '@') TriggerType.CONTACT else TriggerType.TAG
     return TriggerInfo(type = type, startIndex = triggerIdx, query = query)

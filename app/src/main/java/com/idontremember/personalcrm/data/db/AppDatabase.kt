@@ -24,10 +24,14 @@
  *   1 = initial schema: contacts, contact_facts, events, event_contacts, tags,
  *       event_tags (see app/schemas/.../1.json for the authoritative snapshot).
  *   2 = direct contact tags and shared relationships.
+ *   3 = recoverable notes, provider lookup keys, explicit follow-ups.
  * ============================================================================
  */
 package com.idontremember.personalcrm.data.db
 
+import com.idontremember.personalcrm.data.db.entity.FollowUp
+import com.idontremember.personalcrm.data.db.dao.FollowUpDao
+import com.idontremember.personalcrm.data.db.dao.RecallDao
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.idontremember.personalcrm.data.db.dao.PilotDao
@@ -46,6 +50,7 @@ import com.idontremember.personalcrm.data.db.entity.Tag
 
 @Database(
     entities = [
+        FollowUp::class,
         Contact::class,
         ContactFact::class,
         Event::class,
@@ -55,10 +60,12 @@ import com.idontremember.personalcrm.data.db.entity.Tag
         ContactTag::class,
         Relationship::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
+    abstract fun followUpDao(): FollowUpDao
+    abstract fun recallDao(): RecallDao
     abstract fun pilotDao(): PilotDao
     abstract fun contactDao(): ContactDao
     abstract fun contactFactDao(): ContactFactDao

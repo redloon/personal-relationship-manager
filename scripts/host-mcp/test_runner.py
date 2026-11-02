@@ -94,6 +94,29 @@ class RunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Invalid job or offset'):
             self.instance.read_logs(jid, '2')
 
+    def test_concurrent_status_publication_is_atomic(self):
+        jid = 'e'*32
+        directory = self.root/'jobs'/jid
+        directory.mkdir()
+        self.instance.jobs[jid] = dict(status='running', phase='ready')
+        barrier = threading.Barrier(2)
+        original_replace = Path.replace
+        errors = []
+        def replace(path, target):
+            barrier.wait(timeout=3)
+            return original_replace(path, target)
+        def publish():
+            try:
+                self.instance.save(jid)
+            except Exception as error:
+                errors.append(error)
+        with patch.object(Path, 'replace', replace):
+            workers = [threading.Thread(target=publish) for _ in range(2)]
+            for worker in workers: worker.start()
+            for worker in workers: worker.join(timeout=5)
+        self.assertEqual(errors, [])
+        self.assertEqual(self.instance.get_status(jid)['phase'], 'ready')
+
     def test_failed_command_releases_lock(self):
         jid = 'c'*32
         job = self.root/'jobs'/jid
@@ -149,7 +172,7 @@ else: print('Success')
             return original_run(*args, **kwargs)
         with patch.object(runner.subprocess, 'run', side_effect=cleanup):
             self.instance.run(jid, None, lock)
-        self.assertEqual(len(observed), 3)
+        self.assertEqual(len(observed), 6)  # identity check and cleanup command for each operation
         self.assertTrue(all(s == dict(status='running', phase='cleanup') for s in observed))
         self.assertEqual(self.instance.get_status(jid), dict(status='passed', phase='finished', test_count=3))
         self.assertFalse(self.instance.health()['busy'])

@@ -1,68 +1,42 @@
 package com.idontremember.personalcrm.ui.contacts
 
+import android.Manifest
 import android.content.ContentUris
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.provider.ContactsContract
 import android.widget.Toast
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import coil3.compose.AsyncImage
+import com.idontremember.personalcrm.ui.components.exposeTestTags
 import com.idontremember.personalcrm.R
-import com.idontremember.personalcrm.data.db.entity.ContactFact
-import com.idontremember.personalcrm.data.db.entity.Event
-import com.idontremember.personalcrm.data.settings.DateDisplay
-import com.idontremember.personalcrm.ui.pilot.ProfileLinks
-import com.idontremember.personalcrm.ui.components.EmptyState
-import com.idontremember.personalcrm.ui.components.ErrorState
-import com.idontremember.personalcrm.ui.components.LoadingState
-import com.idontremember.personalcrm.ui.components.formatEventDateText
+import com.idontremember.personalcrm.data.search.RecallSearch
+import com.idontremember.personalcrm.ui.addevent.AddEventSheet
+import com.idontremember.personalcrm.ui.components.*
+import com.idontremember.personalcrm.ui.followups.FollowUpsSection
+import com.idontremember.personalcrm.ui.followups.FollowUpEditor
+import com.idontremember.personalcrm.ui.pilot.*
+import java.text.DateFormat
+import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,309 +45,141 @@ fun ContactDetailScreen(
     onBack: () -> Unit,
     onEventClick: (Long) -> Unit,
     onContactClick: (Long) -> Unit = {},
-    viewModel: ContactDetailViewModel = hiltViewModel()
+    viewModel: ContactDetailViewModel = hiltViewModel(),
+    recall: RecallViewModel = hiltViewModel()
 ) {
-    LaunchedEffect(contactId) {
-        viewModel.setContactId(contactId)
-    }
-
+    LaunchedEffect(contactId) { viewModel.setContactId(contactId) }
     val context = LocalContext.current
-    val contactUnavailableMessage = stringResource(R.string.pilot_contact_unavailable)
     val contact by viewModel.contact.collectAsState()
-    val contactLoaded by viewModel.contactLoaded.collectAsState()
+    val loaded by viewModel.contactLoaded.collectAsState()
     val facts by viewModel.facts.collectAsState()
     val events by viewModel.events.collectAsState()
     val dateDisplay by viewModel.dateDisplay.collectAsState()
-    val showAddFactDialog by viewModel.showAddFactDialog.collectAsState()
-
+    val entries by recall.entries.collectAsState()
+    var query by rememberSaveable { mutableStateOf("") }
+    var rename by rememberSaveable { mutableStateOf(false) }
+    var newName by rememberSaveable { mutableStateOf("") }
+    var management by rememberSaveable { mutableStateOf(false) }
+    var allFacts by rememberSaveable { mutableStateOf(false) }
+    var allEvents by rememberSaveable { mutableStateOf(false) }
+    var addNote by rememberSaveable { mutableStateOf(false) }
+    var addFact by rememberSaveable { mutableStateOf(false) }
+    var editingFact by rememberSaveable { mutableStateOf<Long?>(null) }
+    var editingFollowUp by rememberSaveable { mutableStateOf<Long?>(null) }
+    var pendingAndroid by rememberSaveable { mutableStateOf<Long?>(null) }
+    val linking by viewModel.linking.collectAsState()
+    val operationError by viewModel.operationError.collectAsState()
+    val deleted by viewModel.deletedFact.collectAsState()
+    val snackbar = remember { SnackbarHostState() }
+    val deletedMessage = stringResource(R.string.recall_fact_deleted)
+    val undoLabel = stringResource(R.string.recall_undo)
+    val actionFailedMessage = stringResource(R.string.recall_action_failed)
+    val failedMessage = stringResource(R.string.recall_link_failed)
+    val unavailable = stringResource(R.string.pilot_contact_unavailable)
+    LaunchedEffect(deleted) { deleted?.let { id ->
+        if (snackbar.showSnackbar(deletedMessage, undoLabel, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) viewModel.restoreFact(id)
+        viewModel.consumeDeletedFact()
+    } }
+    LaunchedEffect(operationError) { if (operationError) { snackbar.showSnackbar(actionFailedMessage); viewModel.clearOperationError() } }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickContact()) { uri ->
+        if (uri != null) {
+            pendingAndroid = runCatching { context.contentResolver.query(uri, arrayOf(ContactsContract.Contacts._ID), null, null, null)?.use { if (it.moveToFirst()) it.getLong(0) else null } }.getOrNull()
+            if (pendingAndroid == null) Toast.makeText(context, failedMessage, Toast.LENGTH_SHORT).show()
+        }
+    }
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> if (granted) picker.launch(null) }
+    val listState = rememberLazyListState()
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(contact?.displayName ?: stringResource(R.string.title_contact)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
-                    }
-                }
-            )
-        }
-    ) { paddingValues ->
-        val currentContact = contact
-        if (!contactLoaded) {
-            LoadingState(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                testTag = "contact_detail_loading_state"
-            )
-        } else if (currentContact == null) {
-            ErrorState(
-                message = stringResource(R.string.error_contact_not_found),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                testTag = "contact_detail_error_state"
-            )
-        } else LazyColumn(
-            modifier = Modifier
-                .testTag("contact_detail_screen")
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Contact header
-            item {
-                Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .padding(16.dp)
-                                // a11y: name + phone + email read as one ordered utterance.
-                                .semantics(mergeDescendants = true) {},
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (currentContact.photoUri != null) {
-                                AsyncImage(
-                                    model = currentContact.photoUri,
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .size(56.dp)
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Icon(
-                                    Icons.Default.Person,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(56.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column {
-                                Text(
-                                    text = currentContact.displayName,
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                currentContact.phoneNumber?.let {
-                                    Text(
-                                        text = it,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                currentContact.email?.let {
-                                    Text(
-                                        text = it,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    }
-            }
-
-            currentContact.androidContactId?.let { androidId ->
-                item {
-                    TextButton(onClick = {
-                        val uri = ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, androidId)
-                        try {
-                            val exists = context.contentResolver.query(uri, arrayOf(ContactsContract.Contacts._ID), null, null, null)?.use { it.moveToFirst() } == true
-                            if (exists) context.startActivity(Intent(Intent.ACTION_VIEW, uri)) else error("Contact unavailable")
-                        } catch (_: Exception) {
-                            Toast.makeText(context, contactUnavailableMessage, Toast.LENGTH_SHORT).show()
-                        }
-                    }) { Text(stringResource(R.string.pilot_open_contact)) }
-                }
-            }
-
-            item { ProfileLinks(contactId, onContactClick) }
-
-            // Facts section
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+        topBar = { TopAppBar(title = { Text(contact?.displayName ?: stringResource(R.string.title_contact)) }, navigationIcon = {
+            IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back)) }
+        }) },
+        snackbarHost = { SnackbarHost(snackbar) },
+        bottomBar = {
+            if (contact != null) Surface(tonalElevation = 3.dp) {
+                Button(
+                    onClick = { addNote = true },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).testTag("person_add_note")
                 ) {
-                    Text(
-                        text = stringResource(R.string.section_facts),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    IconButton(
-                        onClick = { viewModel.onAddFactClick() },
-                        modifier = Modifier
-                            // a11y: 48dp touch target (M3 IconButton defaults to 40dp).
-                            .size(48.dp)
-                            .testTag("fact_add_button")
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.cd_add_fact))
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.recall_add_note))
+                }
+            }
+        }
+    ) { padding ->
+        when {
+            !loaded -> LoadingState(Modifier.fillMaxSize().padding(padding), "contact_detail_loading_state")
+            contact == null -> ErrorState(stringResource(R.string.error_contact_not_found), modifier = Modifier.fillMaxSize().padding(padding), testTag = "contact_detail_error_state")
+            else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).testTag("contact_detail_screen"), contentPadding = PaddingValues(bottom = 16.dp)) {
+                item { SearchField(query, { query = it }, stringResource(R.string.recall_person_search), "clear_person_search", Modifier.fillMaxWidth().testTag("person_search")) }
+                if (query.isNotBlank()) {
+                    val matches = RecallSearch.find(entries.orEmpty(), query, contactId).filter { it.kind != "person" }
+                    if (matches.isEmpty()) item { EmptyState(stringResource(R.string.recall_no_results), testTag = "person_search_empty") }
+                    items(matches, key = { it.key }) { row -> RecallNoteRow(row, query, dateDisplay = dateDisplay) { when(row.kind) { "fact" -> editingFact = row.id; "followup" -> editingFollowUp = row.id; else -> onEventClick(row.id) } } }
+                } else {
+                    item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        SectionLabel(stringResource(R.string.section_facts))
+                        IconButton(onClick = { addFact = true }, modifier = Modifier.size(48.dp).testTag("fact_add_button")) { Icon(Icons.Default.Add, stringResource(R.string.cd_add_fact)) }
+                    } }
+                    if (facts.isEmpty()) item { EmptyState(stringResource(R.string.empty_facts), testTag = "facts_empty_state") }
+                    items(if (allFacts) facts else facts.take(3), key = { "fact_${it.id}" }) { fact ->
+                        ListItem(
+                            headlineContent = { Text(fact.text) },
+                            supportingContent = { Text(stringResource(R.string.pilot_recorded, formatEventDateText(fact.createdAt, dateDisplay))) },
+                            trailingContent = { Row {
+                                IconButton(onClick = { editingFact = fact.id }, modifier = Modifier.testTag("edit_fact_${fact.id}")) { Icon(Icons.Default.Edit, stringResource(R.string.recall_edit_fact)) }
+                                IconButton(onClick = { viewModel.deleteFact(fact) }, modifier = Modifier.testTag("delete_fact_${fact.id}")) { Icon(Icons.Default.Delete, stringResource(R.string.cd_delete_fact)) }
+                            } }
+                        )
+                    }
+                    if (facts.size > 3) item { TextButton(onClick = { allFacts = !allFacts }) { Text(stringResource(if(allFacts) R.string.recall_less_facts else R.string.recall_more_facts)) } }
+                    item { SectionLabel(stringResource(if(allEvents) R.string.recall_all_history else R.string.recall_recent_notes)) }
+                    if (events.isEmpty()) item { EmptyState(stringResource(R.string.empty_contact_events), testTag = "contact_events_empty_state") }
+                    items(if(allEvents) events else events.take(3), key = { "event_${it.id}" }) { event ->
+                        Card(onClick = { onEventClick(event.id) }, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                            Column(Modifier.padding(16.dp)) { Text(event.note, maxLines = 3); Text(formatEventDateText(event.eventDate, dateDisplay), style = MaterialTheme.typography.bodySmall) }
+                        }
+                    }
+                    if (events.size > 3) item { TextButton(onClick = { allEvents = !allEvents }) { Text(stringResource(if(allEvents) R.string.action_cancel else R.string.recall_all_history)) } }
+                    item { FollowUpsSection(contactId) }
+                    item { TextButton(onClick = { management = !management }, modifier = Modifier.testTag("person_management")) { Text(stringResource(R.string.recall_person_details)) } }
+                    if (management) {
+                        item { ProfileLinks(contactId, onContactClick) }
+                        item {
+                            if(contact?.androidContactId == null) TextButton(onClick = { newName = contact?.displayName.orEmpty(); rename = true }, modifier = Modifier.testTag("rename_person_button")) { Text(stringResource(R.string.recall_rename)) }
+                            contact?.androidContactId?.let { androidId ->
+                                TextButton(onClick = {
+                                    val current = contact
+                                    val uri = current?.lookupKey?.let { ContactsContract.Contacts.getLookupUri(androidId, it) } ?: ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, androidId)
+                                    try { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) } catch (_: Exception) { Toast.makeText(context, unavailable, Toast.LENGTH_SHORT).show() }
+                                }) { Text(stringResource(R.string.pilot_open_contact)) }
+                            }
+                            TextButton(onClick = {
+                                if(ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) picker.launch(null)
+                                else permission.launch(Manifest.permission.READ_CONTACTS)
+                            }, enabled = !linking, modifier = Modifier.testTag("link_android_contact")) { Text(stringResource(R.string.recall_link_android)) }
+                        }
                     }
                 }
             }
-
-            if (facts.isEmpty()) {
-                item {
-                    EmptyState(
-                        message = stringResource(R.string.empty_facts),
-                        modifier = Modifier.fillMaxWidth(),
-                        testTag = "facts_empty_state"
-                    )
-                }
-            }
-
-            items(facts, key = { "fact_${it.id}" }) { fact ->
-                FactItem(
-                    fact = fact,
-                    onDelete = { viewModel.deleteFact(fact) }
-                )
-            }
-
-            // Events section
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = stringResource(R.string.section_events),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            if (events.isEmpty()) {
-                item {
-                    EmptyState(
-                        message = stringResource(R.string.empty_contact_events),
-                        modifier = Modifier.fillMaxWidth(),
-                        testTag = "contact_events_empty_state"
-                    )
-                }
-            }
-
-            items(events, key = { "event_${it.id}" }) { event ->
-                EventItem(
-                    event = event,
-                    dateDisplay = dateDisplay,
-                    onClick = { onEventClick(event.id) }
-                )
-            }
-
-            // Bottom spacing
-            item { Spacer(modifier = Modifier.height(16.dp)) }
         }
     }
-
-    // Add fact dialog
-    if (showAddFactDialog) {
-        AddFactDialog(
-            onDismiss = { viewModel.onDismissAddFact() },
-            onConfirm = { text -> viewModel.addFact(text) }
-        )
-    }
-}
-
-@Composable
-private fun FactItem(
-    fact: ContactFact,
-    onDelete: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = fact.text, style = MaterialTheme.typography.bodyLarge)
-                Text(text = stringResource(R.string.pilot_recorded, java.text.DateFormat.getDateInstance().format(java.util.Date(fact.createdAt))), style = MaterialTheme.typography.bodySmall)
-            }
-            IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = stringResource(R.string.cd_delete_fact),
-                    tint = MaterialTheme.colorScheme.error
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun EventItem(
-    event: Event,
-    dateDisplay: DateDisplay,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = event.note,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 2
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = formatEventDateText(event.eventDate, dateDisplay),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-private fun AddFactDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
-) {
-    var text by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.dialog_add_fact_title)) },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                placeholder = { Text(stringResource(R.string.fact_placeholder)) },
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("fact_text_field")
-            )
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(text) },
-                enabled = text.isNotBlank(),
-                modifier = Modifier.heightIn(min = 48.dp)
-            ) {
-                Text(stringResource(R.string.action_add))
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier.heightIn(min = 48.dp)
-            ) {
-                Text(stringResource(R.string.action_cancel))
-            }
-        }
+    if (addNote || addFact || editingFact != null) AddEventSheet(
+        onDismiss = { addNote = false; addFact = false; editingFact = null },
+        onSaved = { addNote = false; addFact = false; editingFact = null },
+        initialContactId = contactId, existingFactId = editingFact, initialIsFact = addFact
     )
+    editingFollowUp?.let { id -> FollowUpEditor(existingId = id, onDismiss = { editingFollowUp = null }) }
+    if(rename) AlertDialog(modifier = Modifier.exposeTestTags(),
+        onDismissRequest = { rename = false }, title = { Text(stringResource(R.string.recall_rename)) },
+        text = { OutlinedTextField(newName, { newName = it }, label = { Text(stringResource(R.string.recall_person_name)) }, singleLine = true, modifier = Modifier.testTag("rename_person_name")) },
+        confirmButton = { TextButton(onClick = { viewModel.rename(newName) { rename = false } }, enabled = newName.isNotBlank(), modifier = Modifier.testTag("save_person_name")) { Text(stringResource(R.string.action_save)) } },
+        dismissButton = { TextButton(onClick = { rename = false }) { Text(stringResource(R.string.action_cancel)) } }
+    )
+    pendingAndroid?.let { id -> AlertDialog(modifier = Modifier.exposeTestTags(),
+        onDismissRequest = { pendingAndroid = null }, title = { Text(stringResource(R.string.recall_confirm_link)) },
+        text = { Text(stringResource(R.string.recall_confirm_link_detail)) },
+        confirmButton = { TextButton(onClick = { pendingAndroid = null; viewModel.linkAndroidContact(id) }) { Text(stringResource(R.string.action_save)) } },
+        dismissButton = { TextButton(onClick = { pendingAndroid = null }) { Text(stringResource(R.string.action_cancel)) } }
+    ) }
 }

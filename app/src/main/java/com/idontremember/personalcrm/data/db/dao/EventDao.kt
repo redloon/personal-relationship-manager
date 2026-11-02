@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface EventDao {
+    @Query("SELECT * FROM event_contacts") fun observeEventContacts(): Flow<List<EventContact>>
+    @Query("SELECT * FROM event_tags") fun observeEventTags(): Flow<List<EventTag>>
+
 
     @Insert
     suspend fun insert(event: Event): Long
@@ -22,26 +25,26 @@ interface EventDao {
     @Delete
     suspend fun delete(event: Event)
 
-    @Query("SELECT * FROM events WHERE id = :id")
+    @Query("SELECT * FROM events WHERE id = :id AND deleted_at IS NULL")
     suspend fun getById(id: Long): Event?
 
-    @Query("SELECT * FROM events WHERE id = :id")
+    @Query("SELECT * FROM events WHERE id = :id AND deleted_at IS NULL")
     fun getByIdFlow(id: Long): Flow<Event?>
 
-    @Query("SELECT * FROM events ORDER BY event_date DESC")
+    @Query("SELECT * FROM events WHERE deleted_at IS NULL ORDER BY event_date DESC")
     fun getAll(): Flow<List<Event>>
 
-    @Query("SELECT * FROM events WHERE note LIKE '%' || :query || '%' ORDER BY event_date DESC")
+    @Query("SELECT * FROM events WHERE deleted_at IS NULL AND note LIKE '%' || :query || '%' ORDER BY event_date DESC")
     fun searchByNote(query: String): Flow<List<Event>>
 
-    @Query("SELECT * FROM events ORDER BY event_date DESC LIMIT :limit")
+    @Query("SELECT * FROM events WHERE deleted_at IS NULL ORDER BY event_date DESC LIMIT :limit")
     fun getRecent(limit: Int = 50): Flow<List<Event>>
 
     // Events involving a specific contact
     @Query("""
         SELECT e.* FROM events e
         INNER JOIN event_contacts ec ON e.id = ec.event_id
-        WHERE ec.contact_id = :contactId
+        WHERE ec.contact_id = :contactId AND e.deleted_at IS NULL
         ORDER BY e.event_date DESC
     """)
     fun getByContactId(contactId: Long): Flow<List<Event>>
@@ -50,7 +53,7 @@ interface EventDao {
     @Query("""
         SELECT e.* FROM events e
         INNER JOIN event_tags et ON e.id = et.event_id
-        WHERE et.tag_id = :tagId
+        WHERE et.tag_id = :tagId AND e.deleted_at IS NULL
         ORDER BY e.event_date DESC
     """)
     fun getByTagId(tagId: Long): Flow<List<Event>>
@@ -78,7 +81,7 @@ interface EventDao {
 
     // Get events with contact and tag info for list display
     @Query("""
-        SELECT e.* FROM events e
+        SELECT e.* FROM events e WHERE e.deleted_at IS NULL
         ORDER BY e.event_date DESC
     """)
     fun getAllEventsWithMeta(): Flow<List<Event>>

@@ -24,8 +24,9 @@ object RepositoryModule {
         contactDao: ContactDao,
         contactFactDao: ContactFactDao,
         eventDao: EventDao,
-        contactsSyncManager: ContactsSyncManager
-    ): ContactRepository = ContactRepository(contactDao, contactFactDao, eventDao, contactsSyncManager)
+        contactsSyncManager: ContactsSyncManager,
+        database: com.idontremember.personalcrm.data.db.AppDatabase
+    ): ContactRepository = ContactRepository(contactDao, contactFactDao, eventDao, contactsSyncManager, database)
 
     @Provides
     @Singleton

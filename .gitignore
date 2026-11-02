@@ -21,3 +21,6 @@ ignored/
 # Python bytecode
 __pycache__/
 *.py[cod]
+
+# Kotlin compiler session artifacts
+.kotlin/

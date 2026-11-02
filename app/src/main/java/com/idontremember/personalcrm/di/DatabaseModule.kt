@@ -3,6 +3,7 @@ package com.idontremember.personalcrm.di
 import android.content.Context
 import androidx.room.Room
 import com.idontremember.personalcrm.data.db.AppDatabase
+import com.idontremember.personalcrm.data.db.MIGRATION_2_3
 import com.idontremember.personalcrm.data.db.MIGRATION_1_2
 import com.idontremember.personalcrm.data.db.dao.PilotDao
 import com.idontremember.personalcrm.data.db.dao.ContactDao
@@ -27,7 +28,7 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "personal_crm.db"
-        ).addMigrations(MIGRATION_1_2).build()
+        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
     }
 
     @Provides
