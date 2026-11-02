@@ -17,9 +17,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -92,7 +94,7 @@ fun FollowUpsOverlay(contactId: Long? = null, onDismiss: () -> Unit, vm: FollowU
     if (adding || editing != null) FollowUpEditor(contactId = contactId, existingId = editing, onDismiss = { adding = false; editing = null })
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun FollowUpEditor(contactId: Long? = null, existingId: Long? = null, initialText: String? = null, onSaved: (() -> Unit)? = null, onDismiss: () -> Unit, vm: FollowUpViewModel = hiltViewModel()) {
     val context = LocalContext.current
@@ -117,6 +119,9 @@ fun FollowUpEditor(contactId: Long? = null, existingId: Long? = null, initialTex
     val remindersEnabled by vm.reminders.collectAsStateWithLifecycle()
     val reminderPrompted by vm.prompted.collectAsStateWithLifecycle()
     val focusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val editorSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val expanded = editorSheetState.currentValue == SheetValue.Expanded
     val snackbar = remember { SnackbarHostState() }
     val saveError = stringResource(R.string.followup_error)
     val unavailable = stringResource(R.string.followup_unavailable)
@@ -141,7 +146,11 @@ fun FollowUpEditor(contactId: Long? = null, existingId: Long? = null, initialTex
             }
         }
     }
-    LaunchedEffect(loaded, draftConflict) { if (loaded && !draftConflict && !savedAndWaiting) { withFrameNanos { }; focusRequester.requestFocus() } }
+    LaunchedEffect(loaded, draftConflict, expanded) {
+        if (loaded && !draftConflict && !savedAndWaiting && expanded) {
+            if (existingId == null) focusRequester.requestFocus() else keyboard?.hide()
+        }
+    }
     LaunchedEffect(text, person, due, loaded) {
         if (loaded && !savedAndWaiting) {
             val value = JSONObject().put("text", text).put("date", due ?: "")
@@ -153,7 +162,7 @@ fun FollowUpEditor(contactId: Long? = null, existingId: Long? = null, initialTex
         if (Build.VERSION.SDK_INT >= 33) launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
         else scope.launch { vm.settings.setFollowUpRemindersEnabled(true); FollowUpWorker.ensureScheduled(context); if (savedAndWaiting) finishSaved() }
     }
-    ModalBottomSheet(modifier = Modifier.exposeTestTags(), onDismissRequest = { if (!saving) { if (savedAndWaiting) finishSaved() else onDismiss() } }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    ModalBottomSheet(modifier = Modifier.exposeTestTags(), onDismissRequest = { if (!saving) { if (savedAndWaiting) finishSaved() else onDismiss() } }, sheetState = editorSheetState) {
         Column(Modifier.fillMaxHeight(.9f).imePadding().padding(horizontal = 16.dp).testTag("followup_editor")) {
             Text(stringResource(if (existingId == null) R.string.followup_add else R.string.followup_edit), style = MaterialTheme.typography.titleLarge)
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
@@ -162,13 +171,13 @@ fun FollowUpEditor(contactId: Long? = null, existingId: Long? = null, initialTex
                 }
                 OutlinedTextField(text, { text = it }, label = { Text(stringResource(R.string.followup_hint)) }, minLines = 3,
                     enabled = !saving && loaded && !draftConflict, modifier = Modifier.fillMaxWidth().focusRequester(focusRequester).testTag("followup_text"))
-                Row {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick = { choosingDate = true }, enabled = !saving, modifier = Modifier.testTag("followup_choose_date")) { Text(due ?: stringResource(R.string.followup_date)) }
                     if (due != null) TextButton(onClick = { due = null }, enabled = !saving) { Text(stringResource(R.string.followup_no_date)) }
                 }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("followup_error")) }
                 if (existingId != null && loaded) {
-                    Row {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(enabled = !saving && text.isNotBlank() && person != null, onClick = {
                             saving = true
                             scope.launch {
@@ -198,10 +207,9 @@ fun FollowUpEditor(contactId: Long? = null, existingId: Long? = null, initialTex
                 }
             }
             SnackbarHost(snackbar)
-            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = onDismiss, enabled = !saving) { Text(stringResource(R.string.followup_close)) }
                 TextButton(onClick = { confirmDiscard = true }, enabled = !saving) { Text(stringResource(R.string.pilot_discard)) }
-                Spacer(Modifier.weight(1f))
                 Button(enabled = loaded && !saving && !savedAndWaiting && !draftConflict && text.isNotBlank() && person != null, modifier = Modifier.testTag("save_followup"), onClick = {
                     saving = true
                     scope.launch {

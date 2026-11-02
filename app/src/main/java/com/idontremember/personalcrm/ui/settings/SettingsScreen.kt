@@ -256,7 +256,8 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = viewModel::cancelRestore,
             title = { Text(stringResource(R.string.settings_restore_confirm_title)) },
-            text = { Column {
+            text = { Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(stringResource(R.string.reliability_restore_replaces), modifier = Modifier.padding(bottom = 12.dp))
                 Text(stringResource(R.string.settings_restore_confirm_body,
                     preview.contacts.size, preview.facts.size, preview.events.size, preview.tags.size))
                 Text(stringResource(R.string.reliability_restore_followups, preview.followUps.size))

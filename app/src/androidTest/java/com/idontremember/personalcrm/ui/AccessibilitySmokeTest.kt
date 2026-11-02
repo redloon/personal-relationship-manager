@@ -2,9 +2,15 @@ package com.idontremember.personalcrm.ui
 
 import android.os.ParcelFileDescriptor
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -141,6 +147,38 @@ class AccessibilitySmokeTest {
         assertTouchTargetAtLeast48dp("add_event_fab")
     }
 
+    @Test
+    fun captureChoicesStayWholeAndSaveReachableAtLargeTextSizes() {
+        for (scale in listOf(1.0f, 1.3f, 2.0f)) {
+            setFontScale(scale)
+            composeTestRule.activity.getSharedPreferences("capture_draft", android.content.Context.MODE_PRIVATE)
+                .edit().clear().commit()
+            composeTestRule.activityRule.scenario.recreate()
+            composeTestRule.waitUntilTagDisplayed("add_event_fab")
+            org.junit.Assert.assertEquals(scale, composeTestRule.activity.resources.configuration.fontScale, 0.01f)
+            composeTestRule.onNodeWithTag("add_event_fab").performClick()
+            composeTestRule.waitUntilTagDisplayed("add_event_sheet")
+            composeTestRule.onNodeWithTag("note_text_field").performTextInput("Large text capture")
+            composeTestRule.onNodeWithTag("capture_follow_up_button").performScrollTo().assertIsDisplayed()
+            composeTestRule.mainClock.advanceTimeBy(500)
+            composeTestRule.waitForIdle()
+            val layouts = mutableListOf<TextLayoutResult>()
+            composeTestRule.onNodeWithText("Follow-up", useUnmergedTree = true)
+                .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            val layout = layouts.single()
+            // The paragraph retains its larger measurement constraint even when Text
+            // sizes to its glyphs. Compare drawn line bounds, allowing pixel rounding.
+            assertTrue("Follow-up must fit completely on one line at font scale $scale",
+                layout.lineCount == 1 && layout.getLineEnd(0) == layout.layoutInput.text.length &&
+                    !layout.isLineEllipsized(0) && layout.getLineRight(0) <= layout.size.width + 1 &&
+                    layout.getLineBottom(0) <= layout.size.height + 1)
+            composeTestRule.onNodeWithTag("save_event_button").assertIsDisplayed()
+            assertTouchTargetAtLeast48dp("save_event_button")
+            composeTestRule.onNodeWithContentDescription("Close").assertIsDisplayed().performClick()
+            composeTestRule.waitUntilTagDisplayed("add_event_fab")
+        }
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private fun seedContact(): Long = runBlocking {
@@ -181,9 +219,10 @@ class AccessibilitySmokeTest {
     private fun assertTouchTargetAtLeast48dp(tag: String) {
         val node = composeTestRule.onNodeWithTag(tag).fetchSemanticsNode()
         val minPx = with(composeTestRule.density) { 48.dp.toPx() }
+        val target = node.touchBoundsInRoot
         assertTrue(
-            "$tag touch target ${node.size} is smaller than 48dp",
-            node.size.height >= minPx && node.size.width >= minPx
+            "$tag touch target $target is smaller than 48dp",
+            target.height >= minPx && target.width >= minPx
         )
     }
 

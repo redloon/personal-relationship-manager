@@ -63,6 +63,6 @@ class EventsListScreenTest {
         // P2: the shared EmptyState composable renders this — tag + localized text.
         composeTestRule.waitUntilTagDisplayed("events_empty_state")
         composeTestRule.onNodeWithTag("events_empty_state").assertIsDisplayed()
-        composeTestRule.onNodeWithText("No events yet.", substring = true).assertExists()
+        composeTestRule.onNodeWithText("No notes yet.", substring = true).assertExists()
     }
 }

@@ -102,12 +102,10 @@ fun AddEventSheet(
                 if (!ready) {
                     Text(stringResource(if (saveFailed) R.string.capture_unavailable else R.string.capture_loading))
                 } else {
-                    if (!editing) Row(verticalAlignment = Alignment.CenterVertically) {
-                        FilterChip(selected = !isFact, onClick = { viewModel.setFact(false) }, label = { Text(stringResource(R.string.capture_note)) }, enabled = !saving)
-                        Spacer(Modifier.width(8.dp))
-                        FilterChip(selected = isFact, onClick = { viewModel.setFact(true) }, label = { Text(stringResource(R.string.pilot_fact)) }, enabled = !saving)
-                        Spacer(Modifier.width(8.dp))
-                        FilterChip(selected = false, onClick = { showFollowUp = true }, label = { Text(stringResource(R.string.capture_follow_up)) }, enabled = !saving, modifier = Modifier.testTag("capture_follow_up_button"))
+                    if (!editing) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = !isFact, onClick = { viewModel.setFact(false) }, label = { Text(stringResource(R.string.capture_note), maxLines = 1) }, enabled = !saving)
+                        FilterChip(selected = isFact, onClick = { viewModel.setFact(true) }, label = { Text(stringResource(R.string.pilot_fact), maxLines = 1) }, enabled = !saving)
+                        FilterChip(selected = false, onClick = { showFollowUp = true }, label = { Text(stringResource(R.string.capture_follow_up), maxLines = 1) }, enabled = !saving, modifier = Modifier.testTag("capture_follow_up_button"))
                     }
                     if (isFact) Text(stringResource(R.string.pilot_select_one), style = MaterialTheme.typography.bodySmall)
                     AutocompleteTextField(

@@ -104,7 +104,7 @@ class EventsSearchTest {
                 false
             }
         }
-        composeTestRule.onNodeWithText("No events match your search.", substring = true)
+        composeTestRule.onNodeWithText("No notes match your search.", substring = true)
             .assertIsDisplayed()
     }
 

@@ -1,7 +1,7 @@
 <resources>
     <string name="recall_home">Home</string>
     <string name="recall_people">People</string>
-    <string name="recall_search">Find a person or something you remember</string>
+    <string name="recall_search">Search anything</string>
     <string name="recall_people_search">Search names or remembered details</string>
     <string name="recall_person_search">Search this person’s notes</string>
     <string name="recall_recent">Recently remembered</string>

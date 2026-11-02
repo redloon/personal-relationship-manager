@@ -63,7 +63,7 @@ class ContactsListScreenTest {
         // P2: the shared EmptyState composable renders this — tag + localized text.
         composeTestRule.waitUntilTagDisplayed("contacts_empty_state")
         composeTestRule.onNodeWithTag("contacts_empty_state").assertIsDisplayed()
-        composeTestRule.onNodeWithText("No contacts yet.", substring = true).assertExists()
+        composeTestRule.onNodeWithText("No people yet.", substring = true).assertExists()
     }
 
     @Test
@@ -120,7 +120,7 @@ class ContactsListScreenTest {
         // After typing, should show "No contacts match your search" or results
         composeTestRule.waitUntil(timeoutMillis = 3_000) {
             try {
-                composeTestRule.onNodeWithText("No contacts match your search.").assertExists()
+                composeTestRule.onNodeWithText("No people match your search.").assertExists()
                 true
             } catch (e: AssertionError) {
                 false

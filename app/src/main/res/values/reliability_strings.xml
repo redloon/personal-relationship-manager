@@ -14,9 +14,10 @@
     <string name="reliability_trash_empty">Nothing recently deleted</string>
     <string name="reliability_recover">Restore</string>
     <string name="reliability_recovery_failed">Could not restore this item. Try again.</string>
+    <string name="reliability_restore_replaces">This replaces your saved data.</string>
     <string name="reliability_restore_followups">Follow-ups: %1$d</string>
-    <string name="reliability_restore_safety">Save safety backup and restore</string>
-    <string name="reliability_restore_explanation">Restoring replaces your saved data. First choose where to save a safety copy. People will be restored without Android contact links, and reminders will be turned off.</string>
+    <string name="reliability_restore_safety">Save safety copy and restore</string>
+    <string name="reliability_restore_explanation">Choose where to save a safety copy first. Android contact links will be removed and reminders turned off.</string>
     <string name="reliability_portable_backup">Backups contain private, unencrypted notes. Keep the folder somewhere you trust. Android system backup is disabled; use these files to move to another phone.</string>
     <string name="reliability_trash_note">Note</string>
     <string name="reliability_trash_fact">Fact</string>
