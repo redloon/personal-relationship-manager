@@ -58,6 +58,8 @@ Resolve a failing hook or input mismatch instead of bypassing it. Stage a cohere
 - Android contact stress tests assert Contacts Provider aggregation and name normalization, using aggregated contact IDs. Read the test's class documentation before changing sync expectations.
 - Database changes require an explicit migration, committed exported schema, and populated migration tests. Release builds must never use destructive migration fallback.
 - Long-lived processes must redirect stdout/stderr and close stdin. Keep runner timeouts and cleanup intact; an inherited output pipe can make a completed command appear hung.
+- A displayed sheet may still move when its autofocus opens the keyboard. Use `waitForKeyboard` from `TestNavHelpers` before tapping controls affected by that movement, and assert the resulting selection. The helper checks the actual IME window because dialog sheets have separate windows from the activity.
+- Accessibility touch-target assertions use `SemanticsNode.touchBoundsInRoot`; a Material button's visual size can be smaller than its actual touch target. For text clipping, check drawn line bounds and character coverage: a paragraph may retain a wider measurement constraint than the final Text layout, making `hasVisualOverflow` misleading. See `AccessibilitySmokeTest`.
 
 ## Lessons from the workflow audit
 
