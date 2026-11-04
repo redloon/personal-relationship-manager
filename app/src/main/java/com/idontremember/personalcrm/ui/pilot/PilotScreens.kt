@@ -91,17 +91,6 @@ fun SectionLabel(text: String) {
     Text(text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
 }
 
-@Composable
-fun RecallNoteRow(row: RecallEntry, query: String, dateDisplay: DateDisplay = DateDisplay.ABSOLUTE, onClick: () -> Unit) {
-    val kind = stringResource(when (row.kind) { "fact" -> R.string.recall_fact; "followup" -> R.string.recall_followup; else -> R.string.recall_event })
-    ListItem(
-        headlineContent = { Text(RecallSearch.excerpt(row.text, query), maxLines = 3, overflow = TextOverflow.Ellipsis) },
-        overlineContent = { Text(listOf(kind, row.title).filter { it.isNotBlank() }.joinToString(" · ")) },
-        supportingContent = { val date = formatEventDateText(row.date, dateDisplay); Text(if(row.kind == "fact") stringResource(R.string.pilot_recorded, date) else date) },
-        modifier = Modifier.fillMaxWidth().testTag("recall_${row.kind}_${row.id}").clickable(onClick = onClick)
-    )
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TagsScreen(onBack: () -> Unit, onContact: (Long) -> Unit, vm: PilotViewModel = hiltViewModel()) {
@@ -120,26 +109,4 @@ fun TagsScreen(onBack: () -> Unit, onContact: (Long) -> Unit, vm: PilotViewModel
         }
     }
     deleting?.let { tag -> AlertDialog(modifier = Modifier.exposeTestTags(), onDismissRequest = { deleting = null }, title = { Text(stringResource(R.string.pilot_delete_tag, tag.name)) }, text = { Text(stringResource(R.string.pilot_delete_explanation)) }, confirmButton = { TextButton(onClick = { vm.deleteTag(tag); deleting = null }) { Text(stringResource(R.string.pilot_delete)) } }, dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.pilot_cancel)) } }) }
-}
-
-@Composable
-fun ProfileLinks(contactId: Long, onContact: (Long) -> Unit, vm: PilotViewModel = hiltViewModel()) {
-    val tags by vm.tags.collectAsState()
-    val contacts by vm.contacts.collectAsState()
-    val assigned by remember(contactId) { vm.dao.tagsForContact(contactId) }.collectAsState(initial = emptyList())
-    val links by remember(contactId) { vm.dao.relationshipsFor(contactId) }.collectAsState(initial = emptyList())
-    var addingTag by remember { mutableStateOf(false) }
-    var addingLink by remember { mutableStateOf(false) }
-    var chosen by remember { mutableStateOf<Long?>(null) }
-    var label by rememberSaveable { mutableStateOf("") }
-    var personQuery by rememberSaveable { mutableStateOf("") }
-    var tagQuery by rememberSaveable { mutableStateOf("") }
-    Column {
-        Row { Text(stringResource(R.string.pilot_tags), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f)); TextButton(onClick = { addingTag = true }) { Text(stringResource(R.string.pilot_add)) } }
-        assigned.forEach { tag -> Row { Text(tag.name, modifier = Modifier.weight(1f)); TextButton(onClick = { vm.unassign(contactId, tag.id) }) { Text(stringResource(R.string.pilot_remove)) } } }
-        Row { Text(stringResource(R.string.pilot_relationships), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f)); TextButton(onClick = { addingLink = true }, modifier = Modifier.testTag("relationship_add")) { Text(stringResource(R.string.pilot_add)) } }
-        links.forEach { link -> val other = if (link.contactA == contactId) link.contactB else link.contactA; Row { TextButton(onClick = { onContact(other) }, modifier = Modifier.weight(1f).testTag("relationship_person_$other")) { Text(stringResource(R.string.pilot_relation_display, link.label, contacts.find { it.id == other }?.displayName ?: stringResource(R.string.pilot_unknown))) }; TextButton(onClick = { vm.unlink(link) }, modifier = Modifier.testTag("relationship_remove_$other")) { Text(stringResource(R.string.pilot_remove)) } } }
-    }
-    if (addingTag) AlertDialog(modifier = Modifier.exposeTestTags(), onDismissRequest = { addingTag = false }, title = { Text(stringResource(R.string.pilot_add_tag)) }, text = { Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) { SearchField(tagQuery, { tagQuery = it }, stringResource(R.string.recall_tag_search), "clear_tag_picker_search", Modifier.fillMaxWidth()); tags.filter { it !in assigned && it.name.contains(tagQuery, true) }.forEach { tag -> TextButton(onClick = { vm.assign(contactId, tag.id); addingTag = false }) { Text(tag.name) } } } }, confirmButton = { TextButton(onClick = { addingTag = false }) { Text(stringResource(R.string.pilot_done)) } })
-    if (addingLink) AlertDialog(modifier = Modifier.exposeTestTags(), onDismissRequest = { addingLink = false }, title = { Text(stringResource(R.string.pilot_add_relationship)) }, text = { Column(Modifier.heightIn(max = 400.dp)) { OutlinedTextField(label, { label = it }, label = { Text(stringResource(R.string.pilot_label)) }, modifier = Modifier.testTag("relationship_label")); SearchField(personQuery, { personQuery = it }, stringResource(R.string.recall_management_search), "clear_relationship_search", Modifier.fillMaxWidth()); LazyColumn { items(contacts.filter { it.id != contactId && it.displayName.contains(personQuery, true) }, key = { it.id }) { person -> Row(Modifier.fillMaxWidth().selectable(selected = chosen == person.id, role = Role.RadioButton, onClick = { chosen = person.id })) { RadioButton(selected = chosen == person.id, onClick = null); Text(person.displayName) } } } } }, confirmButton = { TextButton(onClick = { chosen?.let { vm.link(contactId, it, label) }; chosen = null; label = ""; addingLink = false }, enabled = chosen != null && label.isNotBlank(), modifier = Modifier.testTag("relationship_confirm")) { Text(stringResource(R.string.pilot_add)) } }, dismissButton = { TextButton(onClick = { addingLink = false }) { Text(stringResource(R.string.pilot_cancel)) } })
 }
