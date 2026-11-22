@@ -65,7 +65,8 @@ import java.util.Locale
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
-    viewModel: SettingsViewModel = hiltViewModel()
+    viewModel: SettingsViewModel = hiltViewModel(),
+    onHiddenPeople: () -> Unit = {}
 ) {
     val themeMode by viewModel.themeMode.collectAsState()
     val dynamicColor by viewModel.dynamicColor.collectAsState()
@@ -146,6 +147,9 @@ fun SettingsScreen(
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
         ) {
+            SettingsSection(title = stringResource(R.string.recall_people), testTag = "settings_section_people") {
+                SettingsActionRow(title = stringResource(R.string.people_hidden_title), onClick = onHiddenPeople, testTag = "settings_hidden_people")
+            }
             SettingsSection(
                 title = stringResource(R.string.settings_section_appearance),
                 testTag = "settings_section_appearance"

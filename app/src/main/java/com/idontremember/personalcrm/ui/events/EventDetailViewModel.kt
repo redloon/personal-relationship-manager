@@ -59,7 +59,7 @@ class EventDetailViewModel @Inject constructor(
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             try {
-                combine(eventDao.getByIdFlow(eventId), contactDao.getAll(), tagDao.getAll()) { _, _, _ -> eventRepository.getEventWithMeta(eventId) }
+                combine(eventDao.getByIdFlow(eventId), contactDao.getAllIncludingHidden(), tagDao.getAll()) { _, _, _ -> eventRepository.getEventWithMeta(eventId) }
                     .collect { meta ->
                         if (!_saved.value) {
                             _event.value = meta?.event

@@ -15,7 +15,7 @@ interface RecallDao {
             c.display_name || ' ' || COALESCE(c.phone_number, '') || ' ' || COALESCE(c.email, '') || ' ' ||
             COALESCE((SELECT GROUP_CONCAT(t.name, ' ') FROM tags t JOIN contact_tags ct ON ct.tag_id=t.id WHERE ct.contact_id=c.id), '') AS searchText,
             NULL AS dueDate, NULL AS completedAt, c.created_at AS createdAt
-        FROM contacts c
+        FROM visible_contacts c
         UNION ALL
         SELECT 'fact', f.id, c.id, c.display_name, f.text, f.created_at,
             ',' || c.id || ',', c.display_name || ' ' || f.text || ' ' ||

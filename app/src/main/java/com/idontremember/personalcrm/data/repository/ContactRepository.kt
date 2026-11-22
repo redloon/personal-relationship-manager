@@ -31,6 +31,23 @@ class ContactRepository @Inject constructor(
 
     fun searchContacts(query: String): Flow<List<Contact>> = contactDao.search(query)
 
+    fun getHiddenContacts(): Flow<List<Contact>> = contactDao.getHidden()
+
+    /** Only for resolving saved associations; never use for person discovery. */
+    fun getContactsIncludingHidden(): Flow<List<Contact>> = contactDao.getAllIncludingHidden()
+
+    /** Returns only changed IDs, so Undo cannot affect unrelated profiles. */
+    suspend fun setPeopleHidden(ids: Set<Long>, hidden: Boolean): Set<Long> = database.withTransaction {
+        val changed = linkedSetOf<Long>()
+        for (chunk in ids.toList().chunked(900)) {
+            val changing = contactDao.idsChangingVisibility(chunk, hidden)
+            if (changing.isNotEmpty()) contactDao.setHidden(changing, hidden)
+            changed.addAll(changing)
+        }
+        changed
+    }
+
+
     suspend fun getContactByAndroidId(id: Long): Contact? = contactDao.getByAndroidContactId(id)
 
     suspend fun getContactById(id: Long): Contact? = contactDao.getById(id)
@@ -44,7 +61,7 @@ class ContactRepository @Inject constructor(
     suspend fun createLocalContact(name: String, allowDuplicate: Boolean = false): Long = database.withTransaction {
         val trimmed = name.trim()
         require(trimmed.isNotEmpty()) { "A name is required" }
-        if (!allowDuplicate) contactDao.getAllOnce().firstOrNull { ContactNames.key(it.displayName) == ContactNames.key(trimmed) }?.let { return@withTransaction it.id }
+        if (!allowDuplicate) contactDao.getAllIncludingHiddenOnce().firstOrNull { !it.isHidden && ContactNames.key(it.displayName) == ContactNames.key(trimmed) }?.let { return@withTransaction it.id }
         contactDao.insert(Contact(displayName = trimmed))
     }
 

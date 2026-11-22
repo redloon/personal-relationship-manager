@@ -179,6 +179,26 @@ class AccessibilitySmokeTest {
         }
     }
 
+    @Test
+    fun peopleSelectionActionsRemainReachableAtLargeFontSizes() {
+        seedContact()
+        for (scale in listOf(1.3f, 2.0f)) {
+            setFontScale(scale)
+            composeTestRule.activityRule.scenario.recreate()
+            composeTestRule.navigateToContactsTab()
+            composeTestRule.waitUntilTagDisplayed("people_menu")
+            composeTestRule.onNodeWithTag("people_menu").performClick()
+            composeTestRule.onNodeWithTag("people_select_menu").performClick()
+            composeTestRule.onAllNodesWithTag("contact_list_item")[0].performClick()
+            composeTestRule.onNodeWithTag("people_selection_count").assertIsDisplayed()
+            composeTestRule.onNodeWithTag("people_visibility_action").assertIsDisplayed()
+            assertTouchTargetAtLeast48dp("people_visibility_action")
+            assertTouchTargetAtLeast48dp("people_selection_close")
+            assertTouchTargetAtLeast48dp("people_selection_menu")
+            composeTestRule.onNodeWithTag("people_selection_close").performClick()
+        }
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private fun seedContact(): Long = runBlocking {

@@ -65,6 +65,15 @@ class BackupJsonTest {
         assertEquals("[]", BackupJson.decode(old).events.single().inlineTokens)
     }
 
+    @Test fun visibilityRoundTripsAndLegacyBackupsDefaultVisible() {
+        assertEquals(4, snapshot.schemaVersion)
+        val hidden = snapshot.copy(contacts = snapshot.contacts.map { it.copy(isHidden = true) })
+        assertEquals(hidden, BackupJson.decode(BackupJson.encode(hidden)))
+        val legacy = BackupJson.encode(snapshot.copy(schemaVersion = 3))
+            .replace(Regex(",\\s*\"isHidden\"\\s*:\\s*false"), "")
+        assertTrue(BackupJson.decode(legacy).contacts.none { it.isHidden })
+    }
+
     private fun assertFailure(block: () -> Unit) {
         try { block(); throw AssertionError("Expected invalid backup") }
         catch (_: IllegalArgumentException) { }

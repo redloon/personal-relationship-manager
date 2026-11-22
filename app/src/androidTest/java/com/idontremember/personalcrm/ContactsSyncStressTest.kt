@@ -2,6 +2,7 @@ package com.idontremember.personalcrm
 
 import android.content.ContentProviderOperation
 import android.content.ContentResolver
+import android.content.ContentValues
 import android.provider.ContactsContract
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -16,6 +17,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -83,7 +85,7 @@ class ContactsSyncStressTest {
         // the sync counters ("added" vs "updated") only make sense against an
         // empty local table. Contact deletion cascades to facts/event links.
         runBlocking {
-            contactDao.getAll().first().forEach { contactDao.delete(it) }
+            contactDao.getAllIncludingHiddenOnce().forEach { contactDao.delete(it) }
         }
 
         // Clear any existing contacts from the provider
@@ -170,6 +172,29 @@ class ContactsSyncStressTest {
      */
     private fun nameFingerprint(name: String): String =
         name.filter { it.isLetterOrDigit() }.toSortedSet().joinToString("")
+
+    @Test
+    fun hiddenContactStaysAttachedAndReceivesUpdatesAcrossRepeatedSyncs(): Unit = runTest {
+        contactsSyncManager.syncContacts()
+        val people = contactDao.getAllIncludingHiddenOnce()
+        val uniqueNames = people.groupingBy { it.displayName }.eachCount().filterValues { it == 1 }.keys
+        val original = people.first { it.displayName in uniqueNames }
+        contactDao.setHidden(listOf(original.id), true)
+        val renamed = "Hidden Sync Test Person"
+        contentResolver.update(ContactsContract.Data.CONTENT_URI,
+            ContentValues().apply { put(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, renamed) },
+            "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+            arrayOf(original.androidContactId.toString(), ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE))
+        repeat(2) { contactsSyncManager.syncContacts() }
+        val after = contactDao.getById(original.id)!!
+        assertTrue(after.isHidden)
+        assertEquals(renamed, after.displayName)
+        assertEquals(original.androidContactId, after.androidContactId)
+        assertEquals(people.size, contactDao.getAllIncludingHiddenOnce().size)
+        assertFalse(contactDao.getAll().first().any { it.id == original.id })
+        contactDao.setHidden(listOf(original.id), false)
+        assertTrue(contactDao.getAll().first().any { it.id == original.id && it.displayName == renamed })
+    }
 
     @Test
     fun firstSync_importsAllContacts() = runTest {

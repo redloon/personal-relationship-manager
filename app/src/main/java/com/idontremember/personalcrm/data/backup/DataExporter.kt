@@ -24,7 +24,7 @@ import javax.inject.Singleton
 
 @Serializable
 data class BackupSnapshot(
-    val schemaVersion: Int = 3,
+    val schemaVersion: Int = 4,
     val app: String = "personal-crm",
     val exportedAt: String,
     val contacts: List<ContactRecord>,
@@ -39,7 +39,7 @@ data class BackupSnapshot(
 )
 
 @Serializable data class ContactRecord(val id: Long, val androidContactId: Long?, val displayName: String,
-    val phoneNumber: String?, val email: String?, val photoUri: String?, val createdAt: Long, val updatedAt: Long)
+    val phoneNumber: String?, val email: String?, val photoUri: String?, val createdAt: Long, val updatedAt: Long, val isHidden: Boolean = false)
 @Serializable data class FactRecord(val id: Long, val contactId: Long, val text: String, val createdAt: Long, val deletedAt: Long? = null)
 @Serializable data class EventRecord(val id: Long, val note: String, val eventDate: Long, val createdAt: Long, val updatedAt: Long, val deletedAt: Long? = null, val inlineTokens: String = "[]")
 @Serializable data class TagRecord(val id: Long, val name: String, val createdAt: Long)
@@ -68,7 +68,7 @@ object BackupJson {
         val fields = json.parseToJsonElement(source).jsonObject
         require("schemaVersion" in fields && "app" in fields) { "Missing backup header" }
         val snapshot = json.decodeFromString(BackupSnapshot.serializer(), source)
-        require(snapshot.schemaVersion in 1..3 && snapshot.app == "personal-crm") { "Unsupported backup" }
+        require(snapshot.schemaVersion in 1..4 && snapshot.app == "personal-crm") { "Unsupported backup" }
         require(snapshot.exportedAt.isNotBlank()) { "Missing export time" }
         fun <T> ids(items: List<T>, id: (T) -> Long): Set<Long> {
             val values = items.map(id)
@@ -110,8 +110,8 @@ class DataExporter @Inject constructor(private val database: AppDatabase,
                 exportedAt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
                     timeZone = TimeZone.getTimeZone("UTC")
                 }.format(Date()),
-                contacts = database.contactDao().getAllOnce().map { ContactRecord(it.id, it.androidContactId, it.displayName,
-                    it.phoneNumber, it.email, it.photoUri, it.createdAt, it.updatedAt) },
+                contacts = database.contactDao().getAllIncludingHiddenOnce().map { ContactRecord(it.id, it.androidContactId, it.displayName,
+                    it.phoneNumber, it.email, it.photoUri, it.createdAt, it.updatedAt, it.isHidden) },
                 facts = database.contactFactDao().getAllOnce().map { FactRecord(it.id, it.contactId, it.text, it.createdAt, it.deletedAt) },
                 events = database.eventDao().getAllOnce().map { EventRecord(it.id, it.note, it.eventDate, it.createdAt, it.updatedAt, it.deletedAt, it.inlineTokens) },
                 tags = database.tagDao().getAllOnce().map { TagRecord(it.id, it.name, it.createdAt) },
@@ -134,7 +134,7 @@ class DataExporter @Inject constructor(private val database: AppDatabase,
             database.contactDao().deleteAll()
             database.tagDao().deleteAll()
             snapshot.contacts.forEach { database.contactDao().insert(Contact(it.id, null, it.displayName,
-                it.phoneNumber, it.email, null, it.createdAt, it.updatedAt)) }
+                it.phoneNumber, it.email, null, it.createdAt, it.updatedAt, isHidden = it.isHidden)) }
             snapshot.events.forEach { database.eventDao().insert(Event(it.id, it.note, it.eventDate, it.createdAt, it.updatedAt, it.deletedAt, it.inlineTokens)) }
             snapshot.tags.forEach { database.tagDao().insert(Tag(it.id, it.name, it.createdAt)) }
             snapshot.facts.forEach { database.contactFactDao().insert(ContactFact(it.id, it.contactId, it.text, it.createdAt, it.deletedAt)) }

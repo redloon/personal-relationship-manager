@@ -67,6 +67,7 @@ fun AddEventSheet(
     val ready by viewModel.ready.collectAsState()
     val conflict by viewModel.sharedDraftConflict.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
+    val selectedPeople by viewModel.selectedPeople.collectAsState()
     val tags by viewModel.tags.collectAsState()
     var showFollowUp by rememberSaveable { mutableStateOf(false) }
     var showPeople by rememberSaveable { mutableStateOf(false) }
@@ -122,7 +123,7 @@ fun AddEventSheet(
                 if (isFact && selectedContactIds.size != 1) Text(stringResource(R.string.usability_fact_person_required), style = MaterialTheme.typography.bodySmall)
                 AutocompleteTextField(
                     value = noteText, onValueChange = viewModel::onNoteChanged,
-                    contacts = viewModel.getAutocompleteContacts(), tags = viewModel.getAutocompleteTags(),
+                    contacts = contacts.map { AutocompleteContact(it.id, it.displayName, it.phoneNumber) }, tags = viewModel.getAutocompleteTags(),
                     onContactSelected = viewModel::insertPersonToken, onTagSelected = viewModel::insertTagToken,
                     autoFocus = autoFocus && !conflict && !showPeople && !showTags && !showDate && !showTime, enableTags = !isFact, enableContacts = !isFact,
                     inlineTokens = if (isFact) emptyList() else inlineTokens,
@@ -134,7 +135,7 @@ fun AddEventSheet(
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (!isFact && selectedContactIds.isEmpty()) TextButton(onClick = { pendingPersonStart = -1; pendingPersonQuery = ""; showPeople = true }, modifier = Modifier.testTag("capture_no_people")) { Text(stringResource(R.string.usability_no_people_linked), style = MaterialTheme.typography.bodySmall) }
                         selectedContactIds.forEach { id -> ContactChip(
-                            name = contacts.find { it.id == id }?.displayName ?: stringResource(R.string.pilot_unavailable_contact),
+                            name = selectedPeople.find { it.id == id }?.displayName ?: stringResource(R.string.pilot_unavailable_contact),
                             onRemove = { viewModel.removeContact(id) }
                         ) }
                         if (!isFact) selectedTagNames.forEach { name -> TagChip(name = name, onRemove = { viewModel.removeTag(name) }) }

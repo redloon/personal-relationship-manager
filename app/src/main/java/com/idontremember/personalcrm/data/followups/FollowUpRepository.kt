@@ -12,7 +12,7 @@ data class FollowUpWithPerson(val item: FollowUp, val name: String)
 
 @Singleton
 class FollowUpRepository @Inject constructor(private val database: AppDatabase) {
-    val items = combine(database.followUpDao().getAll(), database.contactDao().getAll()) { items, contacts ->
+    val items = combine(database.followUpDao().getAll(), database.contactDao().getAllIncludingHidden()) { items, contacts ->
         val names = contacts.associate { it.id to it.displayName }
         items.map { FollowUpWithPerson(it, names[it.contactId].orEmpty()) }
     }

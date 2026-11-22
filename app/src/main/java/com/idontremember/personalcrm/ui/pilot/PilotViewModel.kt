@@ -17,6 +17,7 @@ import javax.inject.Inject
 @HiltViewModel
 class PilotViewModel @Inject constructor(val dao: PilotDao, private val contactsRepo: ContactRepository, private val tagsRepo: TagRepository) : ViewModel() {
     val contacts = contactsRepo.getAllContacts().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val linkedPeople = contactsRepo.getContactsIncludingHidden().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val tags = tagsRepo.getAllTags().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val recent = dao.recentContacts().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     fun createTag(name: String) { if (name.isNotBlank()) viewModelScope.launch { tagsRepo.getOrCreateTag(name) } }

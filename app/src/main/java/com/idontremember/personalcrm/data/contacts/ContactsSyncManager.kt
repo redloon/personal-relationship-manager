@@ -46,7 +46,7 @@ class ContactsSyncManager @Inject constructor(
         }
 
         val systemContacts = readSystemContacts()
-        val attachedByLookup = contactDao.getAllOnce().filter { it.lookupKey != null }.associateBy { it.lookupKey }
+        val attachedByLookup = contactDao.getAllIncludingHiddenOnce().filter { it.lookupKey != null }.associateBy { it.lookupKey }
         var added = 0
         var updated = 0
 
@@ -61,13 +61,13 @@ class ContactsSyncManager @Inject constructor(
                 (attached.lookupKey == null && !legacyAttachmentMatches(attached, sysContact)) ||
                 (attached.lookupKey != null && attached.lookupKey != sysContact.lookupKey && resolvedOldId != sysContact.androidContactId))
             val existing = if (identityChanged) {
-                contactDao.update(attached!!.copy(androidContactId = null, lookupKey = null, photoUri = null))
+                contactDao.detachAndroidContact(attached!!.id)
                 null
             } else attached
 
             val occupyingId = contactDao.getByAndroidContactId(sysContact.androidContactId!!)
             if (occupyingId != null && occupyingId.id != existing?.id) {
-                contactDao.update(occupyingId.copy(androidContactId = null, lookupKey = null, photoUri = null))
+                contactDao.detachAndroidContact(occupyingId.id)
             }
             if (existing == null) {
                 // New contact — insert
@@ -81,16 +81,10 @@ class ContactsSyncManager @Inject constructor(
                     existing.androidContactId != sysContact.androidContactId || existing.photoUri != sysContact.photoUri || existing.lookupKey != sysContact.lookupKey
 
                 if (needsUpdate) {
-                    contactDao.update(
-                        existing.copy(
-                            displayName = sysContact.displayName,
-                            androidContactId = sysContact.androidContactId,
-                            phoneNumber = sysContact.phoneNumber,
-                            email = sysContact.email,
-                            photoUri = sysContact.photoUri,
-                            lookupKey = sysContact.lookupKey,
-                            updatedAt = System.currentTimeMillis()
-                        )
+                    contactDao.updateProviderFields(
+                        existing.id, sysContact.displayName, sysContact.androidContactId,
+                        sysContact.phoneNumber, sysContact.email, sysContact.photoUri,
+                        sysContact.lookupKey, System.currentTimeMillis()
                     )
                     updated++
                 }

@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -65,6 +66,9 @@ class AddEventViewModel @Inject constructor(
     val noteText: StateFlow<TextFieldValue> = _noteText
     private val _selectedContactIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedContactIds: StateFlow<Set<Long>> = _selectedContactIds
+    val selectedPeople = combine(contactRepository.getContactsIncludingHidden(), selectedContactIds) { people, ids ->
+        people.filter { it.id in ids }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     private val _selectedTagNames = MutableStateFlow<Set<String>>(emptySet())
     val selectedTagNames: StateFlow<Set<String>> = _selectedTagNames
     private val _eventDate = MutableStateFlow(System.currentTimeMillis())
@@ -267,7 +271,6 @@ class AddEventViewModel @Inject constructor(
         }
     }
 
-    fun getAutocompleteContacts() = contacts.value.map { AutocompleteContact(it.id, it.displayName, it.phoneNumber) }
     fun getAutocompleteTags() = tags.value.map { AutocompleteTag(it.id, it.name) }
     fun close() { acceptingChanges = false; loadJob?.cancel() }
     fun discard() { close(); reset() }

@@ -61,6 +61,9 @@ data class TagDetailRoute(val tagId: Long) : NavKey
 data object ContactsRoute : NavKey
 
 @Serializable
+data object HiddenPeopleRoute : NavKey
+
+@Serializable
 data class ContactDetailRoute(val contactId: Long, val initialQuery: String = "") : NavKey
 
 @Serializable
@@ -123,10 +126,11 @@ fun AppNavigation() {
                     ) }
                     TagsRoute -> NavEntry(route) { TagsScreen(onBack = { backStack.removeLastOrNull() }, onContact = { backStack.add(ContactDetailRoute(it)) }, onTag = { backStack.add(TagDetailRoute(it)) }) }
                     is TagDetailRoute -> NavEntry(route) { TagDetailScreen(tagId = route.tagId, onBack = { backStack.removeLastOrNull() }, onContact = { backStack.add(ContactDetailRoute(it)) }, onEvent = { backStack.add(EventDetailRoute(it)) }) }
-                    ContactsRoute -> NavEntry(route) { ContactsListScreen(onContactClick = { backStack.add(ContactDetailRoute(it)) }, onSettingsClick = { backStack.add(SettingsRoute) }, onContactSearch = { id, query -> backStack.add(ContactDetailRoute(id, query)) }) }
+                    ContactsRoute -> NavEntry(route) { ContactsListScreen(onContactClick = { backStack.add(ContactDetailRoute(it)) }, onSettingsClick = { backStack.add(SettingsRoute) }, onContactSearch = { id, query -> backStack.add(ContactDetailRoute(id, query)) }, onHiddenPeople = { backStack.add(HiddenPeopleRoute) }) }
+                    HiddenPeopleRoute -> NavEntry(route) { ContactsListScreen(hidden = true, onBack = { backStack.removeLastOrNull() }, onContactClick = { backStack.add(ContactDetailRoute(it)) }, onSettingsClick = { backStack.add(SettingsRoute) }) }
                     is ContactDetailRoute -> NavEntry(route) { ContactDetailScreen(contactId = route.contactId, initialQuery = route.initialQuery, onBack = { backStack.removeLastOrNull() }, onEventClick = { backStack.add(EventDetailRoute(it)) }, onContactClick = { backStack.add(ContactDetailRoute(it)) }) }
                     EventsRoute -> NavEntry(route) { HistoryScreen(onBack = { backStack.removeLastOrNull() }, onEvent = { backStack.add(EventDetailRoute(it)) }, onFact = { readingFact = it }, onFollowUp = { readingFollowUp = it }, onSettings = { backStack.add(SettingsRoute) }, onAdd = { showAddEventSheet = true }, onContact = { backStack.add(ContactDetailRoute(it)) }) }
-                    SettingsRoute -> NavEntry(route) { SettingsScreen(onBack = { backStack.removeLastOrNull() }) }
+                    SettingsRoute -> NavEntry(route) { SettingsScreen(onBack = { backStack.removeLastOrNull() }, onHiddenPeople = { backStack.add(HiddenPeopleRoute) }) }
                     is EventDetailRoute -> NavEntry(route) { EventDetailScreen(eventId = route.eventId, onBack = { backStack.removeLastOrNull() }, onContactClick = { backStack.add(ContactDetailRoute(it)) }) }
                     AddEventRoute -> NavEntry(route) { AddEventSheet(onDismiss = { backStack.removeLastOrNull() }, onSaved = { backStack.removeLastOrNull() }) }
                     else -> NavEntry(route) { Text(stringResource(R.string.unknown_route)) }

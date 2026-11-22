@@ -25,6 +25,7 @@
  *       event_tags (see app/schemas/.../1.json for the authoritative snapshot).
  *   2 = direct contact tags and shared relationships.
  *   4 = explicit inline token metadata, preserving original prose.
+ *   5 = non-destructive person hiding and shared visible_contacts view.
  *   3 = recoverable notes, provider lookup keys, explicit follow-ups.
  * ============================================================================
  */
@@ -61,7 +62,8 @@ import com.idontremember.personalcrm.data.db.entity.Tag
         ContactTag::class,
         Relationship::class
     ],
-    version = 4,
+    views = [com.idontremember.personalcrm.data.db.entity.VisibleContact::class],
+    version = 5,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

@@ -21,7 +21,7 @@ class FollowUpViewModel @Inject constructor(
 ) : ViewModel() {
     val dateDisplay = settings.dateDisplay.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DateDisplay.ABSOLUTE)
     val items = repository.items.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val people = contacts.getAllContacts().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val people = contacts.getContactsIncludingHidden().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val prompted = settings.followUpReminderPrompted.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val reminders = settings.followUpRemindersEnabled.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val hour = settings.reminderHour.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 9)

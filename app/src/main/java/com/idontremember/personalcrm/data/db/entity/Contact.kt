@@ -36,5 +36,7 @@ data class Contact(
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long = System.currentTimeMillis(),
 
-    @ColumnInfo(name = "lookup_key") val lookupKey: String? = null
+    @ColumnInfo(name = "lookup_key") val lookupKey: String? = null,
+
+    @ColumnInfo(name = "is_hidden", defaultValue = "0") val isHidden: Boolean = false
 )

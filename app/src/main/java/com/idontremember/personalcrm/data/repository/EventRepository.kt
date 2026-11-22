@@ -32,7 +32,7 @@ class EventRepository @Inject constructor(
 ) {
 
     fun observeEventsWithMeta(): Flow<List<EventWithMeta>> = combine(
-        eventDao.getAll(), contactDao.getAll(), tagDao.getAll(), eventDao.observeEventContacts(), eventDao.observeEventTags()
+        eventDao.getAll(), contactDao.getAllIncludingHidden(), tagDao.getAll(), eventDao.observeEventContacts(), eventDao.observeEventTags()
     ) { events, people, tags, personLinks, tagLinks ->
         val peopleById = people.associateBy { it.id }
         val tagsById = tags.associateBy { it.id }

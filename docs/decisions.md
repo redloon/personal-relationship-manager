@@ -2,6 +2,18 @@
 
 Record important, non-obvious product decisions here, briefly.
 
+## 2026-11-22 — Clear identity for Hidden people
+
+People keeps its toolbar sync action without a duplicate import button beneath search. Hidden people uses a persistent eye-off icon, page label and distinct theme-based header color, including during bulk selection. The selected count appears beneath the page label, with room for enlarged text. Keep the explanation brief; color supplements the label and icon. Selection and visibility behavior remain governed by the non-destructive hiding decision.
+
+## 2026-11-21 — Non-destructive person hiding and bulk selection
+
+Long-press on People starts multi-selection; a visible Select people menu offers the same action. Hiding changes only a profile's visibility, never its data, timestamps, Android attachment or associations. Unhiding restores discovery of that same profile. Sync updates hidden profiles normally and preserves visibility. No automatic classification or import triage.
+
+Person discovery uses the shared `visible_contacts` view: People, universal person results, recent people, tag People sections and all in-app person selectors exclude hidden profiles. New discovery queries must use that view or the repository's default filtered APIs. Explicit all-record access is reserved for saved associations, hidden management, sync, backup and identity operations. Saved notes, facts, follow-ups, existing relationships and their person links remain readable/searchable; reminders and drafts are unchanged. Search can therefore still find saved content about a hidden person. Visibility is included in portable backups; restore still detaches Android identities and requires explicit relinking.
+
+Selection persists across searches, and Select all results adds only current results. Bulk actions consume the selected IDs independently of the selection controls; hiding is the first action, not a special selection mode. Undo affects only profiles changed by its operation.
+
 ## 2026-11-22 — Free software without project monetization
 
 Personal CRM is licensed under GPL-3.0-or-later and will remain free to use, without monetization. Distributed derivatives must comply with the GPL's source-sharing requirements. Commercial use remains permitted by the license; the no-monetization commitment is this project's policy. Preserve existing third-party license notices.

@@ -184,4 +184,23 @@
     <string name="pilot_fact_selected">✓ Fact</string>
     <string name="pilot_event_selected">✓ Note</string>
     <string name="pilot_save_fact">Save fact</string>
+    <string name="people_hidden_title">Hidden people</string>
+    <string name="people_hidden_explanation">Hidden from lists and pickers. Unhide anytime.</string>
+    <string name="people_hidden_search">Search hidden people</string>
+    <string name="people_hidden_empty">No hidden people.</string>
+    <string name="people_select">Select people</string>
+    <string name="people_actions">People actions</string>
+    <string name="people_selection_actions">Selection actions</string>
+    <string name="people_select_person">Select person</string>
+    <string name="people_select_all">Select all results</string>
+    <string name="people_clear_selection">Clear selection</string>
+    <string name="people_close_selection">Close selection</string>
+    <string name="people_selected_count">%1$d selected</string>
+    <string name="people_hide">Hide</string>
+    <string name="people_unhide">Unhide</string>
+    <string name="people_hidden_count">Hidden: %1$d</string>
+    <string name="people_unhidden_count">Unhidden: %1$d</string>
+    <string name="people_undo">Undo</string>
+    <string name="people_visibility_failed">Couldn’t change visibility. Try again.</string>
+    <string name="people_retry">Retry</string>
 </resources>
