@@ -31,6 +31,8 @@ class ContactRepository @Inject constructor(
 
     fun searchContacts(query: String): Flow<List<Contact>> = contactDao.search(query)
 
+    fun getAppOnlyContacts(): Flow<List<Contact>> = contactDao.getAppOnly()
+
     fun getHiddenContacts(): Flow<List<Contact>> = contactDao.getHidden()
 
     /** Only for resolving saved associations; never use for person discovery. */
@@ -83,7 +85,7 @@ class ContactRepository @Inject constructor(
             val keeper = contactDao.getById(appContactId) ?: error("Person unavailable")
             val imported = contactDao.getByAndroidContactId(androidId)
             if (imported != null && imported.id != appContactId) consolidate(appContactId, imported.id)
-            contactDao.update(keeper.copy(androidContactId = androidId, lookupKey = provider.lookupKey,
+            contactDao.update(keeper.copy(displayName = provider.displayName, androidContactId = androidId, lookupKey = provider.lookupKey,
                 phoneNumber = provider.phoneNumber, email = provider.email, photoUri = provider.photoUri,
                 updatedAt = System.currentTimeMillis()))
         }

@@ -45,11 +45,13 @@ fun ContactsListScreen(
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ContactsListViewModel = hiltViewModel(),
-    onContactSearch: ((Long, String) -> Unit)? = null,
-    hidden: Boolean = false,
+    scope: PeopleListScope = PeopleListScope.ALL,
     onBack: () -> Unit = {},
-    onHiddenPeople: () -> Unit = {}
+    onHiddenPeople: () -> Unit = {},
+    onAppOnlyPeople: () -> Unit = {}
 ) {
+    val hidden = scope == PeopleListScope.HIDDEN
+    val secondary = scope != PeopleListScope.ALL
     val context = LocalContext.current
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> if (granted) viewModel.syncContacts() }
     val importContacts = {
@@ -59,7 +61,6 @@ fun ContactsListScreen(
     var addPerson by rememberSaveable { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     val contacts by viewModel.contacts.collectAsState()
-    val excerpts by viewModel.matchingExcerpts.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
@@ -69,8 +70,16 @@ fun ContactsListScreen(
     val snackbar = remember { SnackbarHostState() }
     val undo = stringResource(R.string.people_undo)
     val resources = LocalResources.current
-    val contextTitle = if (hidden) stringResource(R.string.people_hidden_title) else null
-    val contextIcon = if (hidden) Icons.Default.VisibilityOff else null
+    val contextTitle = when (scope) {
+        PeopleListScope.ALL -> null
+        PeopleListScope.HIDDEN -> stringResource(R.string.people_hidden_title)
+        PeopleListScope.APP_ONLY -> stringResource(R.string.people_app_only_title)
+    }
+    val contextIcon = when (scope) {
+        PeopleListScope.ALL -> null
+        PeopleListScope.HIDDEN -> Icons.Default.VisibilityOff
+        PeopleListScope.APP_ONLY -> Icons.Default.PersonOutline
+    }
     val headerColors = if (hidden) TopAppBarDefaults.topAppBarColors(
         containerColor = MaterialTheme.colorScheme.tertiaryContainer,
         scrolledContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
@@ -79,7 +88,7 @@ fun ContactsListScreen(
         actionIconContentColor = MaterialTheme.colorScheme.onTertiaryContainer
     ) else TopAppBarDefaults.topAppBarColors()
 
-    LaunchedEffect(hidden) { viewModel.configure(hidden) }
+    LaunchedEffect(scope) { viewModel.configure(scope) }
     BackHandler(enabled = selection.active || busy) { viewModel.clearSelection() }
     LaunchedEffect(viewModel, resources, undo) {
         viewModel.visibilityChanges.collectLatest { change ->
@@ -106,7 +115,11 @@ fun ContactsListScreen(
     }
 
     Scaffold(
-        modifier = modifier.testTag(if (hidden) "hidden_people_screen" else "contacts_list_screen").exposeTestTags(),
+        modifier = modifier.testTag(when (scope) {
+            PeopleListScope.ALL -> "contacts_list_screen"
+            PeopleListScope.HIDDEN -> "hidden_people_screen"
+            PeopleListScope.APP_ONLY -> "app_only_people_screen"
+        }).exposeTestTags(),
         topBar = {
             if (selection.active) {
                 PeopleSelectionToolbar(
@@ -121,18 +134,18 @@ fun ContactsListScreen(
             } else TopAppBar(
                 modifier = Modifier.testTag("people_appbar"),
                 colors = headerColors,
-                expandedHeight = if (hidden) contextAppBarHeight() else 64.dp,
+                expandedHeight = if (secondary) contextAppBarHeight() else 64.dp,
                 title = {
                     if (contextTitle != null) PeopleContextTitle(contextTitle, contextIcon)
                     else Text(stringResource(R.string.recall_people))
                 },
                 navigationIcon = {
-                    if (hidden) IconButton(onClick = onBack, modifier = Modifier.testTag("hidden_people_back")) {
+                    if (secondary) IconButton(onClick = onBack, modifier = Modifier.testTag(if (hidden) "hidden_people_back" else "app_only_people_back")) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back))
                     }
                 },
                 actions = {
-                    if (!hidden) {
+                    if (!secondary) {
                         IconButton(onClick = importContacts, enabled = syncState !is ContactsListViewModel.SyncState.Syncing,
                             modifier = Modifier.size(48.dp).testTag("sync_button")) {
                             if (syncState is ContactsListViewModel.SyncState.Syncing) CircularProgressIndicator(Modifier.size(24.dp))
@@ -148,7 +161,9 @@ fun ContactsListScreen(
                             DropdownMenuItem(text = { Text(stringResource(R.string.people_select)) },
                                 onClick = { menu = false; viewModel.startSelection() },
                                 modifier = Modifier.testTag("people_select_menu"))
-                            if (!hidden) DropdownMenuItem(text = { Text(stringResource(R.string.people_hidden_title)) },
+                            if (!secondary) DropdownMenuItem(text = { Text(stringResource(R.string.people_app_only_title)) },
+                                onClick = { menu = false; onAppOnlyPeople() }, modifier = Modifier.testTag("app_only_people_menu"))
+                            if (!secondary) DropdownMenuItem(text = { Text(stringResource(R.string.people_hidden_title)) },
                                 onClick = { menu = false; onHiddenPeople() }, modifier = Modifier.testTag("hidden_people_menu"))
                         }
                     }
@@ -156,17 +171,17 @@ fun ContactsListScreen(
             )
         },
         floatingActionButton = {
-            if (!hidden && !selection.active) ExtendedFloatingActionButton(onClick = { addPerson = true },
+            if (!secondary && !selection.active) ExtendedFloatingActionButton(onClick = { addPerson = true },
                 icon = { Icon(Icons.Default.Add, null) }, text = { Text(stringResource(R.string.recall_add_person)) },
                 modifier = Modifier.testTag("add_person_button"))
         },
         snackbarHost = { SnackbarHost(snackbar, Modifier.imePadding()) }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).imePadding()) {
-            if (hidden) Text(stringResource(R.string.people_hidden_explanation),
+            if (secondary) Text(stringResource(if (hidden) R.string.people_hidden_explanation else R.string.people_app_only_explanation),
                 Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
             SearchField(searchQuery, viewModel::onSearchQueryChanged,
-                stringResource(if (hidden) R.string.people_hidden_search else R.string.recall_people_search),
+                stringResource(when(scope) { PeopleListScope.ALL -> R.string.people_directory_search; PeopleListScope.HIDDEN -> R.string.people_hidden_search; PeopleListScope.APP_ONLY -> R.string.people_app_only_search }),
                 "clear_contacts_search_button",
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).testTag("search_field"))
             if (bulkFailed) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
@@ -185,15 +200,16 @@ fun ContactsListScreen(
                     message = stringResource(when {
                         searchQuery.isNotBlank() -> R.string.empty_contacts_search
                         hidden -> R.string.people_hidden_empty
+                        secondary -> R.string.people_app_only_empty
                         else -> R.string.empty_contacts
                     }), modifier = Modifier.fillMaxSize(), testTag = "contacts_empty_state")
                 else -> LazyColumn(Modifier.fillMaxSize().testTag("contacts_list"), contentPadding = PaddingValues(bottom = 88.dp)) {
                     items(list, key = { it.id }) { contact ->
-                        SelectablePersonRow(contact, if (hidden) null else excerpts[contact.id],
+                        SelectablePersonRow(contact,
                             selection.active, contact.id in selection.ids, !busy,
                             onClick = {
                                 if (selection.active) viewModel.togglePerson(contact.id)
-                                else onContactSearch?.invoke(contact.id, searchQuery) ?: onContactClick(contact.id)
+                                else onContactClick(contact.id)
                             },
                             onLongClick = { viewModel.togglePerson(contact.id) })
                     }
@@ -284,7 +300,7 @@ private fun contextAppBarHeight(): Dp = with(LocalDensity.current) {
 
 @Composable
 private fun SelectablePersonRow(
-    contact: Contact, excerpt: String?, selecting: Boolean, selected: Boolean, enabled: Boolean,
+    contact: Contact, selecting: Boolean, selected: Boolean, enabled: Boolean,
     onClick: () -> Unit, onLongClick: () -> Unit
 ) {
     val selectLabel = stringResource(R.string.people_select_person)
@@ -292,8 +308,7 @@ private fun SelectablePersonRow(
         ListItem(
             headlineContent = { Text(contact.displayName) },
             supportingContent = {
-                val details = excerpt?.takeIf { it.isNotBlank() }
-                    ?: listOfNotNull(contact.phoneNumber, contact.email).joinToString(" · ")
+                val details = listOfNotNull(contact.phoneNumber, contact.email).joinToString(" · ")
                 if (details.isNotBlank()) Text(details)
             },
             leadingContent = {

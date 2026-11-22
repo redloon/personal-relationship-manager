@@ -64,21 +64,21 @@ class UsabilityNavigationTest {
         ui.onNodeWithTag("note_text_field").assertTextContains("Collects antique maps", substring = true)
     }
 
-    @Test fun peopleDetailMatchKeepsItsQueryAcrossNavigation() {
+    @Test fun peopleDirectoryKeepsItsQueryAcrossNavigation() {
         runBlocking {
             val person = db.contactDao().insert(Contact(displayName = "Maya Context"))
             val event = db.eventDao().insert(Event(note = "We talked for ages. ".repeat(30) + "Priya is recovering well."))
             db.eventDao().insertEventContact(EventContact(event, person))
         }
         ui.navigateToContactsTab()
-        ui.onNodeWithTag("search_field").performTextInput("Priya")
+        ui.onNodeWithTag("search_field").performTextInput("Maya")
         ui.waitUntilTagDisplayed("contact_list_item", 10_000)
-        ui.onNodeWithTag("contact_list_item").assertTextContains("Priya", substring = true)
+        ui.onNodeWithTag("contact_list_item").assertTextContains("Maya", substring = true)
         ui.onNodeWithTag("contact_list_item").performClick()
         ui.waitUntilTagDisplayed("person_search", 10_000)
-        ui.onNodeWithTag("person_search").assertTextContains("Priya", substring = true)
+        ui.onNodeWithTag("person_search").assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("")))
         ui.runOnUiThread { ui.activity.onBackPressedDispatcher.onBackPressed() }
         ui.waitUntilTagDisplayed("search_field", 10_000)
-        ui.onNodeWithTag("search_field").assertTextContains("Priya", substring = true)
+        ui.onNodeWithTag("search_field").assertTextContains("Maya", substring = true)
     }
 }

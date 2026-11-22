@@ -33,6 +33,17 @@ class CaptureContextTest {
         assertEquals("Alice Sm", detectTrigger(typing, typing.length, listOf("Alice", "Alice Smith"))?.query)
     }
 
+    @Test fun incrementalMentionTypingKeepsSpacesAndUsesTheLatestTrigger() {
+        val text = "@Maya Chen"
+        for (end in 1..text.length) {
+            assertEquals(text.substring(1, end), detectTrigger(text.substring(0, end), end)?.query)
+        }
+        val consecutive = "@Maya Chen and @Alex"
+        val trigger = detectTrigger(consecutive, consecutive.length)!!
+        assertEquals("Alex", trigger.query)
+        assertEquals(consecutive.lastIndexOf('@'), trigger.startIndex)
+    }
+
     @Test fun datePickerKeepsLocalTimeInsteadOfSwitchingToUtcMidnight() {
         val zone = TimeZone.getTimeZone("America/Los_Angeles")
         val original = Calendar.getInstance(zone).apply { set(2026, Calendar.NOVEMBER, 1, 17, 35, 0); set(Calendar.MILLISECOND, 0) }

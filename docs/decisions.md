@@ -2,6 +2,18 @@
 
 Record important, non-obvious product decisions here, briefly.
 
+## 2026-11-22 — App-only people and directory search
+
+App-only people are temporary profiles without an Android attachment, including restored or detached profiles awaiting relinking. People and Settings offer the same management page, excluding hidden profiles. Correct names and remembered context through the normal profile; no separate inline editing, app phone/email editor, Android contact creation, or general merge/delete flow. Explicit linking adopts the Android name and keeps app identity, context and visibility. Android Contacts remain authoritative for attached names and contact details.
+
+People searches only names, phone numbers and email, using case-insensitive terms that must all match. It opens an unfiltered profile and retains its directory query on return. Home remains universal recall, including saved context. This supersedes the earlier People deep-context search example in UX-05 (dogfood #45).
+
+Mention suggestions must survive keyboard touches and incremental full-name typing. Choosing Keep as text dismisses suggestions deliberately; ordinary keyboard input does not. Suggestions fit above or below the typing field within the space above the keyboard; long menus scroll and leave the header actions unobstructed. Last interaction displays the latest non-deleted event date, never a fact's recorded date or a manually edited date.
+
+Opening a configured backup folder is a best-effort viewing action with read access. An unavailable viewer or revoked access reports failure without changing backup configuration or reopening the folder picker.
+
+Invitation/decline tracking (#42) remains an exploration: saved notes can record this context today. Do not add counters, scores or obligations without a clear decision they would support. Keep Home and People as the primary bottom destinations; Settings remains reachable through the gear (#48), since configuration is occasional rather than a primary capture/recall task.
+
 ## 2026-11-22 — Clear identity for Hidden people
 
 People keeps its toolbar sync action without a duplicate import button beneath search. Hidden people uses a persistent eye-off icon, page label and distinct theme-based header color, including during bulk selection. The selected count appears beneath the page label, with room for enlarged text. Keep the explanation brief; color supplements the label and icon. Selection and visibility behavior remain governed by the non-destructive hiding decision.

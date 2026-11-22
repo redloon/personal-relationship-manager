@@ -19,6 +19,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.selected
@@ -54,6 +56,8 @@ fun AddEventSheet(
     initialText: String? = null,
     initialIsFact: Boolean = false
 ) {
+    val density = LocalDensity.current
+    var suggestionWidth by remember { mutableStateOf(112.dp) }
     val noteText by viewModel.noteText.collectAsState()
     val inlineTokens by viewModel.inlineTokens.collectAsState()
     val resumingDraft by viewModel.resumingDraft.collectAsState()
@@ -97,7 +101,7 @@ fun AddEventSheet(
                     resumingDraft && !conflict -> R.string.usability_resume_draft
                     isFact -> R.string.usability_add_fact
                     else -> R.string.capture_add_note
-                }), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                }), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f).onSizeChanged { suggestionWidth = with(density) { it.width.toDp().coerceAtLeast(1.dp) } })
                 IconButton(onClick = close, enabled = !saving) {
                     Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_close))
                 }
@@ -122,6 +126,7 @@ fun AddEventSheet(
                 }
                 if (isFact && selectedContactIds.size != 1) Text(stringResource(R.string.usability_fact_person_required), style = MaterialTheme.typography.bodySmall)
                 AutocompleteTextField(
+                    suggestionMaxWidth = suggestionWidth,
                     value = noteText, onValueChange = viewModel::onNoteChanged,
                     contacts = contacts.map { AutocompleteContact(it.id, it.displayName, it.phoneNumber) }, tags = viewModel.getAutocompleteTags(),
                     onContactSelected = viewModel::insertPersonToken, onTagSelected = viewModel::insertTagToken,

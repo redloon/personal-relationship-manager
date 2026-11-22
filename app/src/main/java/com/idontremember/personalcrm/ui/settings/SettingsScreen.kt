@@ -66,7 +66,8 @@ import java.util.Locale
 fun SettingsScreen(
     onBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
-    onHiddenPeople: () -> Unit = {}
+    onHiddenPeople: () -> Unit = {},
+    onAppOnlyPeople: () -> Unit = {}
 ) {
     val themeMode by viewModel.themeMode.collectAsState()
     val dynamicColor by viewModel.dynamicColor.collectAsState()
@@ -148,6 +149,7 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             SettingsSection(title = stringResource(R.string.recall_people), testTag = "settings_section_people") {
+                SettingsActionRow(title = stringResource(R.string.people_app_only_title), onClick = onAppOnlyPeople, testTag = "settings_app_only_people")
                 SettingsActionRow(title = stringResource(R.string.people_hidden_title), onClick = onHiddenPeople, testTag = "settings_hidden_people")
             }
             SettingsSection(

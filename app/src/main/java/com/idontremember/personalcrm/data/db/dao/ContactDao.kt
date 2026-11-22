@@ -28,6 +28,9 @@ interface ContactDao {
     @Query("SELECT * FROM contacts ORDER BY display_name COLLATE NOCASE")
     fun getAllIncludingHidden(): Flow<List<Contact>>
 
+    @Query("SELECT * FROM visible_contacts WHERE android_contact_id IS NULL ORDER BY display_name COLLATE NOCASE")
+    fun getAppOnly(): Flow<List<Contact>>
+
     @Query("SELECT * FROM contacts WHERE is_hidden = 1 ORDER BY display_name COLLATE NOCASE")
     fun getHidden(): Flow<List<Contact>>
 

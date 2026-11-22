@@ -6,8 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.idontremember.personalcrm.data.contacts.ContactsSyncManager
 import com.idontremember.personalcrm.data.db.entity.Contact
 import com.idontremember.personalcrm.data.repository.ContactRepository
-import com.idontremember.personalcrm.data.search.SearchRepository
-import com.idontremember.personalcrm.data.search.RecallSearch
+import com.idontremember.personalcrm.data.contacts.ContactDirectorySearch
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
@@ -26,16 +25,17 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+enum class PeopleListScope { ALL, HIDDEN, APP_ONLY }
+
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class ContactsListViewModel @Inject constructor(
     private val contactRepository: ContactRepository,
-    searchRepository: SearchRepository,
     private val savedState: SavedStateHandle
 ) : ViewModel() {
 
     val searchQuery = savedState.getStateFlow("people_query", "")
-    private val hiddenMode = savedState.getStateFlow("hidden_people", false)
+    private val scope = savedState.getStateFlow("people_scope", PeopleListScope.ALL.name)
     private val _selection = MutableStateFlow(PeopleSelection(
         savedState["selecting_people"] ?: false,
         savedState.get<LongArray>("selected_people")?.toSet().orEmpty()
@@ -51,7 +51,7 @@ class ContactsListViewModel @Inject constructor(
 
     data class VisibilityChange(val ids: Set<Long>, val hidden: Boolean)
 
-    fun configure(hidden: Boolean) { savedState["hidden_people"] = hidden }
+    fun configure(value: PeopleListScope) { savedState["people_scope"] = value.name }
 
     private fun setSelection(value: PeopleSelection) {
         _selection.value = value
@@ -66,7 +66,7 @@ class ContactsListViewModel @Inject constructor(
         if (!_bulkBusy.value) setSelection(_selection.value.selectAll(contacts.value.orEmpty().map { it.id }.toSet()))
     }
 
-    fun changeSelectedVisibility() = changeVisibility(_selection.value.ids, !hiddenMode.value)
+    fun changeSelectedVisibility() = changeVisibility(_selection.value.ids, scope.value != PeopleListScope.HIDDEN.name)
     fun retryVisibilityChange() { retryChange?.let { changeVisibility(it.ids, it.hidden) } }
 
     fun changeVisibility(ids: Set<Long>, hidden: Boolean) {
@@ -97,32 +97,23 @@ class ContactsListViewModel @Inject constructor(
     private val refreshTrigger = MutableStateFlow(0)
 
     /** Filtering never changes the selection; only unavailable records prune it. */
-    private val availablePeople = hiddenMode.flatMapLatest { hidden ->
-        if (hidden) contactRepository.getHiddenContacts() else contactRepository.getAllContacts()
+    private val availablePeople = scope.flatMapLatest { name ->
+        when (PeopleListScope.valueOf(name)) {
+            PeopleListScope.ALL -> contactRepository.getAllContacts()
+            PeopleListScope.HIDDEN -> contactRepository.getHiddenContacts()
+            PeopleListScope.APP_ONLY -> contactRepository.getAppOnlyContacts()
+        }
     }.onEach { people -> setSelection(_selection.value.reconcile(people.map { it.id }.toSet())) }
 
     val contacts: StateFlow<List<Contact>?> = refreshTrigger.flatMapLatest {
-        combine(availablePeople, searchRepository.entries, searchQuery) { people, entries, query ->
-            if (query.isBlank()) people else if (hiddenMode.value) {
-                people.filter { person ->
-                    listOfNotNull(person.displayName, person.phoneNumber, person.email)
-                        .any { it.contains(query.trim(), ignoreCase = true) }
-                }
-            } else {
-                val matches = withContext(Dispatchers.Default) { RecallSearch.find(entries, query) }
-                val ids = matches.flatMap { it.personIds.trim(',').split(',').mapNotNull(String::toLongOrNull) }.toSet()
-                people.filter { it.id in ids }
-            }
+        combine(availablePeople, searchQuery) { people, query ->
+            withContext(Dispatchers.Default) { ContactDirectorySearch.find(people, query) }
         }.onEach { _loadError.value = null }.catch { e ->
             if (e is CancellationException) throw e
             _loadError.value = e.message ?: "People unavailable"
             emit(emptyList())
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
-    val matchingExcerpts = combine(searchRepository.entries, searchQuery) { entries, query ->
-        withContext(Dispatchers.Default) { RecallSearch.personExcerpts(entries, query) }
-    }.catch { emit(emptyMap()) }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     fun onSearchQueryChanged(query: String) { savedState["people_query"] = query }
 

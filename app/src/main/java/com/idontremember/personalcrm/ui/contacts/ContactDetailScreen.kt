@@ -101,7 +101,7 @@ fun ContactDetailScreen(
             IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back)) }
         }, actions = {
             if (contact != null) IconButton(onClick = { newName = contact?.displayName.orEmpty(); rename = true }, modifier = Modifier.testTag("edit_person_button")) {
-                Icon(Icons.Default.Edit, stringResource(R.string.reading_edit_person))
+                Icon(Icons.Default.Edit, stringResource(if (contact?.androidContactId == null) R.string.people_edit_name else R.string.reading_edit_person))
             }
         }) },
         snackbarHost = { SnackbarHost(snackbar) },
@@ -122,6 +122,13 @@ fun ContactDetailScreen(
             !loaded -> LoadingState(Modifier.fillMaxSize().padding(padding), "contact_detail_loading_state")
             contact == null -> ErrorState(stringResource(R.string.error_contact_not_found), modifier = Modifier.fillMaxSize().padding(padding), testTag = "contact_detail_error_state")
             else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).testTag("contact_detail_screen"), contentPadding = PaddingValues(bottom = 16.dp)) {
+                item {
+                    if (contact?.androidContactId == null) Text(stringResource(R.string.people_app_only_status), style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("app_only_status"))
+                    val latest = events.maxOfOrNull { it.eventDate }
+                    Text(stringResource(R.string.people_last_interaction, latest?.let { formatEventDateText(it, dateDisplay) }
+                        ?: stringResource(R.string.people_no_interactions)), style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(vertical = 8.dp).testTag("last_interaction"))
+                }
                 item { SearchField(query, { query = it }, stringResource(R.string.recall_person_search), "clear_person_search", Modifier.fillMaxWidth().testTag("person_search")) }
                 if (query.isNotBlank()) {
                     val matches = RecallSearch.find(entries.orEmpty(), query, contactId).filter { it.kind != "person" }
@@ -167,19 +174,19 @@ fun ContactDetailScreen(
     readingFollowUp?.let { id -> FollowUpReader(existingId = id, onDismiss = { readingFollowUp = null }, onContact = { readingFollowUp = null; onContactClick(it) }, onEdit = { readingFollowUp = null; editingFollowUp = it }) }
     editingFollowUp?.let { id -> FollowUpEditor(existingId = id, onDismiss = { editingFollowUp = null }) }
     if(rename) AlertDialog(modifier = Modifier.exposeTestTags(),
-        onDismissRequest = { rename = false }, title = { Text(stringResource(R.string.reading_edit_person)) },
+        onDismissRequest = { rename = false }, title = { Text(stringResource(if (contact?.androidContactId == null) R.string.people_edit_name else R.string.reading_edit_person)) },
         text = { Column {
             OutlinedTextField(newName, { newName = it }, label = { Text(stringResource(R.string.recall_person_name)) }, singleLine = true,
                 enabled = contact?.androidContactId == null, modifier = Modifier.fillMaxWidth().testTag("rename_person_name"))
             contact?.androidContactId?.let { androidId ->
                 Text(stringResource(R.string.reading_edit_android_name), style = MaterialTheme.typography.bodySmall)
-                TextButton(onClick = {
+                TextButton(modifier = Modifier.testTag("open_android_contact"), onClick = {
                     val current = contact
                     val uri = current?.lookupKey?.let { ContactsContract.Contacts.getLookupUri(androidId, it) } ?: ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, androidId)
                     try { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) } catch (_: Exception) { Toast.makeText(context, unavailable, Toast.LENGTH_SHORT).show() }
                 }) { Text(stringResource(R.string.pilot_open_contact)) }
             }
-            TextButton(onClick = {
+            if (contact?.androidContactId == null) TextButton(onClick = {
                 if(ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) picker.launch(null)
                 else permission.launch(Manifest.permission.READ_CONTACTS)
             }, enabled = !linking, modifier = Modifier.testTag("link_android_contact")) { Text(stringResource(R.string.recall_link_android)) }
