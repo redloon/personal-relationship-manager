@@ -101,4 +101,33 @@ Reviewed the pending changes against the product decisions and recovered the pri
 - Fresh navigation job `95191e9a5309493f874c8c3e437250ff` passed **3 tests** on `android_tests`. Full job `07a5cdb6b7db49489ec88b08b318da94` reached the runner's 180-second limit; it is not a full-suite pass. Both jobs reached terminal cleanup and all log chunks were consumed.
 - The three previous worker worktrees were fully archived under `ignored/cleanup-2026-11-22/`, including ignored files, their Git indexes, staged/working patches and status. Every archived file and symlink was verified against its source. Their differing revisions predate the final integration fixes; none contained a changed file missing from the main checkout.
 - The archived worker worktrees and their merged-base branches were removed after committing the integrated implementation. The separately active host checkout `usability/nightly-2026-11-21` was preserved; its `/tmp` path is outside this sandbox.
-- A fresh class-by-class rerun was blocked by another host/sandbox connection taking the runner lock and repeatedly replacing the shared inbox with different APK hashes. No class job was created by those rejected submissions. Do not interpret the historical 119-test coverage as a fresh full-suite pass. Resume the class runs with exclusive inbox access; the current build itself remains unchanged and validated.
+- Initial class submissions were rejected while another host task held the runner or replaced the shared APK inbox. After that task was paused, a fresh run passed **all 119 Android tests across all 26 classes**, listed below, against the exact final app and test hashes above. Every job reached terminal cleanup and all integer-offset log chunks were consumed. This is complete class-by-class coverage; the single unfiltered run remains limited by the trusted runner's timeout. Detailed local provenance is in `ignored/cleanup-2026-11-22/android-class-runs.json`.
+
+| Fresh test class | Tests | Passing job |
+| --- | ---: | --- |
+| AppLaunchTest | 3 | `c50e89f6676f4deba8ff719692592d11` |
+| ContactsSyncStressTest | 11 | `60a912abfc1b4e368342b199bcd08adc` |
+| data.db.AppDatabaseMigrationTest | 4 | `7d796223bbc241b485cf8aba84cedbf1` |
+| data.db.AppDatabaseTest | 7 | `96337d5566e84778ac2d569a3c3e0188` |
+| data.db.BackupRestoreTest | 7 | `76d84148f2fb41faad5eb89724c95c59` |
+| data.db.FollowUpRepositoryTest | 4 | `b072b0a23edb49de93e127e2ce01e506` |
+| data.db.InlineTokenMigrationTest | 1 | `27c02a9b388c4e79abc6da157bfd9dc1` |
+| data.db.RecallMigrationTest | 1 | `1698ecb09b624c138db6c7af1de75fc1` |
+| data.search.RecallDaoTest | 4 | `4ac5e1a406994bbdad832fdd884ae9f1` |
+| ui.AccessibilityResourceIdsTest | 4 | `afeb556661fd48efb61a7f0d4fcdc602` |
+| ui.AccessibilitySmokeTest | 4 | `9925da41fd4344db97b4010b30a5be89` |
+| ui.AddEventSheetTest | 17 | `10d943f6bba74830a726b87f0de4a8a7` |
+| ui.CaptureViewportTest | 1 | `f3c7bce619364a1880f7e3b186b19e2e` |
+| ui.ContactsListScreenTest | 7 | `a20e2b86ef8549d8b738a84620914f3f` |
+| ui.DashboardTest | 6 | `4456a5c1d85f42e9965c6fe8b878ef11` |
+| ui.EventContactNavigationTest | 3 | `8478bfd131e24f32a5e4336a656a7fd6` |
+| ui.EventsListScreenTest | 3 | `6b108c8af0ac49bf835fd3c18f710b83` |
+| ui.EventsSearchTest | 4 | `fef4773771ee478fbe176f941da9ecd9` |
+| ui.FollowUpsTest | 5 | `e1e327eb9d4a4cf8b45eb10430cab173` |
+| ui.NavigationTest | 4 | `16a79e6d09b64886825bdeba5d829624` |
+| ui.QuickAddActivityTest | 2 | `52f113c5a9794eb4b07cfd49eeb76b80` |
+| ui.ReadingUsabilityTest | 4 | `2b68fd3a5232434a8fc4f9e837538173` |
+| ui.RestoreFlowTest | 3 | `39346ea9b89f4f2f9161e3f204939a26` |
+| ui.SettingsScreenTest | 4 | `eef038eddebb4021b5fbd6fef4cf841d` |
+| ui.ShareCaptureTest | 3 | `ab750057dd3d457f97af79d28952b21b` |
+| ui.UsabilityNavigationTest | 3 | `dc3a27258cbe42239f844f4cca1db13e` |
