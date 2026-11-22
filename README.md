@@ -2,6 +2,14 @@
 
 An Android app for tracking contacts, interactions, and personal facts. Built with Jetpack Compose, Hilt, Room, and Navigation3.
 
+## License and project policy
+
+Copyright (C) 2026 Kevin Quinn. Personal CRM is free and open-source software, licensed under the [GNU General Public License, version 3 or later](LICENSE) (`GPL-3.0-or-later`). Distributed modified versions must comply with the GPL, including its corresponding-source requirements.
+
+This project will remain free to use and will not be monetized. This is our project policy; the GPL permits others to use and distribute the software commercially under its terms.
+
+Files with existing third-party notices retain their stated licenses. A copy of the [Apache License 2.0](LICENSES/Apache-2.0.txt) is included for the Android and Gradle files carrying those notices. Dependencies retain their own licenses.
+
 ## Quick Start
 
 ```bash
