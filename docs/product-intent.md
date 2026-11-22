@@ -86,6 +86,8 @@ If a feature fails any of these, it goes on the backlog for later — not now.
 
 ## What This Should Feel Like
 
+Concrete human preferences and audit checks live in [usability principles](usability-principles.md). Use them alongside the product decisions when judging capture and recall changes.
+
 The Greenfeld framing is right: staying in touch should require little effort but have unlimited upside. The app is a 30-second interaction, not a system to tend. Open, jot, close. Open, scan, go talk to the person. That's it.
 
 If it ever feels like maintaining the app is itself a relationship I have to tend, something went wrong.

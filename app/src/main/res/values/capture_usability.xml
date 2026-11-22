@@ -1,0 +1,17 @@
+<resources>
+    <string name="usability_tag_label">#%1$s</string>
+    <string name="usability_create_person">Create person</string>
+    <string name="usability_new_person">New person</string>
+    <string name="usability_full_name">Full name</string>
+    <string name="usability_different_person">Different person with this name</string>
+    <string name="usability_use_existing">Use existing %1$s</string>
+    <string name="usability_person_saved">Saved %1$s</string>
+    <string name="usability_create_failed">Couldn’t create this person. Try again.</string>
+    <string name="usability_no_people_linked">No people linked · Add person</string>
+    <string name="usability_add_fact">Add fact</string>
+    <string name="usability_fact_prompt">What would you like to remember?</string>
+    <string name="usability_fact_person_required">Choose one person for this fact</string>
+    <string name="usability_resume_draft">Resume draft</string>
+    <string name="usability_capture_actions">Capture actions</string>
+    <string name="usability_keep_text">Keep as text</string>
+</resources>

@@ -32,13 +32,6 @@ class ContactsListViewModel @Inject constructor(
 ) : ViewModel() {
 
     val searchQuery = savedState.getStateFlow("people_query", "")
-    private val _creating = MutableStateFlow(false)
-    val creating: StateFlow<Boolean> = _creating
-    private val _createError = MutableStateFlow(false)
-    val createError: StateFlow<Boolean> = _createError
-    private val _created = MutableStateFlow<Long?>(null)
-    val created: StateFlow<Long?> = _created
-
     private val _syncState = MutableStateFlow<SyncState>(SyncState.Idle)
     val syncState: StateFlow<SyncState> = _syncState
 
@@ -60,20 +53,11 @@ class ContactsListViewModel @Inject constructor(
         }.onEach { _loadError.value = null }.catch { e -> _loadError.value = e.message; emit(emptyList()) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    fun onSearchQueryChanged(query: String) { savedState["people_query"] = query }
+    val matchingExcerpts = combine(searchRepository.entries, searchQuery) { entries, query ->
+        withContext(Dispatchers.Default) { RecallSearch.personExcerpts(entries, query) }
+    }.catch { emit(emptyMap()) }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
-    fun createPerson(name: String) {
-        if (name.isBlank() || _creating.value) return
-        _creating.value = true
-        _createError.value = false
-        viewModelScope.launch {
-            try { _created.value = contactRepository.createLocalContact(name.trim()) }
-            catch (e: kotlinx.coroutines.CancellationException) { throw e }
-            catch (_: Exception) { _createError.value = true }
-            finally { _creating.value = false }
-        }
-    }
-    fun consumeCreated() { _created.value = null }
+    fun onSearchQueryChanged(query: String) { savedState["people_query"] = query }
 
     fun syncContacts() {
         viewModelScope.launch {

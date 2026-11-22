@@ -25,6 +25,7 @@
 
 ## UI conventions
 
+- Read `docs/usability-principles.md` before UI changes or audits. Preserve confirmed human preferences; keep implementation defaults distinct from preferences.
 - Inspect sibling screens and `ui/components` before UI work. Reuse shared controls such as `SearchField` and `SettingsButton`, and fix repeated interactions in those components.
 - Test user-visible behavior and explain intentional deviations from shared patterns.
 

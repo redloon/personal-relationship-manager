@@ -1,5 +1,9 @@
 package com.idontremember.personalcrm.data.repository
 
+import androidx.room.withTransaction
+import com.idontremember.personalcrm.data.db.AppDatabase
+import com.idontremember.personalcrm.data.capture.InlineTokens
+import com.idontremember.personalcrm.data.capture.TokenTarget
 import com.idontremember.personalcrm.data.db.dao.TagDao
 import com.idontremember.personalcrm.data.db.entity.Tag
 import kotlinx.coroutines.flow.Flow
@@ -8,7 +12,8 @@ import javax.inject.Singleton
 
 @Singleton
 class TagRepository @Inject constructor(
-    private val tagDao: TagDao
+    private val tagDao: TagDao,
+    private val database: AppDatabase
 ) {
 
     fun getAllTags(): Flow<List<Tag>> = tagDao.getAll()
@@ -21,5 +26,12 @@ class TagRepository @Inject constructor(
 
     suspend fun getOrCreateTag(name: String): Tag = tagDao.getOrCreate(name)
 
-    suspend fun deleteTag(tag: Tag) = tagDao.delete(tag)
+    suspend fun deleteTag(tag: Tag) = database.withTransaction {
+        for (event in database.eventDao().getAllOnce()) {
+            val tokens = InlineTokens.decode(event.inlineTokens)
+            val kept = tokens.filterNot { it.target == TokenTarget.Tag(tag.name) }
+            if (kept != tokens) database.eventDao().update(event.copy(inlineTokens = InlineTokens.encode(kept)))
+        }
+        tagDao.delete(tag)
+    }
 }

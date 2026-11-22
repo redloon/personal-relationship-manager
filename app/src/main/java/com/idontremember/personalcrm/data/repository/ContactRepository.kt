@@ -1,5 +1,8 @@
 package com.idontremember.personalcrm.data.repository
 
+import com.idontremember.personalcrm.data.capture.ContactNames
+import com.idontremember.personalcrm.data.capture.InlineTokens
+import com.idontremember.personalcrm.data.capture.TokenTarget
 import androidx.room.withTransaction
 import com.idontremember.personalcrm.data.db.AppDatabase
 import com.idontremember.personalcrm.data.contacts.ContactsSyncManager
@@ -38,10 +41,11 @@ class ContactRepository @Inject constructor(
 
     suspend fun insertManually(contact: Contact): Long = contactDao.insert(contact)
 
-    suspend fun createLocalContact(name: String): Long {
+    suspend fun createLocalContact(name: String, allowDuplicate: Boolean = false): Long = database.withTransaction {
         val trimmed = name.trim()
         require(trimmed.isNotEmpty()) { "A name is required" }
-        return contactDao.insert(Contact(displayName = trimmed))
+        if (!allowDuplicate) contactDao.getAllOnce().firstOrNull { ContactNames.key(it.displayName) == ContactNames.key(trimmed) }?.let { return@withTransaction it.id }
+        contactDao.insert(Contact(displayName = trimmed))
     }
 
     suspend fun renameLocalContact(id: Long, name: String) {
@@ -83,6 +87,16 @@ class ContactRepository @Inject constructor(
             }
         }
         for((a,b,label) in links) sql.execSQL("INSERT OR IGNORE INTO relationships(contact_a, contact_b, label) VALUES (?, ?, ?)", arrayOf<Any>(a,b,label))
+        val tokenUpdates = mutableListOf<Pair<Long, String>>()
+        sql.query("SELECT id, inline_tokens FROM events").use { cursor ->
+            while (cursor.moveToNext()) {
+                val tokens = InlineTokens.decode(cursor.getString(1))
+                if (tokens.any { it.target == TokenTarget.Person(remove) }) {
+                    tokenUpdates += cursor.getLong(0) to InlineTokens.encode(tokens.map { if (it.target == TokenTarget.Person(remove)) it.copy(target = TokenTarget.Person(keep)) else it })
+                }
+            }
+        }
+        for ((id, tokens) in tokenUpdates) sql.execSQL("UPDATE events SET inline_tokens = ? WHERE id = ?", arrayOf<Any>(tokens, id))
         sql.execSQL("DELETE FROM contacts WHERE id = ?", arrayOf(remove))
     }
 

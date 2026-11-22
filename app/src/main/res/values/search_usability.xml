@@ -1,0 +1,22 @@
+<resources>
+    <string name="search_history_title">History</string>
+    <string name="search_all_types">All</string>
+    <string name="search_notes_type">Notes</string>
+    <string name="search_facts_type">Facts</string>
+    <string name="search_followups_type">Follow-ups</string>
+    <string name="search_saved_context">Saved context</string>
+    <string name="search_resume_draft">Resume draft</string>
+    <string name="search_view_all">View all</string>
+    <string name="search_history_hint">Search saved notes, facts and follow-ups</string>
+    <string name="search_history_empty">No saved records yet.</string>
+    <string name="search_history_no_matches">No saved records match your search.</string>
+    <string name="search_tag_people_empty">No people linked to this tag.</string>
+    <string name="search_tag_notes_empty">No notes with this tag.</string>
+    <string name="search_tag_missing">This tag is no longer available.</string>
+    <string name="search_tag_direct">Direct</string>
+    <string name="search_tag_via_note">Via note</string>
+    <string name="search_tag_both">Direct · Via note</string>
+    <string name="search_open_tag">Open tag %1$s</string>
+    <string name="search_delete_tag">Delete tag %1$s</string>
+    <string name="search_tag_hint">Search tags</string>
+</resources>

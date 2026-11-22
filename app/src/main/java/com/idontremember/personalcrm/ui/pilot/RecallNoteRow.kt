@@ -1,43 +1,40 @@
 package com.idontremember.personalcrm.ui.pilot
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.ui.semantics.Role
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.EventAvailable
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.res.stringResource
-import com.idontremember.personalcrm.ui.components.exposeTestTags
-import com.idontremember.personalcrm.R
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import com.idontremember.personalcrm.ui.components.*
-import com.idontremember.personalcrm.data.db.entity.Tag
+import com.idontremember.personalcrm.R
 import com.idontremember.personalcrm.data.settings.DateDisplay
 import com.idontremember.personalcrm.data.search.RecallEntry
 import com.idontremember.personalcrm.data.search.RecallSearch
-import com.idontremember.personalcrm.ui.followups.FollowUpsSection
-import java.text.DateFormat
-import java.util.Date
+import com.idontremember.personalcrm.ui.components.formatEventDateText
+import com.idontremember.personalcrm.ui.followups.FollowUpStatus
+import com.idontremember.personalcrm.ui.reading.RecordPreview
 
 @Composable
 fun RecallNoteRow(row: RecallEntry, query: String, dateDisplay: DateDisplay = DateDisplay.ABSOLUTE, onClick: () -> Unit) {
     val kind = stringResource(when (row.kind) { "fact" -> R.string.recall_fact; "followup" -> R.string.recall_followup; else -> R.string.recall_event })
+    val excerpt = RecallSearch.excerpt(row.text, query)
+    val source = row.text.replace(Regex("\\s+"), " ").trim()
     ListItem(
-        headlineContent = { Text(RecallSearch.excerpt(row.text, query), maxLines = 3, overflow = TextOverflow.Ellipsis) },
+        headlineContent = { RecordPreview(excerpt, onClick, sourceTruncated = excerpt != source) },
         overlineContent = { Text(listOf(kind, row.title).filter { it.isNotBlank() }.joinToString(" · ")) },
-        supportingContent = { val date = formatEventDateText(row.date, dateDisplay); Text(if(row.kind == "fact") stringResource(R.string.pilot_recorded, date) else date) },
+        supportingContent = {
+            if (row.kind == "followup") FollowUpStatus(row.dueDate, row.completedAt)
+            else {
+                val date = formatEventDateText(row.date, dateDisplay)
+                Text(if (row.kind == "fact") stringResource(R.string.pilot_recorded, date) else date)
+            }
+        },
+        leadingContent = if (row.kind == "followup") { { Icon(Icons.Default.EventAvailable, null, tint = MaterialTheme.colorScheme.tertiary) } } else null,
+        colors = if (row.kind == "followup") ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = .35f)) else ListItemDefaults.colors(),
         modifier = Modifier.fillMaxWidth().testTag("recall_${row.kind}_${row.id}").clickable(onClick = onClick)
     )
 }

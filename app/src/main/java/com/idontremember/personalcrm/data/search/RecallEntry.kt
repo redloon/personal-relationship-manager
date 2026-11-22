@@ -9,7 +9,10 @@ data class RecallEntry(
     val text: String,
     val date: Long,
     val personIds: String,
-    val searchText: String
+    val searchText: String,
+    val dueDate: String? = null,
+    val completedAt: Long? = null,
+    val createdAt: Long = date
 ) {
     val key: String get() = "$kind:$id"
     fun belongsTo(personId: Long): Boolean = personIds.contains(",$personId,")

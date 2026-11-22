@@ -1,5 +1,7 @@
 package com.idontremember.personalcrm.data.repository
 
+import com.idontremember.personalcrm.data.capture.InlineToken
+import com.idontremember.personalcrm.data.capture.InlineTokens
 import androidx.room.withTransaction
 import com.idontremember.personalcrm.data.db.AppDatabase
 import com.idontremember.personalcrm.data.db.dao.ContactDao
@@ -68,9 +70,11 @@ class EventRepository @Inject constructor(
         note: String,
         contactIds: List<Long>,
         tagNames: List<String>,
-        eventDate: Long = System.currentTimeMillis()
+        eventDate: Long = System.currentTimeMillis(),
+        inlineTokens: List<InlineToken> = emptyList()
     ): Long = database.withTransaction {
-        val event = Event(note = note, eventDate = eventDate)
+        InlineTokens.validate(note, inlineTokens, contactIds.toSet(), tagNames.toSet())
+        val event = Event(note = note, eventDate = eventDate, inlineTokens = InlineTokens.encode(inlineTokens))
         val eventId = eventDao.insert(event)
 
         // Link contacts
@@ -95,10 +99,12 @@ class EventRepository @Inject constructor(
         note: String,
         contactIds: List<Long>,
         tagNames: List<String>,
-        eventDate: Long
+        eventDate: Long,
+        inlineTokens: List<InlineToken> = emptyList()
     ) = database.withTransaction {
         val existing = eventDao.getById(eventId) ?: return@withTransaction
-        eventDao.update(existing.copy(note = note, eventDate = eventDate, updatedAt = System.currentTimeMillis()))
+        InlineTokens.validate(note, inlineTokens, contactIds.toSet(), tagNames.toSet())
+        eventDao.update(existing.copy(note = note, eventDate = eventDate, updatedAt = System.currentTimeMillis(), inlineTokens = InlineTokens.encode(inlineTokens)))
 
         // Replace links
         eventDao.deleteEventContacts(eventId)

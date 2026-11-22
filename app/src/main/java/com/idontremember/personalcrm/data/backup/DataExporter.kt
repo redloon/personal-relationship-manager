@@ -1,5 +1,6 @@
 package com.idontremember.personalcrm.data.backup
 
+import com.idontremember.personalcrm.data.capture.InlineTokens
 import android.content.Context
 import androidx.core.app.NotificationManagerCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -23,7 +24,7 @@ import javax.inject.Singleton
 
 @Serializable
 data class BackupSnapshot(
-    val schemaVersion: Int = 2,
+    val schemaVersion: Int = 3,
     val app: String = "personal-crm",
     val exportedAt: String,
     val contacts: List<ContactRecord>,
@@ -40,7 +41,7 @@ data class BackupSnapshot(
 @Serializable data class ContactRecord(val id: Long, val androidContactId: Long?, val displayName: String,
     val phoneNumber: String?, val email: String?, val photoUri: String?, val createdAt: Long, val updatedAt: Long)
 @Serializable data class FactRecord(val id: Long, val contactId: Long, val text: String, val createdAt: Long, val deletedAt: Long? = null)
-@Serializable data class EventRecord(val id: Long, val note: String, val eventDate: Long, val createdAt: Long, val updatedAt: Long, val deletedAt: Long? = null)
+@Serializable data class EventRecord(val id: Long, val note: String, val eventDate: Long, val createdAt: Long, val updatedAt: Long, val deletedAt: Long? = null, val inlineTokens: String = "[]")
 @Serializable data class TagRecord(val id: Long, val name: String, val createdAt: Long)
 @Serializable data class EventContactRecord(val eventId: Long, val contactId: Long)
 @Serializable data class EventTagRecord(val eventId: Long, val tagId: Long)
@@ -67,7 +68,7 @@ object BackupJson {
         val fields = json.parseToJsonElement(source).jsonObject
         require("schemaVersion" in fields && "app" in fields) { "Missing backup header" }
         val snapshot = json.decodeFromString(BackupSnapshot.serializer(), source)
-        require(snapshot.schemaVersion in 1..2 && snapshot.app == "personal-crm") { "Unsupported backup" }
+        require(snapshot.schemaVersion in 1..3 && snapshot.app == "personal-crm") { "Unsupported backup" }
         require(snapshot.exportedAt.isNotBlank()) { "Missing export time" }
         fun <T> ids(items: List<T>, id: (T) -> Long): Set<Long> {
             val values = items.map(id)
@@ -90,6 +91,12 @@ object BackupJson {
             snapshot.eventTags.distinct().size == snapshot.eventTags.size) { "Invalid event tag link" }
         require(snapshot.contactTags.all { it.contactId in contactIds && it.tagId in tagIds } && snapshot.contactTags.distinct().size == snapshot.contactTags.size) { "Invalid contact tag" }
         require(snapshot.relationships.all { it.contactA in contactIds && it.contactB in contactIds && it.contactA < it.contactB && it.label.isNotBlank() } && snapshot.relationships.distinct().size == snapshot.relationships.size) { "Invalid relationship" }
+        val tagsById = snapshot.tags.associateBy { it.id }
+        for (event in snapshot.events) {
+            InlineTokens.validate(event.note, InlineTokens.decode(event.inlineTokens),
+                snapshot.eventContacts.filter { it.eventId == event.id }.map { it.contactId }.toSet(),
+                snapshot.eventTags.filter { it.eventId == event.id }.mapNotNull { tagsById[it.tagId]?.name }.toSet())
+        }
         return snapshot
     }
 }
@@ -106,7 +113,7 @@ class DataExporter @Inject constructor(private val database: AppDatabase,
                 contacts = database.contactDao().getAllOnce().map { ContactRecord(it.id, it.androidContactId, it.displayName,
                     it.phoneNumber, it.email, it.photoUri, it.createdAt, it.updatedAt) },
                 facts = database.contactFactDao().getAllOnce().map { FactRecord(it.id, it.contactId, it.text, it.createdAt, it.deletedAt) },
-                events = database.eventDao().getAllOnce().map { EventRecord(it.id, it.note, it.eventDate, it.createdAt, it.updatedAt, it.deletedAt) },
+                events = database.eventDao().getAllOnce().map { EventRecord(it.id, it.note, it.eventDate, it.createdAt, it.updatedAt, it.deletedAt, it.inlineTokens) },
                 tags = database.tagDao().getAllOnce().map { TagRecord(it.id, it.name, it.createdAt) },
                 eventContacts = database.eventDao().getAllEventContacts().map { EventContactRecord(it.eventId, it.contactId) },
                 eventTags = database.eventDao().getAllEventTags().map { EventTagRecord(it.eventId, it.tagId) },
@@ -128,7 +135,7 @@ class DataExporter @Inject constructor(private val database: AppDatabase,
             database.tagDao().deleteAll()
             snapshot.contacts.forEach { database.contactDao().insert(Contact(it.id, null, it.displayName,
                 it.phoneNumber, it.email, null, it.createdAt, it.updatedAt)) }
-            snapshot.events.forEach { database.eventDao().insert(Event(it.id, it.note, it.eventDate, it.createdAt, it.updatedAt, it.deletedAt)) }
+            snapshot.events.forEach { database.eventDao().insert(Event(it.id, it.note, it.eventDate, it.createdAt, it.updatedAt, it.deletedAt, it.inlineTokens)) }
             snapshot.tags.forEach { database.tagDao().insert(Tag(it.id, it.name, it.createdAt)) }
             snapshot.facts.forEach { database.contactFactDao().insert(ContactFact(it.id, it.contactId, it.text, it.createdAt, it.deletedAt)) }
             snapshot.followUps.forEach { database.followUpDao().insert(FollowUp(it.id, it.contactId, it.text,

@@ -54,6 +54,17 @@ class BackupJsonTest {
             followUps = listOf(FollowUpRecord(9, 1, "Ask", "2026-02-31", null, null, 1, 1, null))))) }
     }
 
+    @Test fun inlineTokensRoundTripAndRequireRealAssociations() {
+        val tokens = com.idontremember.personalcrm.data.capture.InlineTokens.encode(listOf(
+            com.idontremember.personalcrm.data.capture.InlineToken(0, 5, com.idontremember.personalcrm.data.capture.TokenTarget.Person(1))))
+        val linked = snapshot.copy(events = listOf(EventRecord(3, "@Maya at coffee", 30, 11, 12, inlineTokens = tokens)))
+        assertEquals(linked, BackupJson.decode(BackupJson.encode(linked)))
+        assertFailure { BackupJson.decode(BackupJson.encode(linked.copy(eventContacts = emptyList()))) }
+        val old = BackupJson.encode(snapshot.copy(schemaVersion = 2)).replace(",\n            \"inlineTokens\": \"[]\"", "")
+        org.junit.Assert.assertFalse(old.contains("inlineTokens"))
+        assertEquals("[]", BackupJson.decode(old).events.single().inlineTokens)
+    }
+
     private fun assertFailure(block: () -> Unit) {
         try { block(); throw AssertionError("Expected invalid backup") }
         catch (_: IllegalArgumentException) { }

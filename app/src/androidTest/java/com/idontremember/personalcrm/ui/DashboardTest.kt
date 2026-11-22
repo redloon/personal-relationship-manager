@@ -8,6 +8,7 @@ import com.idontremember.personalcrm.data.db.entity.*
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -32,18 +33,28 @@ class DashboardTest {
         ui.waitUntilTagDisplayed("dashboard_person_$alice", 10_000)
         ui.onNodeWithTag("dashboard_person_$alice").performClick()
         ui.waitUntilTagDisplayed("contact_detail_screen", 10_000)
-        ui.onNodeWithTag("person_management").performScrollTo().performClick()
-        ui.onNodeWithTag("relationship_add").performScrollTo().performClick()
+        ui.waitForKeyboard(visible = false)
+        ui.onNodeWithTag("clear_person_search").performClick()
+        ui.onNodeWithTag("contact_detail_screen").performScrollToNode(hasTestTag("person_management"))
+        ui.onNodeWithTag("person_management").assertIsDisplayed().performClick()
+        ui.onNodeWithTag("contact_detail_screen").performScrollToNode(hasTestTag("relationship_add"))
+        ui.onNodeWithTag("relationship_add").assertIsDisplayed().performClick()
         ui.onNodeWithTag("add_event_sheet").assertDoesNotExist()
         ui.waitUntilTagDisplayed("relationship_label", 10_000)
         ui.onNodeWithTag("relationship_label").performTextInput("Friend")
-        ui.onNodeWithText("Bob Relationship").performScrollTo().performClick()
+        ui.onNodeWithText("Bob Relationship").performScrollTo().assertIsDisplayed().performClick()
         ui.onNodeWithTag("relationship_confirm").performClick()
         ui.waitUntilTagExists("relationship_person_$bob", 10_000)
-        ui.onNodeWithTag("relationship_person_$bob").performScrollTo().performClick()
-        ui.onNodeWithTag("person_management").performScrollTo().performClick()
+        ui.onNodeWithTag("contact_detail_screen").performScrollToNode(hasTestTag("relationship_person_$bob"))
+        ui.onNodeWithTag("relationship_person_$bob").assertIsDisplayed().performClick()
+        ui.onNodeWithTag("contact_detail_screen").performScrollToNode(hasTestTag("person_management"))
+        ui.onNodeWithTag("person_management").assertIsDisplayed().performClick()
         ui.waitUntilTagExists("relationship_person_$alice", 10_000)
-        ui.onNodeWithTag("relationship_remove_$alice").performScrollTo().performClick()
+        ui.onNodeWithTag("contact_detail_screen").performScrollToNode(hasTestTag("relationship_remove_$alice"))
+        ui.onNodeWithTag("relationship_remove_$alice").assertIsDisplayed().performClick()
+        // Check persistence before the UI; this distinguishes a missed tap from a stale row.
+        ui.waitUntil(10_000) { runBlocking { db.pilotDao().allRelationships().isEmpty() } }
+        assertTrue("Removing the relationship must delete its database link", runBlocking { db.pilotDao().allRelationships().isEmpty() })
         ui.waitUntil(10_000) { ui.onAllNodesWithTag("relationship_person_$alice").fetchSemanticsNodes().isEmpty() }
     }
 
@@ -68,7 +79,7 @@ class DashboardTest {
         ui.onNodeWithText("Hidden Bob").assertDoesNotExist()
     }
 
-    @Test fun forgottenFactCanBeFoundAndEditedWithoutKnowingName() {
+    @Test fun forgottenFactOpensForReadingBeforeExplicitEditing() {
         val factId = runBlocking {
             val person = db.contactDao().insert(Contact(displayName = "Morgan Recall"))
             db.contactFactDao().insert(ContactFact(contactId = person, text = "Enjoys climbing outdoors"))
@@ -77,6 +88,10 @@ class DashboardTest {
         ui.onNodeWithTag("dashboard_search").performTextInput("climbing")
         ui.waitUntilTagDisplayed("recall_fact_$factId", 10_000)
         ui.onNodeWithTag("recall_fact_$factId").performClick()
+        ui.waitUntilTagDisplayed("fact_reader", 10_000)
+        ui.onNodeWithTag("add_event_sheet").assertDoesNotExist()
+        ui.onNodeWithTag("fact_reader_text").assertTextEquals("Enjoys climbing outdoors")
+        ui.onNodeWithTag("fact_reader_edit").performClick()
         ui.waitUntilTagDisplayed("add_event_sheet", 10_000)
         ui.onNodeWithTag("note_text_field").assertTextContains("Enjoys climbing outdoors", substring = true)
     }
@@ -101,5 +116,15 @@ class DashboardTest {
         ui.waitUntilTagDisplayed("settings_button", 10_000)
         ui.onNodeWithTag("settings_button").performClick()
         ui.waitUntilTagDisplayed("settings_screen", 10_000)
+    }
+    @Test fun homeLimitsRecentPreviewAndKeepsFollowUpsDiscoverable() {
+        runBlocking {
+            repeat(20) { db.eventDao().insert(Event(note = "Recent note $it", eventDate = it.toLong(), createdAt = it.toLong())) }
+        }
+        ui.waitUntilTagDisplayed("followups_shortcut", 10_000)
+        ui.onNodeWithTag("followups_shortcut").assertIsDisplayed()
+        ui.waitUntil(10_000) { ui.onAllNodesWithText("Recent note 19").fetchSemanticsNodes().isNotEmpty() }
+        ui.onNodeWithTag("recent_view_all").performScrollTo().performClick()
+        ui.waitUntilTagDisplayed("events_list_screen", 10_000)
     }
 }

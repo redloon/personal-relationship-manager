@@ -1,296 +1,120 @@
 package com.idontremember.personalcrm.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import com.idontremember.personalcrm.R
+import com.idontremember.personalcrm.data.capture.InlineToken
 import kotlinx.coroutines.delay
 
-/**
- * A text field that detects @ and # triggers to show autocomplete dropdowns.
- *
- * @param value Current text value
- * @param onValueChange Called when text changes
- * @param contacts Available contacts for @ autocomplete
- * @param tags Available tags for # autocomplete
- * @param onContactSelected Called when a contact is selected from @ dropdown
- * @param onTagSelected Called when a tag is selected from # dropdown
- * @param modifier Modifier
- * @param placeholder Placeholder text; defaults to the localized note prompt.
- */
+/** Literal prose stays literal. Only an explicit choice inserts an associated token. */
 @Composable
 fun AutocompleteTextField(
     value: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
     contacts: List<AutocompleteContact>,
     tags: List<AutocompleteTag>,
-    onContactSelected: (AutocompleteContact) -> Unit,
-    onTagSelected: (AutocompleteTag) -> Unit,
+    onContactSelected: (AutocompleteContact, Int, Int) -> Unit,
+    onTagSelected: (AutocompleteTag, Int, Int) -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String? = null,
     autoFocus: Boolean = false,
     enableTags: Boolean = true,
-    onCreateContact: ((String) -> Unit)? = null
+    enableContacts: Boolean = true,
+    inlineTokens: List<InlineToken> = emptyList(),
+    onCreateContact: ((String, Int, Int) -> Unit)? = null
 ) {
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     LaunchedEffect(autoFocus) {
-        if (autoFocus) {
-            delay(150)
-            focusRequester.requestFocus()
-            keyboardController?.show()
-        }
+        if (autoFocus) { delay(150); focusRequester.requestFocus(); keyboardController?.show() }
     }
-    val resolvedPlaceholder = placeholder ?: stringResource(R.string.note_placeholder)
-    var showContactDropdown by remember { mutableStateOf(false) }
-    var showTagDropdown by remember { mutableStateOf(false) }
-    var triggerQuery by remember { mutableStateOf("") }
-    var triggerStartIndex by remember { mutableStateOf(-1) }
-
-    // Detect trigger characters
-    val text = value.text
-    val cursorPos = value.selection.start
-
-    // Find if we're in a trigger context
-    val triggerInfo = remember(text, cursorPos, enableTags, contacts) {
-        detectTrigger(text, cursorPos, contacts.map { it.displayName })?.takeIf { enableTags || it.type != TriggerType.TAG }
+    val cursor = value.selection.start
+    val trigger = detectTrigger(value.text, cursor)?.takeIf { candidate ->
+        (if (candidate.type == TriggerType.CONTACT) enableContacts else enableTags) &&
+            inlineTokens.none { candidate.startIndex >= it.start && candidate.startIndex < it.endExclusive }
     }
-
-    if (triggerInfo != null) {
-        triggerStartIndex = triggerInfo.startIndex
-        triggerQuery = triggerInfo.query
-
-        when (triggerInfo.type) {
-            TriggerType.CONTACT -> {
-                val filtered = contacts.filter {
-                    it.displayName.contains(triggerQuery, ignoreCase = true)
-                }
-                showContactDropdown = filtered.isNotEmpty() || (triggerQuery.isNotBlank() && onCreateContact != null)
-                showTagDropdown = false
-
-                if (showContactDropdown) {
-                    DropdownMenu(
-                        expanded = true,
-                        onDismissRequest = {
-                            showContactDropdown = false
-                        },
-                        properties = PopupProperties(focusable = false)
-                    ) {
-                        filtered.take(5).forEach { contact ->
-                            DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text(
-                                            text = contact.displayName,
-                                            style = MaterialTheme.typography.bodyLarge
-                                        )
-                                        if (contact.phoneNumber != null) {
-                                            Text(
-                                                text = contact.phoneNumber,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                },
-                                onClick = {
-                                    showContactDropdown = false
-                                    // Replace the @query with @DisplayName
-                                    val before = text.substring(0, triggerStartIndex)
-                                    val after = if (cursorPos < text.length) text.substring(cursorPos) else ""
-                                    val newText = "$before@${contact.displayName} $after"
-                                    val newCursor = before.length + contact.displayName.length + 2
-                                    onValueChange(
-                                        TextFieldValue(
-                                            text = newText,
-                                            selection = TextRange(newCursor)
-                                        )
-                                    )
-                                    onContactSelected(contact)
-                                }
-                            )
-                        }
-                        if (triggerQuery.isNotBlank() && filtered.isEmpty() && onCreateContact != null) {
-                            DropdownMenuItem(text = { Text(stringResource(R.string.pilot_create_contact, triggerQuery.trim())) }, onClick = { onCreateContact(triggerQuery.trim()) })
-                        }
+    var dismissedTrigger by remember { mutableStateOf<Pair<Int, TriggerType>?>(null) }
+    val triggerKey = trigger?.let { it.startIndex to it.type }
+    LaunchedEffect(triggerKey) { if (triggerKey != dismissedTrigger) dismissedTrigger = null }
+    val tokenBackground = MaterialTheme.colorScheme.secondaryContainer
+    val tokenColor = MaterialTheme.colorScheme.onSecondaryContainer
+    Box(modifier) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxSize().focusRequester(focusRequester).testTag("note_text_field"),
+            placeholder = { Text(placeholder ?: stringResource(R.string.note_placeholder)) },
+            minLines = 1,
+            visualTransformation = VisualTransformation { source ->
+                val annotated = buildAnnotatedString {
+                    append(source)
+                    inlineTokens.forEach { token ->
+                        if (token.start >= 0 && token.endExclusive <= source.length && token.start < token.endExclusive)
+                            addStyle(SpanStyle(background = tokenBackground, color = tokenColor, fontWeight = FontWeight.SemiBold), token.start, token.endExclusive)
                     }
                 }
+                TransformedText(annotated, OffsetMapping.Identity)
             }
-            TriggerType.TAG -> {
-                val filtered = tags.filter {
-                    it.name.contains(triggerQuery, ignoreCase = true)
-                }
-                showTagDropdown = true // Always show, even if empty (to show "create new")
-                showContactDropdown = false
-
-                if (showTagDropdown) {
-                    DropdownMenu(
-                        expanded = true,
-                        onDismissRequest = {
-                            showTagDropdown = false
-                        },
-                        properties = PopupProperties(focusable = false)
-                    ) {
-                        filtered.take(5).forEach { tag ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = "#${tag.name}",
-                                        style = MaterialTheme.typography.bodyLarge
-                                    )
-                                },
-                                onClick = {
-                                    showTagDropdown = false
-                                    val before = text.substring(0, triggerStartIndex)
-                                    val after = if (cursorPos < text.length) text.substring(cursorPos) else ""
-                                    val newText = "$before#${tag.name} $after"
-                                    val newCursor = before.length + tag.name.length + 2
-                                    onValueChange(
-                                        TextFieldValue(
-                                            text = newText,
-                                            selection = TextRange(newCursor)
-                                        )
-                                    )
-                                    onTagSelected(tag)
-                                }
-                            )
-                        }
-                        // "Create new" option if query doesn't match any existing tag
-                        if (triggerQuery.isNotBlank() && filtered.none {
-                                it.name.equals(triggerQuery.trim(), ignoreCase = true)
-                            }) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = stringResource(
-                                            R.string.create_tag_option,
-                                            triggerQuery.trim()
-                                        ),
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                onClick = {
-                                    showTagDropdown = false
-                                    val tagName = triggerQuery.trim().lowercase()
-                                    val before = text.substring(0, triggerStartIndex)
-                                    val after = if (cursorPos < text.length) text.substring(cursorPos) else ""
-                                    val newText = "$before#$tagName $after"
-                                    val newCursor = before.length + tagName.length + 2
-                                    onValueChange(
-                                        TextFieldValue(
-                                            text = newText,
-                                            selection = TextRange(newCursor)
-                                        )
-                                    )
-                                    onTagSelected(AutocompleteTag(id = -1, name = tagName))
-                                }
-                            )
-                        }
+        )
+        if (trigger != null && triggerKey != dismissedTrigger) {
+            val contactMatches = contacts.filter { it.displayName.contains(trigger.query.trim(), true) }.take(5)
+            val tagMatches = tags.filter { it.name.contains(trigger.query, true) }.take(5)
+            val canCreate = trigger.query.isNotBlank()
+            val visible = if (trigger.type == TriggerType.CONTACT) contactMatches.isNotEmpty() || (canCreate && onCreateContact != null) else true
+            DropdownMenu(expanded = visible, onDismissRequest = { dismissedTrigger = triggerKey },
+                properties = PopupProperties(focusable = false), modifier = Modifier.heightIn(max = 220.dp)) {
+                if (trigger.type == TriggerType.CONTACT) {
+                    contactMatches.forEach { person ->
+                        DropdownMenuItem(text = { Column { Text(person.displayName); person.phoneNumber?.let { Text(it, style = MaterialTheme.typography.bodySmall) } } },
+                            onClick = { dismissedTrigger = triggerKey; onContactSelected(person, trigger.startIndex, cursor) })
                     }
+                    if (canCreate && onCreateContact != null) DropdownMenuItem(
+                        text = { Text(stringResource(R.string.pilot_create_contact, trigger.query.trim())) },
+                        modifier = Modifier.testTag("inline_create_person"),
+                        onClick = { dismissedTrigger = triggerKey; onCreateContact(trigger.query.trim(), trigger.startIndex, cursor) })
+                } else {
+                    tagMatches.forEach { tag -> DropdownMenuItem(text = { Text(stringResource(R.string.usability_tag_label, tag.name)) }, onClick = { dismissedTrigger = triggerKey; onTagSelected(tag, trigger.startIndex, cursor) }) }
+                    if (canCreate && tagMatches.none { it.name.equals(trigger.query.trim(), true) }) DropdownMenuItem(
+                        text = { Text(stringResource(R.string.create_tag_option, trigger.query.trim())) },
+                        onClick = { dismissedTrigger = triggerKey; onTagSelected(AutocompleteTag(-1, trigger.query.trim().lowercase(java.util.Locale.ROOT)), trigger.startIndex, cursor) })
                 }
+                DropdownMenuItem(text = { Text(stringResource(R.string.usability_keep_text)) }, modifier = Modifier.testTag("inline_keep_text"), onClick = { dismissedTrigger = triggerKey })
             }
         }
-    } else {
-        showContactDropdown = false
-        showTagDropdown = false
     }
-
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier
-            .fillMaxWidth()
-            .focusRequester(focusRequester)
-            .testTag("note_text_field"),
-        placeholder = { Text(resolvedPlaceholder) },
-        minLines = 3,
-        maxLines = 8
-    )
 }
 
-enum class TriggerType {
-    CONTACT, TAG
-}
+enum class TriggerType { CONTACT, TAG }
+data class TriggerInfo(val type: TriggerType, val startIndex: Int, val query: String)
+data class AutocompleteContact(val id: Long, val displayName: String, val phoneNumber: String? = null)
+data class AutocompleteTag(val id: Long, val name: String)
 
-data class TriggerInfo(
-    val type: TriggerType,
-    val startIndex: Int,
-    val query: String
-)
-
-data class AutocompleteContact(
-    val id: Long,
-    val displayName: String,
-    val phoneNumber: String? = null
-)
-
-data class AutocompleteTag(
-    val id: Long,
-    val name: String
-)
-
-/**
- * Detect if the cursor is right after a @ or # trigger with a partial query.
- */
+/** People can contain spaces. Existing short names never terminate a new full-name query. */
+@Suppress("UNUSED_PARAMETER")
 fun detectTrigger(text: String, cursorPos: Int, contactNames: List<String> = emptyList()): TriggerInfo? {
     if (cursorPos <= 0 || cursorPos > text.length) return null
-
-    // Look backwards from cursor to find a trigger character
-    val beforeCursor = text.substring(0, cursorPos)
-
-    // Find the last @ or # that isn't preceded by a word character
-    val atIdx = beforeCursor.lastIndexOf('@')
-    val hashIdx = beforeCursor.lastIndexOf('#')
-
-    // Use whichever trigger is more recent (closer to cursor)
-    val triggerIdx = maxOf(atIdx, hashIdx)
-    if (triggerIdx < 0) return null
-
-    // Make sure the trigger is at the start of a word (preceded by space, newline, or start of text)
-    if (triggerIdx > 0) {
-        val charBefore = text[triggerIdx - 1]
-        if (!charBefore.isWhitespace()) return null
-    }
-
-    // Check there's no space between trigger and cursor (the query shouldn't contain spaces)
-    val queryStart = triggerIdx + 1
-    val query = text.substring(queryStart, cursorPos)
-    if (query.any { it == '\n' || it == '\t' } || query.lastOrNull()?.isWhitespace() == true) return null
-    if (text[triggerIdx] == '#' && query.any { it.isWhitespace() }) return null
-
-    // A complete known name followed by prose is no longer an active mention.
-    // Keep longer matching names available when a shorter name shares their prefix.
-    if (text[triggerIdx] == '@' && contactNames.none { it.startsWith(query, ignoreCase = true) } &&
-        contactNames.any { query.startsWith("$it ", ignoreCase = true) }) return null
-
-    val type = if (text[triggerIdx] == '@') TriggerType.CONTACT else TriggerType.TAG
-    return TriggerInfo(type = type, startIndex = triggerIdx, query = query)
+    val before = text.substring(0, cursorPos)
+    val start = maxOf(before.lastIndexOf('@'), before.lastIndexOf('#'))
+    if (start < 0 || (start > 0 && !text[start - 1].isWhitespace())) return null
+    val query = text.substring(start + 1, cursorPos)
+    if (query.any { it == '\n' || it == '\t' }) return null
+    val type = if (text[start] == '@') TriggerType.CONTACT else TriggerType.TAG
+    if (type == TriggerType.TAG && query.any { it.isWhitespace() }) return null
+    return TriggerInfo(type, start, query)
 }

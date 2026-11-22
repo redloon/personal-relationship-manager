@@ -6,6 +6,7 @@ import com.idontremember.personalcrm.data.followups.FollowUpRepository
 import com.idontremember.personalcrm.data.repository.ContactRepository
 import com.idontremember.personalcrm.data.recovery.RecoveryRepository
 import com.idontremember.personalcrm.data.settings.SettingsRepository
+import com.idontremember.personalcrm.data.settings.DateDisplay
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -18,6 +19,7 @@ class FollowUpViewModel @Inject constructor(
     val recovery: RecoveryRepository,
     val settings: SettingsRepository
 ) : ViewModel() {
+    val dateDisplay = settings.dateDisplay.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DateDisplay.ABSOLUTE)
     val items = repository.items.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val people = contacts.getAllContacts().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val prompted = settings.followUpReminderPrompted.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)

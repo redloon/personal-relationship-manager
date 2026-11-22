@@ -4,24 +4,22 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import com.idontremember.personalcrm.data.repository.EventRepository
+import com.idontremember.personalcrm.data.db.AppDatabase
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import javax.inject.Inject
 
 /**
- * UI tests for the EventsListScreen.
+ * UI tests for complete capture History.
  *
- * Navigation: tap the Events tab on the bottom nav bar (see TestNavHelpers.kt).
+ * Navigation: open History from Home (see TestNavHelpers.kt).
  *
  * NOTE: the in-memory test database is a process-wide Hilt singleton shared by
- * all tests in one instrumentation run, so setup clears every event to keep the
- * empty/list assertions deterministic.
+ * all tests in one instrumentation run. History includes notes, facts and follow-ups,
+ * so setup clears the whole test database before checking its empty state.
  */
 @HiltAndroidTest
 class EventsListScreenTest {
@@ -33,15 +31,12 @@ class EventsListScreenTest {
     val composeTestRule = createAndroidComposeRule<MainActivity>()
 
     @Inject
-    lateinit var eventRepository: EventRepository
+    lateinit var database: AppDatabase
 
     @Before
     fun setup() {
         hiltRule.inject()
-        runBlocking {
-            // Start clean: the test DB singleton is shared across tests in this run
-            eventRepository.getAllEvents().first().forEach { eventRepository.deleteEvent(it) }
-        }
+        database.clearAllTables()
     }
 
     @Test
@@ -58,11 +53,11 @@ class EventsListScreenTest {
     }
 
     @Test
-    fun eventsTab_showsEmptyStateWhenNoEvents() {
+    fun history_showsEmptyStateWhenNoCapturedRecords() {
         composeTestRule.navigateToEventsTab()
         // P2: the shared EmptyState composable renders this — tag + localized text.
         composeTestRule.waitUntilTagDisplayed("events_empty_state")
         composeTestRule.onNodeWithTag("events_empty_state").assertIsDisplayed()
-        composeTestRule.onNodeWithText("No notes yet.", substring = true).assertExists()
+        composeTestRule.onNodeWithText("No saved records yet.").assertExists()
     }
 }

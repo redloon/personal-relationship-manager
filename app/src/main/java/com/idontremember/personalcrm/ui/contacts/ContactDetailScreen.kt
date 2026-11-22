@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -34,6 +35,9 @@ import com.idontremember.personalcrm.ui.addevent.AddEventSheet
 import com.idontremember.personalcrm.ui.components.*
 import com.idontremember.personalcrm.ui.followups.FollowUpsSection
 import com.idontremember.personalcrm.ui.followups.FollowUpEditor
+import com.idontremember.personalcrm.ui.followups.FollowUpReader
+import com.idontremember.personalcrm.ui.reading.FactReaderSheet
+import com.idontremember.personalcrm.ui.reading.RecordPreview
 import com.idontremember.personalcrm.ui.pilot.*
 import java.text.DateFormat
 import java.util.Date
@@ -45,6 +49,7 @@ fun ContactDetailScreen(
     onBack: () -> Unit,
     onEventClick: (Long) -> Unit,
     onContactClick: (Long) -> Unit = {},
+    initialQuery: String = "",
     viewModel: ContactDetailViewModel = hiltViewModel(),
     recall: RecallViewModel = hiltViewModel()
 ) {
@@ -56,7 +61,7 @@ fun ContactDetailScreen(
     val events by viewModel.events.collectAsState()
     val dateDisplay by viewModel.dateDisplay.collectAsState()
     val entries by recall.entries.collectAsState()
-    var query by rememberSaveable { mutableStateOf("") }
+    var query by rememberSaveable(contactId) { mutableStateOf(initialQuery) }
     var rename by rememberSaveable { mutableStateOf(false) }
     var newName by rememberSaveable { mutableStateOf("") }
     var management by rememberSaveable { mutableStateOf(false) }
@@ -64,6 +69,8 @@ fun ContactDetailScreen(
     var allEvents by rememberSaveable { mutableStateOf(false) }
     var addNote by rememberSaveable { mutableStateOf(false) }
     var addFact by rememberSaveable { mutableStateOf(false) }
+    var readingFact by rememberSaveable { mutableStateOf<Long?>(null) }
+    var readingFollowUp by rememberSaveable { mutableStateOf<Long?>(null) }
     var editingFact by rememberSaveable { mutableStateOf<Long?>(null) }
     var editingFollowUp by rememberSaveable { mutableStateOf<Long?>(null) }
     var pendingAndroid by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -92,6 +99,10 @@ fun ContactDetailScreen(
     Scaffold(
         topBar = { TopAppBar(title = { Text(contact?.displayName ?: stringResource(R.string.title_contact)) }, navigationIcon = {
             IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back)) }
+        }, actions = {
+            if (contact != null) IconButton(onClick = { newName = contact?.displayName.orEmpty(); rename = true }, modifier = Modifier.testTag("edit_person_button")) {
+                Icon(Icons.Default.Edit, stringResource(R.string.reading_edit_person))
+            }
         }) },
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
@@ -115,7 +126,7 @@ fun ContactDetailScreen(
                 if (query.isNotBlank()) {
                     val matches = RecallSearch.find(entries.orEmpty(), query, contactId).filter { it.kind != "person" }
                     if (matches.isEmpty()) item { EmptyState(stringResource(R.string.recall_no_results), testTag = "person_search_empty") }
-                    items(matches, key = { it.key }) { row -> RecallNoteRow(row, query, dateDisplay = dateDisplay) { when(row.kind) { "fact" -> editingFact = row.id; "followup" -> editingFollowUp = row.id; else -> onEventClick(row.id) } } }
+                    items(matches, key = { it.key }) { row -> RecallNoteRow(row, query, dateDisplay = dateDisplay) { when(row.kind) { "fact" -> readingFact = row.id; "followup" -> readingFollowUp = row.id; else -> onEventClick(row.id) } } }
                 } else {
                     item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         SectionLabel(stringResource(R.string.section_facts))
@@ -124,41 +135,24 @@ fun ContactDetailScreen(
                     if (facts.isEmpty()) item { EmptyState(stringResource(R.string.empty_facts), testTag = "facts_empty_state") }
                     items(if (allFacts) facts else facts.take(3), key = { "fact_${it.id}" }) { fact ->
                         ListItem(
-                            headlineContent = { Text(fact.text) },
+                            headlineContent = { RecordPreview(fact.text, onOpen = { readingFact = fact.id }) },
                             supportingContent = { Text(stringResource(R.string.pilot_recorded, formatEventDateText(fact.createdAt, dateDisplay))) },
-                            trailingContent = { Row {
-                                IconButton(onClick = { editingFact = fact.id }, modifier = Modifier.testTag("edit_fact_${fact.id}")) { Icon(Icons.Default.Edit, stringResource(R.string.recall_edit_fact)) }
-                                IconButton(onClick = { viewModel.deleteFact(fact) }, modifier = Modifier.testTag("delete_fact_${fact.id}")) { Icon(Icons.Default.Delete, stringResource(R.string.cd_delete_fact)) }
-                            } }
+                            modifier = Modifier.fillMaxWidth().testTag("fact_row_${fact.id}").clickable { readingFact = fact.id }
                         )
                     }
                     if (facts.size > 3) item { TextButton(onClick = { allFacts = !allFacts }) { Text(stringResource(if(allFacts) R.string.recall_less_facts else R.string.recall_more_facts)) } }
                     item { SectionLabel(stringResource(if(allEvents) R.string.recall_all_history else R.string.recall_recent_notes)) }
                     if (events.isEmpty()) item { EmptyState(stringResource(R.string.empty_contact_events), testTag = "contact_events_empty_state") }
                     items(if(allEvents) events else events.take(3), key = { "event_${it.id}" }) { event ->
-                        Card(onClick = { onEventClick(event.id) }, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                            Column(Modifier.padding(16.dp)) { Text(event.note, maxLines = 3); Text(formatEventDateText(event.eventDate, dateDisplay), style = MaterialTheme.typography.bodySmall) }
+                        Card(onClick = { onEventClick(event.id) }, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).testTag("event_preview_${event.id}")) {
+                            Column(Modifier.padding(16.dp)) { RecordPreview(event.note, onOpen = { onEventClick(event.id) }); Text(formatEventDateText(event.eventDate, dateDisplay), style = MaterialTheme.typography.bodySmall) }
                         }
                     }
                     if (events.size > 3) item { TextButton(onClick = { allEvents = !allEvents }) { Text(stringResource(if(allEvents) R.string.action_cancel else R.string.recall_all_history)) } }
-                    item { FollowUpsSection(contactId) }
+                    item { FollowUpsSection(contactId, onContact = onContactClick) }
                     item { TextButton(onClick = { management = !management }, modifier = Modifier.testTag("person_management")) { Text(stringResource(R.string.recall_person_details)) } }
                     if (management) {
                         item { ProfileLinks(contactId, onContactClick) }
-                        item {
-                            if(contact?.androidContactId == null) TextButton(onClick = { newName = contact?.displayName.orEmpty(); rename = true }, modifier = Modifier.testTag("rename_person_button")) { Text(stringResource(R.string.recall_rename)) }
-                            contact?.androidContactId?.let { androidId ->
-                                TextButton(onClick = {
-                                    val current = contact
-                                    val uri = current?.lookupKey?.let { ContactsContract.Contacts.getLookupUri(androidId, it) } ?: ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, androidId)
-                                    try { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) } catch (_: Exception) { Toast.makeText(context, unavailable, Toast.LENGTH_SHORT).show() }
-                                }) { Text(stringResource(R.string.pilot_open_contact)) }
-                            }
-                            TextButton(onClick = {
-                                if(ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) picker.launch(null)
-                                else permission.launch(Manifest.permission.READ_CONTACTS)
-                            }, enabled = !linking, modifier = Modifier.testTag("link_android_contact")) { Text(stringResource(R.string.recall_link_android)) }
-                        }
                     }
                 }
             }
@@ -169,11 +163,28 @@ fun ContactDetailScreen(
         onSaved = { addNote = false; addFact = false; editingFact = null },
         initialContactId = contactId, existingFactId = editingFact, initialIsFact = addFact
     )
+    readingFact?.let { id -> FactReaderSheet(factId = id, onDismiss = { readingFact = null }, onContact = { readingFact = null; onContactClick(it) }, onEdit = { readingFact = null; editingFact = it }) }
+    readingFollowUp?.let { id -> FollowUpReader(existingId = id, onDismiss = { readingFollowUp = null }, onContact = { readingFollowUp = null; onContactClick(it) }, onEdit = { readingFollowUp = null; editingFollowUp = it }) }
     editingFollowUp?.let { id -> FollowUpEditor(existingId = id, onDismiss = { editingFollowUp = null }) }
     if(rename) AlertDialog(modifier = Modifier.exposeTestTags(),
-        onDismissRequest = { rename = false }, title = { Text(stringResource(R.string.recall_rename)) },
-        text = { OutlinedTextField(newName, { newName = it }, label = { Text(stringResource(R.string.recall_person_name)) }, singleLine = true, modifier = Modifier.testTag("rename_person_name")) },
-        confirmButton = { TextButton(onClick = { viewModel.rename(newName) { rename = false } }, enabled = newName.isNotBlank(), modifier = Modifier.testTag("save_person_name")) { Text(stringResource(R.string.action_save)) } },
+        onDismissRequest = { rename = false }, title = { Text(stringResource(R.string.reading_edit_person)) },
+        text = { Column {
+            OutlinedTextField(newName, { newName = it }, label = { Text(stringResource(R.string.recall_person_name)) }, singleLine = true,
+                enabled = contact?.androidContactId == null, modifier = Modifier.fillMaxWidth().testTag("rename_person_name"))
+            contact?.androidContactId?.let { androidId ->
+                Text(stringResource(R.string.reading_edit_android_name), style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = {
+                    val current = contact
+                    val uri = current?.lookupKey?.let { ContactsContract.Contacts.getLookupUri(androidId, it) } ?: ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, androidId)
+                    try { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) } catch (_: Exception) { Toast.makeText(context, unavailable, Toast.LENGTH_SHORT).show() }
+                }) { Text(stringResource(R.string.pilot_open_contact)) }
+            }
+            TextButton(onClick = {
+                if(ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) picker.launch(null)
+                else permission.launch(Manifest.permission.READ_CONTACTS)
+            }, enabled = !linking, modifier = Modifier.testTag("link_android_contact")) { Text(stringResource(R.string.recall_link_android)) }
+        } },
+        confirmButton = { TextButton(onClick = { if (contact?.androidContactId == null) viewModel.rename(newName) { rename = false } else rename = false }, enabled = newName.isNotBlank(), modifier = Modifier.testTag("save_person_name")) { Text(stringResource(if (contact?.androidContactId == null) R.string.action_save else R.string.reading_close)) } },
         dismissButton = { TextButton(onClick = { rename = false }) { Text(stringResource(R.string.action_cancel)) } }
     )
     pendingAndroid?.let { id -> AlertDialog(modifier = Modifier.exposeTestTags(),

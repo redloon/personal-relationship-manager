@@ -24,6 +24,7 @@
  *   1 = initial schema: contacts, contact_facts, events, event_contacts, tags,
  *       event_tags (see app/schemas/.../1.json for the authoritative snapshot).
  *   2 = direct contact tags and shared relationships.
+ *   4 = explicit inline token metadata, preserving original prose.
  *   3 = recoverable notes, provider lookup keys, explicit follow-ups.
  * ============================================================================
  */
@@ -60,7 +61,7 @@ import com.idontremember.personalcrm.data.db.entity.Tag
         ContactTag::class,
         Relationship::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

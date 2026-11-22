@@ -1,5 +1,9 @@
 package com.idontremember.personalcrm.ui.addevent
 
+import com.idontremember.personalcrm.data.capture.CaptureLinks
+import com.idontremember.personalcrm.data.capture.InlineToken
+import com.idontremember.personalcrm.data.capture.InlineTokens
+import com.idontremember.personalcrm.data.capture.TokenTarget
 import android.content.Context
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
@@ -47,13 +51,16 @@ class AddEventViewModel @Inject constructor(
     private var pendingSharedText: String? = null
     private var pendingContactId: Long? = null
     private var pendingIsFact = false
-    private var creatingPerson = false
 
     val contacts = contactRepository.getAllContacts()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList<Contact>())
     val tags = tagRepository.getAllTags()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList<Tag>())
 
+    private val _inlineTokens = MutableStateFlow<List<InlineToken>>(emptyList())
+    val inlineTokens: StateFlow<List<InlineToken>> = _inlineTokens
+    private val _resumingDraft = MutableStateFlow(false)
+    val resumingDraft: StateFlow<Boolean> = _resumingDraft
     private val _noteText = MutableStateFlow(TextFieldValue(""))
     val noteText: StateFlow<TextFieldValue> = _noteText
     private val _selectedContactIds = MutableStateFlow<Set<Long>>(emptySet())
@@ -86,6 +93,8 @@ class AddEventViewModel @Inject constructor(
         _saveFailed.value = false
         _saving.value = false
         _sharedDraftConflict.value = false
+        _inlineTokens.value = emptyList()
+        _resumingDraft.value = false
         pendingSharedText = sharedText?.takeIf { it.isNotBlank() }
         pendingContactId = contactId
         pendingIsFact = initialIsFact
@@ -94,12 +103,14 @@ class AddEventViewModel @Inject constructor(
                 val stored = draftPrefs.getString(draftKey, null)?.let { runCatching { JSONObject(it) }.getOrNull() }
                 if (stored != null) {
                     readDraft(stored)
+                    _resumingDraft.value = true
                     if (pendingSharedText != null || (eventId == null && factId == null &&
                         ((contactId != null && _selectedContactIds.value != setOf(contactId)) ||
                         ((contactId != null || initialIsFact) && _isFact.value != initialIsFact)))) _sharedDraftConflict.value = true
                 } else if (eventId != null) {
                     val meta = eventRepository.getEventWithMeta(eventId) ?: error("Note unavailable")
                     _noteText.value = meta.event.note.asTextField()
+                    _inlineTokens.value = InlineTokens.decode(meta.event.inlineTokens)
                     _selectedContactIds.value = meta.contacts.map { it.id }.toSet()
                     _selectedTagNames.value = meta.tags.map { it.name }.toSet()
                     _eventDate.value = meta.event.eventDate
@@ -143,6 +154,8 @@ class AddEventViewModel @Inject constructor(
     }
 
     private suspend fun freshCapture(contactId: Long?, text: String) {
+        _inlineTokens.value = emptyList()
+        _resumingDraft.value = false
         _noteText.value = text.asTextField()
         _selectedContactIds.value = contactId?.let { setOf(it) }.orEmpty()
         _selectedTagNames.value = emptySet()
@@ -159,6 +172,9 @@ class AddEventViewModel @Inject constructor(
         _selectedTagNames.value = value.optJSONArray("tags").toStringSet()
         _eventDate.value = value.optLong("date", System.currentTimeMillis())
         _isFact.value = value.optBoolean("fact", existingFactId != null)
+        _inlineTokens.value = runCatching {
+            InlineTokens.decode(value.optString("tokens", "[]")).also { InlineTokens.validate(_noteText.value.text, it, _selectedContactIds.value, _selectedTagNames.value) }
+        }.getOrDefault(emptyList())
     }
 
     private inline fun change(block: () -> Unit) {
@@ -167,41 +183,57 @@ class AddEventViewModel @Inject constructor(
         _saveFailed.value = false
         persistDraft()
     }
-    fun onNoteChanged(value: TextFieldValue) = change { _noteText.value = value }
+    private fun currentLinks() = CaptureLinks(_isFact.value, _selectedContactIds.value, _selectedTagNames.value, _inlineTokens.value)
+    private fun applyLinks(links: CaptureLinks) {
+        _isFact.value = links.isFact
+        _selectedContactIds.value = links.contactIds
+        _selectedTagNames.value = links.tagNames
+        _inlineTokens.value = links.tokens
+    }
+    fun onNoteChanged(value: TextFieldValue) = change {
+        applyLinks(currentLinks().edit(_noteText.value.text, value.text, _noteText.value.selection.start, _noteText.value.selection.end, value.selection.start))
+        _noteText.value = value
+    }
+    private fun unlinkRemovedTokens(next: List<InlineToken>) {
+        for (target in InlineTokens.removedTargets(_inlineTokens.value, next)) when (target) {
+            is TokenTarget.Person -> _selectedContactIds.value = _selectedContactIds.value - target.id
+            is TokenTarget.Tag -> _selectedTagNames.value = _selectedTagNames.value - target.name
+        }
+    }
+    fun insertPersonToken(person: AutocompleteContact, start: Int, end: Int) = change {
+        val inserted = InlineTokens.insert(_noteText.value.text, start, end, "@${person.displayName}", TokenTarget.Person(person.id), _inlineTokens.value)
+        unlinkRemovedTokens(inserted.tokens)
+        _inlineTokens.value = inserted.tokens
+        _noteText.value = TextFieldValue(inserted.text, TextRange(inserted.cursor))
+        _selectedContactIds.value = _selectedContactIds.value + person.id
+    }
+    fun insertTagToken(tag: AutocompleteTag, start: Int, end: Int) = change {
+        val name = tag.name.trim().removePrefix("#").lowercase(java.util.Locale.ROOT)
+        val inserted = InlineTokens.insert(_noteText.value.text, start, end, "#$name", TokenTarget.Tag(name), _inlineTokens.value)
+        unlinkRemovedTokens(inserted.tokens)
+        _inlineTokens.value = inserted.tokens
+        _noteText.value = TextFieldValue(inserted.text, TextRange(inserted.cursor))
+        _selectedTagNames.value = _selectedTagNames.value + name
+    }
     fun onContactSelected(contact: AutocompleteContact) = change {
-        _selectedContactIds.value = if (_isFact.value) setOf(contact.id) else _selectedContactIds.value + contact.id
+        applyLinks(currentLinks().selectPerson(contact.id))
     }
     fun onTagSelected(tag: AutocompleteTag) = change {
         val name = tag.name.trim().removePrefix("#").lowercase()
         if (name.isNotBlank()) _selectedTagNames.value = _selectedTagNames.value + name
     }
-    fun removeContact(id: Long) = change { _selectedContactIds.value = _selectedContactIds.value - id }
-    fun removeTag(name: String) = change { _selectedTagNames.value = _selectedTagNames.value - name }
+    fun removeContact(id: Long) = change { _selectedContactIds.value = _selectedContactIds.value - id; _inlineTokens.value = _inlineTokens.value.filterNot { it.target == TokenTarget.Person(id) } }
+    fun removeTag(name: String) = change { _selectedTagNames.value = _selectedTagNames.value - name; _inlineTokens.value = _inlineTokens.value.filterNot { it.target == TokenTarget.Tag(name) } }
     fun onDateChanged(date: Long) = change { _eventDate.value = date }
     fun setFact(value: Boolean) = change {
-        if (existingEventId == null && existingFactId == null) _isFact.value = value
-    }
-
-    fun createPerson(name: String, onCreated: () -> Unit = {}) {
-        if (name.isBlank() || _saving.value || !acceptingChanges || creatingPerson) return
-        creatingPerson = true
-        viewModelScope.launch {
-            try {
-                val id = contactRepository.createLocalContact(name.trim())
-                check(id > 0)
-                onContactSelected(AutocompleteContact(id, name.trim()))
-                onCreated()
-            } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { _saveFailed.value = true }
-            finally { creatingPerson = false }
-        }
+        if (existingEventId == null && existingFactId == null) applyLinks(currentLinks().withFactMode(value))
     }
 
     private fun persistDraft() {
         val value = JSONObject().put("note", _noteText.value.text)
             .put("contacts", JSONArray(_selectedContactIds.value.toList()))
             .put("tags", JSONArray(_selectedTagNames.value.toList()))
-            .put("date", _eventDate.value).put("fact", _isFact.value)
+            .put("date", _eventDate.value).put("fact", _isFact.value).put("tokens", InlineTokens.encode(_inlineTokens.value))
         draftPrefs.edit().putString(draftKey, value.toString()).apply()
     }
 
@@ -219,10 +251,10 @@ class AddEventViewModel @Inject constructor(
                     }
                     existingEventId != null -> {
                         check(eventRepository.getEventById(existingEventId!!) != null)
-                        eventRepository.updateEvent(existingEventId!!, note, _selectedContactIds.value.toList(), _selectedTagNames.value.toList(), _eventDate.value)
+                        eventRepository.updateEvent(existingEventId!!, note, _selectedContactIds.value.toList(), _selectedTagNames.value.toList(), _eventDate.value, _inlineTokens.value)
                     }
                     _isFact.value -> contactRepository.addFact(_selectedContactIds.value.single(), note)
-                    else -> eventRepository.createEvent(note, _selectedContactIds.value.toList(), _selectedTagNames.value.toList(), _eventDate.value)
+                    else -> eventRepository.createEvent(note, _selectedContactIds.value.toList(), _selectedTagNames.value.toList(), _eventDate.value, _inlineTokens.value)
                 }
                 acceptingChanges = false
                 draftPrefs.edit().remove(draftKey).apply()
@@ -241,6 +273,8 @@ class AddEventViewModel @Inject constructor(
     fun discard() { close(); reset() }
     fun reset(clearDraft: Boolean = true) {
         if (clearDraft) draftPrefs.edit().remove(draftKey).apply()
+        _inlineTokens.value = emptyList()
+        _resumingDraft.value = false
         _noteText.value = TextFieldValue("")
         _selectedContactIds.value = emptySet()
         _selectedTagNames.value = emptySet()

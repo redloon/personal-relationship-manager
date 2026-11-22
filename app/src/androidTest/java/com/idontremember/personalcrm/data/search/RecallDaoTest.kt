@@ -47,4 +47,40 @@ class RecallDaoTest {
         assertTrue(RecallSearch.find(rows, "New Alice").any { it.kind == "event" && it.id == event })
         assertEquals("Met @Old Alice", db.eventDao().getById(event)!!.note)
     }
+    @Test fun tagEntitiesAndFollowUpStateAreAvailableWithoutPerRowQueries() = runBlocking {
+        val person = db.contactDao().insert(Contact(displayName = "Maya"))
+        val tag = db.tagDao().insert(Tag(name = "dog-owner"))
+        val follow = db.followUpDao().insert(FollowUp(contactId = person, text = "Ask about dog", dueDate = "2026-11-10", completedAt = 7, createdAt = 3))
+        val rows = db.recallDao().entries().first()
+        assertEquals(listOf(tag), RecallSearch.find(rows, "dog-owner", kind = "tag").map { it.id })
+        val result = rows.single { it.kind == "followup" && it.id == follow }
+        assertEquals("2026-11-10", result.dueDate)
+        assertEquals(7L, result.completedAt)
+        assertEquals(3L, result.createdAt)
+    }
+
+    @Test fun exactTagBrowsingIncludesPersonlessNotesAndDeduplicatesMembership() = runBlocking {
+        val person = db.contactDao().insert(Contact(displayName = "Maya"))
+        val dog = db.tagDao().insert(Tag(name = "dog"))
+        val dogOwner = db.tagDao().insert(Tag(name = "dog-owner"))
+        val linked = db.eventDao().insert(Event(note = "Linked note"))
+        val bare = db.eventDao().insert(Event(note = "Personless note"))
+        val other = db.eventDao().insert(Event(note = "Other tag"))
+        db.eventDao().insertEventContact(EventContact(linked, person))
+        db.eventDao().insertEventTag(EventTag(linked, dogOwner))
+        db.eventDao().insertEventTag(EventTag(bare, dogOwner))
+        db.eventDao().insertEventTag(EventTag(other, dog))
+        db.pilotDao().addTag(ContactTag(person, dogOwner))
+        assertEquals(setOf(linked, bare), db.pilotDao().noteIdsForTag(dogOwner).first().toSet())
+        val members = db.pilotDao().peopleForTag(dogOwner).first()
+        assertEquals(1, members.size)
+        assertTrue(members.single().direct)
+        assertTrue(members.single().viaNote)
+        val event = db.eventDao().getById(linked)!!
+        db.eventDao().update(event.copy(deletedAt = 100))
+        val after = db.pilotDao().peopleForTag(dogOwner).first().single()
+        assertTrue(after.direct)
+        assertFalse(after.viaNote)
+        assertEquals(listOf(bare), db.pilotDao().noteIdsForTag(dogOwner).first())
+    }
 }

@@ -23,3 +23,9 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_follow_ups_contact_id ON follow_ups(contact_id)")
     }
 }
+
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE events ADD COLUMN inline_tokens TEXT NOT NULL DEFAULT '[]'")
+    }
+}

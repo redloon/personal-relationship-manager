@@ -21,5 +21,7 @@ data class Event(
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long = System.currentTimeMillis(),
 
-    @ColumnInfo(name = "deleted_at") val deletedAt: Long? = null
+    @ColumnInfo(name = "deleted_at") val deletedAt: Long? = null,
+
+    @ColumnInfo(name = "inline_tokens", defaultValue = "'[]'") val inlineTokens: String = "[]"
 )

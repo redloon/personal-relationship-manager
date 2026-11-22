@@ -1,0 +1,11 @@
+<resources>
+    <string name="reading_fact_title">Fact</string>
+    <string name="reading_edit_person">Edit person</string>
+    <string name="reading_read_more">Read more</string>
+    <string name="reading_planned_date">Planned %1$s</string>
+    <string name="reading_created_date">Created %1$s</string>
+    <string name="reading_fact_unavailable">This fact is no longer available.</string>
+    <string name="reading_close">Close</string>
+    <string name="reading_edit_followup">Edit follow-up</string>
+    <string name="reading_edit_android_name">Manage this person’s name in Android Contacts.</string>
+</resources>

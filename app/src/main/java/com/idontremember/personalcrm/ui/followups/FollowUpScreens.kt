@@ -14,6 +14,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.EventAvailable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -34,6 +38,8 @@ import com.idontremember.personalcrm.data.followups.FollowUpWithPerson
 import com.idontremember.personalcrm.data.followups.FollowUpWorker
 import com.idontremember.personalcrm.data.recovery.TrashKind
 import com.idontremember.personalcrm.ui.components.SearchField
+import com.idontremember.personalcrm.ui.components.PersonPicker
+import com.idontremember.personalcrm.ui.reading.RecordPreview
 import com.idontremember.personalcrm.ui.settings.SettingsSwitchRow
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -42,39 +48,46 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 
 @Composable
-fun FollowUpsSection(contactId: Long? = null, vm: FollowUpViewModel = hiltViewModel()) {
+fun FollowUpsSection(contactId: Long? = null, onContact: (Long) -> Unit = {}, vm: FollowUpViewModel = hiltViewModel()) {
     val items by vm.items.collectAsStateWithLifecycle()
     val related = items.filter { contactId == null || it.item.contactId == contactId }
     val pending = related.filter { it.item.completedAt == null }
     var showAll by rememberSaveable { mutableStateOf(false) }
     var adding by rememberSaveable { mutableStateOf(false) }
     var editing by rememberSaveable { mutableStateOf<Long?>(null) }
+    var reading by rememberSaveable { mutableStateOf<Long?>(null) }
     if (contactId != null || related.isNotEmpty()) Column(Modifier.fillMaxWidth().testTag("followups_section")) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(stringResource(R.string.followup_title), style = MaterialTheme.typography.titleMedium)
             TextButton(onClick = { adding = true }) { Text(stringResource(R.string.followup_add)) }
         }
-        pending.take(3).forEach { FollowUpRow(it, onClick = { editing = it.item.id }) }
+        pending.take(3).forEach { FollowUpRow(it, onClick = { reading = it.item.id }) }
+        if (pending.isEmpty()) Text(stringResource(R.string.followup_empty), style = MaterialTheme.typography.bodyMedium)
         if (related.isNotEmpty()) TextButton(onClick = { showAll = true }) { Text(stringResource(R.string.followup_all)) }
     }
-    if (showAll) FollowUpsOverlay(contactId = contactId, onDismiss = { showAll = false })
+    if (showAll) FollowUpsOverlay(contactId = contactId, onDismiss = { showAll = false }, onContact = onContact)
+    reading?.let { id -> FollowUpReader(existingId = id, onDismiss = { reading = null }, onContact = { reading = null; onContact(it) }, onEdit = { reading = null; editing = it }) }
     if (adding || editing != null) FollowUpEditor(contactId = contactId, existingId = editing, onDismiss = { adding = false; editing = null })
 }
 
 @Composable
 private fun FollowUpRow(entry: FollowUpWithPerson, onClick: () -> Unit) {
-    ListItem(headlineContent = { Text(entry.item.text, maxLines = 3) },
-        supportingContent = { Text(listOfNotNull(entry.name.takeIf { it.isNotBlank() }, entry.item.dueDate).joinToString(" · ")) },
+    ListItem(headlineContent = { RecordPreview(entry.item.text, onClick) },
+        overlineContent = { Text(entry.name) },
+        leadingContent = { Icon(Icons.Default.EventAvailable, null, tint = MaterialTheme.colorScheme.tertiary) },
+        supportingContent = { FollowUpStatus(entry.item.dueDate, entry.item.completedAt) },
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = .35f)),
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).testTag("followup_${entry.item.id}"))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FollowUpsOverlay(contactId: Long? = null, onDismiss: () -> Unit, vm: FollowUpViewModel = hiltViewModel()) {
+fun FollowUpsOverlay(contactId: Long? = null, onDismiss: () -> Unit, onContact: (Long) -> Unit = {}, vm: FollowUpViewModel = hiltViewModel()) {
     val entries by vm.items.collectAsStateWithLifecycle()
     var completed by rememberSaveable { mutableStateOf(false) }
     var adding by rememberSaveable { mutableStateOf(false) }
     var editing by rememberSaveable { mutableStateOf<Long?>(null) }
+    var reading by rememberSaveable { mutableStateOf<Long?>(null) }
     val visible = entries.filter { (contactId == null || it.item.contactId == contactId) && (it.item.completedAt != null) == completed }
     ModalBottomSheet(modifier = Modifier.exposeTestTags(), onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxHeight(.85f).padding(horizontal = 16.dp).testTag("followups_list")) {
@@ -87,10 +100,11 @@ fun FollowUpsOverlay(contactId: Long? = null, onDismiss: () -> Unit, vm: FollowU
                 TextButton(onClick = { adding = true }) { Text(stringResource(R.string.followup_add)) }
             }
             if (visible.isEmpty()) Text(stringResource(R.string.followup_empty), Modifier.padding(vertical = 24.dp))
-            LazyColumn(Modifier.weight(1f)) { items(visible, key = { it.item.id }) { entry -> FollowUpRow(entry) { editing = entry.item.id } } }
+            LazyColumn(Modifier.weight(1f)) { items(visible, key = { it.item.id }) { entry -> FollowUpRow(entry) { reading = entry.item.id } } }
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.followup_close)) }
         }
     }
+    reading?.let { id -> FollowUpReader(existingId = id, onDismiss = { reading = null }, onContact = { reading = null; onContact(it) }, onEdit = { reading = null; editing = it }) }
     if (adding || editing != null) FollowUpEditor(contactId = contactId, existingId = editing, onDismiss = { adding = false; editing = null })
 }
 
@@ -112,7 +126,6 @@ fun FollowUpEditor(contactId: Long? = null, existingId: Long? = null, initialTex
     var error by remember { mutableStateOf<String?>(null) }
     var choosingPerson by remember { mutableStateOf(false) }
     var choosingDate by remember { mutableStateOf(false) }
-    var query by rememberSaveable { mutableStateOf("") }
     var askReminders by rememberSaveable(key) { mutableStateOf(false) }
     var savedAndWaiting by rememberSaveable(key) { mutableStateOf(false) }
     val people by vm.people.collectAsStateWithLifecycle()
@@ -164,17 +177,20 @@ fun FollowUpEditor(contactId: Long? = null, existingId: Long? = null, initialTex
     }
     ModalBottomSheet(modifier = Modifier.exposeTestTags(), onDismissRequest = { if (!saving) { if (savedAndWaiting) finishSaved() else onDismiss() } }, sheetState = editorSheetState) {
         Column(Modifier.fillMaxHeight(.9f).imePadding().padding(horizontal = 16.dp).testTag("followup_editor")) {
-            Text(stringResource(if (existingId == null) R.string.followup_add else R.string.followup_edit), style = MaterialTheme.typography.titleLarge)
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            Row(Modifier.fillMaxWidth()) {
+                Text(stringResource(if (existingId == null) R.string.followup_add else R.string.followup_edit), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).padding(top = 12.dp))
+                IconButton(onClick = onDismiss, enabled = !saving) { Icon(Icons.Default.Close, stringResource(R.string.followup_close)) }
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 TextButton(onClick = { choosingPerson = true }, enabled = !saving, modifier = Modifier.testTag("followup_choose_person")) {
                     Text(people.find { it.id == person }?.displayName ?: stringResource(R.string.followup_person))
                 }
-                OutlinedTextField(text, { text = it }, label = { Text(stringResource(R.string.followup_hint)) }, minLines = 3,
-                    enabled = !saving && loaded && !draftConflict, modifier = Modifier.fillMaxWidth().focusRequester(focusRequester).testTag("followup_text"))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { choosingDate = true }, enabled = !saving, modifier = Modifier.testTag("followup_choose_date")) { Text(due ?: stringResource(R.string.followup_date)) }
-                    if (due != null) TextButton(onClick = { due = null }, enabled = !saving) { Text(stringResource(R.string.followup_no_date)) }
-                }
+                TextButton(onClick = { choosingDate = true }, enabled = !saving, modifier = Modifier.testTag("followup_choose_date")) { Text(due?.let { formatFollowUpDate(it) } ?: stringResource(R.string.followup_date)) }
+                if (due != null) TextButton(onClick = { due = null }, enabled = !saving) { Text(stringResource(R.string.followup_no_date)) }
+            }
+            OutlinedTextField(text, { text = it }, label = { Text(stringResource(R.string.followup_hint)) }, minLines = 1,
+                enabled = !saving && loaded && !draftConflict, modifier = Modifier.fillMaxWidth().weight(1f).focusRequester(focusRequester).testTag("followup_text"))
+            Column {
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("followup_error")) }
                 if (existingId != null && loaded) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -190,7 +206,7 @@ fun FollowUpEditor(contactId: Long? = null, existingId: Long? = null, initialTex
                             val done = entries.find { it.item.id == existingId }?.item?.completedAt != null
                             Text(stringResource(if (done) R.string.followup_reopen else R.string.followup_done))
                         }
-                        TextButton(enabled = !saving, onClick = {
+                        IconButton(enabled = !saving, onClick = {
                             saving = true
                             scope.launch {
                                 try {
@@ -202,13 +218,12 @@ fun FollowUpEditor(contactId: Long? = null, existingId: Long? = null, initialTex
                                 } catch (e: kotlinx.coroutines.CancellationException) { throw e }
                                 catch (_: Exception) { error = saveError; saving = false }
                             }
-                        }) { Text(stringResource(R.string.followup_delete)) }
+                        }) { Icon(Icons.Default.Delete, stringResource(R.string.followup_delete)) }
                     }
                 }
             }
             SnackbarHost(snackbar)
             FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = onDismiss, enabled = !saving) { Text(stringResource(R.string.followup_close)) }
                 TextButton(onClick = { confirmDiscard = true }, enabled = !saving) { Text(stringResource(R.string.pilot_discard)) }
                 Button(enabled = loaded && !saving && !savedAndWaiting && !draftConflict && text.isNotBlank() && person != null, modifier = Modifier.testTag("save_followup"), onClick = {
                     saving = true
@@ -235,14 +250,10 @@ fun FollowUpEditor(contactId: Long? = null, existingId: Long? = null, initialTex
     if (confirmDiscard) AlertDialog(modifier = Modifier.exposeTestTags(), onDismissRequest = { confirmDiscard = false }, title = { Text(stringResource(R.string.followup_discard_title)) },
         confirmButton = { TextButton(onClick = { prefs.edit().remove(key).apply(); confirmDiscard = false; onDismiss() }) { Text(stringResource(R.string.pilot_discard)) } },
         dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text(stringResource(R.string.followup_cancel)) } })
-    if (choosingPerson) AlertDialog(modifier = Modifier.exposeTestTags(), onDismissRequest = { choosingPerson = false }, title = { Text(stringResource(R.string.followup_person)) }, text = {
-        Column(Modifier.heightIn(max = 400.dp)) {
-            SearchField(query, { query = it }, stringResource(R.string.followup_search), "followup_clear_person", Modifier.fillMaxWidth())
-            LazyColumn { items(people.filter { it.displayName.contains(query, true) }, key = { it.id }) { candidate ->
-                TextButton(onClick = { person = candidate.id; choosingPerson = false }, modifier = Modifier.fillMaxWidth().testTag("followup_person_${candidate.id}")) { Text(candidate.displayName) }
-            } }
-        }
-    }, confirmButton = { TextButton(onClick = { choosingPerson = false }) { Text(stringResource(R.string.followup_close)) } })
+    if (choosingPerson) PersonPicker(
+        onDismiss = { choosingPerson = false },
+        onPersonSelected = { person = it.id; choosingPerson = false }
+    )
     if (choosingDate) {
         val dateState = rememberDatePickerState(initialSelectedDateMillis = due?.let { LocalDate.parse(it).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() })
         DatePickerDialog(modifier = Modifier.exposeTestTags(), onDismissRequest = { choosingDate = false }, confirmButton = { TextButton(onClick = {

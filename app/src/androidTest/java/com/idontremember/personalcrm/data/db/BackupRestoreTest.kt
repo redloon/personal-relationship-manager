@@ -30,6 +30,7 @@ class BackupRestoreTest {
     @Inject lateinit var contacts: ContactRepository
     @Inject lateinit var settings: SettingsRepository
     @Inject lateinit var eventRepository: EventRepository
+    @Inject lateinit var tagRepository: com.idontremember.personalcrm.data.repository.TagRepository
 
     @Before fun setup() {
         hiltRule.inject()
@@ -97,7 +98,7 @@ class BackupRestoreTest {
 
     @Test fun recoverableDeletionSurvivesQueriesAndExpiresAfterThirtyDays() = runBlocking {
         val person = contacts.createLocalContact("  Alice  ")
-        val sameName = contacts.createLocalContact("Alice")
+        val sameName = contacts.createLocalContact("Alice", allowDuplicate = true)
         assertTrue(person != sameName) // A name is not a portable identity.
         assertEquals("Alice", database.contactDao().getById(person)?.displayName)
         val fact = contacts.addFact(person, "Climbing")
@@ -120,6 +121,25 @@ class BackupRestoreTest {
         assertEquals(fact, database.contactFactDao().getByContactIdOnce(person).single().id)
         assertEquals("@Alice at the park", database.eventDao().getById(event)?.note)
         assertEquals(listOf(person), database.eventDao().getContactIdsForEvent(event))
+    }
+
+    @Test fun explicitTokensSurviveBackupRenameAndTagRemovalWithoutChangingProse(): Unit = runBlocking {
+        val person = contacts.createLocalContact("Maya Chen")
+        val note = "@Maya Chen likes #tea"
+        val tokens = listOf(
+            com.idontremember.personalcrm.data.capture.InlineToken(0, 10, com.idontremember.personalcrm.data.capture.TokenTarget.Person(person)),
+            com.idontremember.personalcrm.data.capture.InlineToken(17, 21, com.idontremember.personalcrm.data.capture.TokenTarget.Tag("tea")))
+        val event = eventRepository.createEvent(note, listOf(person), listOf("tea"), inlineTokens = tokens)
+        contacts.renameLocalContact(person, "Maya Li")
+        val snapshot = BackupJson.decode(exporter.exportToJson())
+        exporter.restore(snapshot)
+        assertEquals(note, database.eventDao().getById(event)!!.note)
+        assertEquals(tokens, com.idontremember.personalcrm.data.capture.InlineTokens.decode(database.eventDao().getById(event)!!.inlineTokens))
+        assertEquals("Maya Li", database.contactDao().getById(person)!!.displayName)
+        tagRepository.deleteTag(database.tagDao().getByName("tea")!!)
+        assertEquals(note, database.eventDao().getById(event)!!.note)
+        assertEquals(tokens.take(1), com.idontremember.personalcrm.data.capture.InlineTokens.decode(database.eventDao().getById(event)!!.inlineTokens))
+        BackupJson.decode(exporter.exportToJson())
     }
 
     @Test fun tagMembershipAndRelationshipsAreReciprocal() = runBlocking {

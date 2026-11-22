@@ -59,6 +59,8 @@ Resolve a failing hook or input mismatch instead of bypassing it. Stage a cohere
 - Database changes require an explicit migration, committed exported schema, and populated migration tests. Release builds must never use destructive migration fallback.
 - Long-lived processes must redirect stdout/stderr and close stdin. Keep runner timeouts and cleanup intact; an inherited output pipe can make a completed command appear hung.
 - A displayed sheet may still move when its autofocus opens the keyboard. Use `waitForKeyboard` from `TestNavHelpers` before tapping controls affected by that movement, and assert the resulting selection. The helper checks the actual IME window because dialog sheets have separate windows from the activity.
+- A nested control in a prefetched lazy item can expose semantics before placement, with misleading coordinates. Scroll the lazy container using `performScrollToNode(hasTestTag(...))`, then assert visibility and tap; calling `performScrollTo()` on that unplaced child can hit another control. Verify persistence for mutations.
+- Kotlin expression-bodied JUnit tests must return `Unit`. A final call returning a value can make JUnit reject the whole class; explicitly declare `: Unit` when needed.
 - Accessibility touch-target assertions use `SemanticsNode.touchBoundsInRoot`; a Material button's visual size can be smaller than its actual touch target. For text clipping, check drawn line bounds and character coverage: a paragraph may retain a wider measurement constraint than the final Text layout, making `hasVisualOverflow` misleading. See `AccessibilitySmokeTest`.
 
 ## Lessons from the workflow audit

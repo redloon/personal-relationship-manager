@@ -55,6 +55,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import com.idontremember.personalcrm.ui.components.exposeTestTags
 import com.idontremember.personalcrm.R
+import com.idontremember.personalcrm.ui.components.PersonPicker
 import com.idontremember.personalcrm.ui.components.SearchField
 import com.idontremember.personalcrm.ui.components.SettingsButton
 import com.idontremember.personalcrm.data.db.entity.Contact
@@ -68,7 +69,8 @@ fun ContactsListScreen(
     onContactClick: (Long) -> Unit,
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: ContactsListViewModel = hiltViewModel()
+    viewModel: ContactsListViewModel = hiltViewModel(),
+    onContactSearch: ((Long, String) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> if (granted) viewModel.syncContacts() }
@@ -77,12 +79,8 @@ fun ContactsListScreen(
         else permission.launch(Manifest.permission.READ_CONTACTS)
     }
     var addPerson by rememberSaveable { mutableStateOf(false) }
-    var name by rememberSaveable { mutableStateOf("") }
-    val creating by viewModel.creating.collectAsState()
-    val createError by viewModel.createError.collectAsState()
-    val created by viewModel.created.collectAsState()
-    LaunchedEffect(created) { created?.let { addPerson = false; name = ""; viewModel.consumeCreated(); onContactClick(it) } }
     val contacts by viewModel.contacts.collectAsState()
+    val excerpts by viewModel.matchingExcerpts.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
@@ -185,19 +183,18 @@ fun ContactsListScreen(
                     items(contactList, key = { it.id }) { contact ->
                         ContactListItem(
                             contact = contact,
-                            onClick = { onContactClick(contact.id) }
+                            excerpt = excerpts[contact.id],
+                            onClick = { onContactSearch?.invoke(contact.id, searchQuery) ?: onContactClick(contact.id) }
                         )
                     }
                 }
             }
         }
     }
-    if (addPerson) AlertDialog(modifier = Modifier.exposeTestTags(),
-        onDismissRequest = { if (!creating) addPerson = false },
-        title = { Text(stringResource(R.string.recall_add_person)) },
-        text = { Column { OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.recall_person_name)) }, singleLine = true, modifier = Modifier.testTag("new_person_name")); if (createError) Text(stringResource(R.string.recall_create_failed), color = MaterialTheme.colorScheme.error) } },
-        confirmButton = { TextButton(onClick = { viewModel.createPerson(name) }, enabled = name.isNotBlank() && !creating, modifier = Modifier.testTag("create_person_button")) { Text(stringResource(R.string.action_add)) } },
-        dismissButton = { TextButton(onClick = { addPerson = false }, enabled = !creating) { Text(stringResource(R.string.action_cancel)) } }
+    if (addPerson) PersonPicker(
+        onDismiss = { addPerson = false },
+        onPersonSelected = { addPerson = false; onContactClick(it.id) },
+        startCreating = true
     )
 
 }
@@ -205,15 +202,15 @@ fun ContactsListScreen(
 @Composable
 private fun ContactListItem(
     contact: Contact,
+    excerpt: String? = null,
     onClick: () -> Unit
 ) {
     ListItem(
         headlineContent = { Text(contact.displayName) },
         supportingContent = {
             val details = listOfNotNull(contact.phoneNumber, contact.email).joinToString(" · ")
-            if (details.isNotBlank()) {
-                Text(details)
-            }
+            val context = excerpt?.takeIf { it.isNotBlank() } ?: details
+            if (context.isNotBlank()) Text(context)
         },
         leadingContent = {
             if (contact.photoUri != null) {

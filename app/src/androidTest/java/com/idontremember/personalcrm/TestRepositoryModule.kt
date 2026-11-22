@@ -43,6 +43,7 @@ object TestRepositoryModule {
     @Provides
     @Singleton
     fun provideTagRepository(
-        tagDao: TagDao
-    ): TagRepository = TagRepository(tagDao)
+        tagDao: TagDao,
+        database: com.idontremember.personalcrm.data.db.AppDatabase
+    ): TagRepository = TagRepository(tagDao, database)
 }

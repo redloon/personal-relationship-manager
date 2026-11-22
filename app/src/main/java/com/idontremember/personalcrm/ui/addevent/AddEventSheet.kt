@@ -3,10 +3,16 @@ package com.idontremember.personalcrm.ui.addevent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Tag
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -24,6 +30,7 @@ import com.idontremember.personalcrm.R
 import com.idontremember.personalcrm.ui.components.AutocompleteContact
 import com.idontremember.personalcrm.ui.components.AutocompleteTag
 import com.idontremember.personalcrm.ui.components.AutocompleteTextField
+import com.idontremember.personalcrm.ui.components.PersonPicker
 import com.idontremember.personalcrm.ui.components.ContactChip
 import com.idontremember.personalcrm.ui.components.ErrorState
 import com.idontremember.personalcrm.ui.components.SearchField
@@ -48,6 +55,8 @@ fun AddEventSheet(
     initialIsFact: Boolean = false
 ) {
     val noteText by viewModel.noteText.collectAsState()
+    val inlineTokens by viewModel.inlineTokens.collectAsState()
+    val resumingDraft by viewModel.resumingDraft.collectAsState()
     val selectedContactIds by viewModel.selectedContactIds.collectAsState()
     val selectedTagNames by viewModel.selectedTagNames.collectAsState()
     val eventDate by viewModel.eventDate.collectAsState()
@@ -64,7 +73,9 @@ fun AddEventSheet(
     var showTags by rememberSaveable { mutableStateOf(false) }
     var showDate by rememberSaveable { mutableStateOf(false) }
     var showTime by rememberSaveable { mutableStateOf(false) }
-    var personQuery by rememberSaveable { mutableStateOf("") }
+    var pendingPersonQuery by rememberSaveable { mutableStateOf("") }
+    var pendingPersonStart by rememberSaveable { mutableStateOf(-1) }
+    var pendingPersonEnd by rememberSaveable { mutableStateOf(-1) }
     var tagQuery by rememberSaveable { mutableStateOf("") }
     val editing = existingEventId != null || existingFactId != null
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -82,6 +93,8 @@ fun AddEventSheet(
                 Text(stringResource(when {
                     existingFactId != null -> R.string.capture_edit_fact
                     editing -> R.string.capture_edit_note
+                    resumingDraft && !conflict -> R.string.usability_resume_draft
+                    isFact -> R.string.usability_add_fact
                     else -> R.string.capture_add_note
                 }), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 IconButton(onClick = close, enabled = !saving) {
@@ -98,45 +111,55 @@ fun AddEventSheet(
                 modifier = Modifier.fillMaxWidth(),
                 testTag = "event_save_error"
             )
-            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (!ready) {
-                    Text(stringResource(if (saveFailed) R.string.capture_unavailable else R.string.capture_loading))
-                } else {
-                    if (!editing) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = !isFact, onClick = { viewModel.setFact(false) }, label = { Text(stringResource(R.string.capture_note), maxLines = 1) }, enabled = !saving)
-                        FilterChip(selected = isFact, onClick = { viewModel.setFact(true) }, label = { Text(stringResource(R.string.pilot_fact), maxLines = 1) }, enabled = !saving)
-                        FilterChip(selected = false, onClick = { showFollowUp = true }, label = { Text(stringResource(R.string.capture_follow_up), maxLines = 1) }, enabled = !saving, modifier = Modifier.testTag("capture_follow_up_button"))
+            if (!ready) {
+                Text(stringResource(if (saveFailed) R.string.capture_unavailable else R.string.capture_loading))
+            } else {
+                if (!editing) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = !isFact, onClick = { viewModel.setFact(false) }, label = { Text(stringResource(R.string.capture_note), maxLines = 1) }, enabled = !saving)
+                    FilterChip(selected = isFact, onClick = { viewModel.setFact(true) }, label = { Text(stringResource(R.string.pilot_fact), maxLines = 1) }, enabled = !saving)
+                    FilterChip(selected = false, onClick = { showFollowUp = true }, label = { Text(stringResource(R.string.capture_follow_up), maxLines = 1) }, enabled = !saving, modifier = Modifier.testTag("capture_follow_up_button"))
+                }
+                if (isFact && selectedContactIds.size != 1) Text(stringResource(R.string.usability_fact_person_required), style = MaterialTheme.typography.bodySmall)
+                AutocompleteTextField(
+                    value = noteText, onValueChange = viewModel::onNoteChanged,
+                    contacts = viewModel.getAutocompleteContacts(), tags = viewModel.getAutocompleteTags(),
+                    onContactSelected = viewModel::insertPersonToken, onTagSelected = viewModel::insertTagToken,
+                    autoFocus = autoFocus && !conflict && !showPeople && !showTags && !showDate && !showTime, enableTags = !isFact, enableContacts = !isFact,
+                    inlineTokens = if (isFact) emptyList() else inlineTokens,
+                    placeholder = if (isFact) stringResource(R.string.usability_fact_prompt) else null,
+                    modifier = Modifier.fillMaxWidth().weight(1f).heightIn(min = 56.dp),
+                    onCreateContact = { query, start, end -> pendingPersonQuery = query; pendingPersonStart = start; pendingPersonEnd = end; showPeople = true }
+                )
+                if (selectedContactIds.isNotEmpty() || (!isFact && selectedTagNames.isNotEmpty())) {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (!isFact && selectedContactIds.isEmpty()) TextButton(onClick = { pendingPersonStart = -1; pendingPersonQuery = ""; showPeople = true }, modifier = Modifier.testTag("capture_no_people")) { Text(stringResource(R.string.usability_no_people_linked), style = MaterialTheme.typography.bodySmall) }
+                        selectedContactIds.forEach { id -> ContactChip(
+                            name = contacts.find { it.id == id }?.displayName ?: stringResource(R.string.pilot_unavailable_contact),
+                            onRemove = { viewModel.removeContact(id) }
+                        ) }
+                        if (!isFact) selectedTagNames.forEach { name -> TagChip(name = name, onRemove = { viewModel.removeTag(name) }) }
                     }
-                    if (isFact) Text(stringResource(R.string.pilot_select_one), style = MaterialTheme.typography.bodySmall)
-                    AutocompleteTextField(
-                        value = noteText, onValueChange = viewModel::onNoteChanged,
-                        contacts = viewModel.getAutocompleteContacts(), tags = viewModel.getAutocompleteTags(),
-                        onContactSelected = viewModel::onContactSelected, onTagSelected = viewModel::onTagSelected,
-                        autoFocus = autoFocus && !conflict, enableTags = !isFact,
-                        onCreateContact = { viewModel.createPerson(it) }
-                    )
-                    if (selectedContactIds.isNotEmpty() || (!isFact && selectedTagNames.isNotEmpty())) {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            selectedContactIds.forEach { id -> ContactChip(
-                                name = contacts.find { it.id == id }?.displayName ?: stringResource(R.string.pilot_unavailable_contact),
-                                onRemove = { viewModel.removeContact(id) }
-                            ) }
-                            if (!isFact) selectedTagNames.forEach { name -> TagChip(name = name, onRemove = { viewModel.removeTag(name) }) }
+                } else if (!isFact) {
+                    TextButton(onClick = { pendingPersonStart = -1; pendingPersonQuery = ""; showPeople = true }, modifier = Modifier.testTag("capture_no_people")) { Text(stringResource(R.string.usability_no_people_linked), style = MaterialTheme.typography.bodySmall) }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    IconButton(onClick = { pendingPersonStart = -1; pendingPersonQuery = ""; showPeople = true }, enabled = !saving, modifier = Modifier.testTag("capture_people_button")) {
+                        Icon(Icons.Default.PersonAdd, contentDescription = stringResource(R.string.capture_people))
+                    }
+                    if (!isFact) {
+                        IconButton(onClick = { showTags = true }, enabled = !saving, modifier = Modifier.testTag("capture_tags_button")) {
+                            Icon(Icons.Default.Tag, contentDescription = stringResource(R.string.capture_tags))
+                        }
+                        IconButton(onClick = { showDate = true }, enabled = !saving, modifier = Modifier.testTag("capture_date_button")) {
+                            Icon(Icons.Default.DateRange, contentDescription = stringResource(R.string.capture_date) + ": " + SimpleDateFormat(stringResource(R.string.date_pattern_short), Locale.getDefault()).format(Date(eventDate)))
+                        }
+                        IconButton(onClick = { showTime = true }, enabled = !saving, modifier = Modifier.testTag("capture_time_button")) {
+                            Icon(Icons.Default.Schedule, contentDescription = stringResource(R.string.select_time_title) + ": " + SimpleDateFormat(stringResource(R.string.time_pattern), Locale.getDefault()).format(Date(eventDate)))
                         }
                     }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        TextButton(onClick = { showPeople = true }, enabled = !saving, modifier = Modifier.testTag("capture_people_button")) { Text(stringResource(R.string.capture_people)) }
-                        if (!isFact) {
-                            TextButton(onClick = { showTags = true }, enabled = !saving, modifier = Modifier.testTag("capture_tags_button")) { Text(stringResource(R.string.capture_tags)) }
-                            TextButton(onClick = { showDate = true }, enabled = !saving, modifier = Modifier.testTag("capture_date_button")) {
-                                Text(SimpleDateFormat(stringResource(R.string.date_pattern_short), Locale.getDefault()).format(Date(eventDate)))
-                            }
-                            TextButton(onClick = { showTime = true }, enabled = !saving, modifier = Modifier.testTag("capture_time_button")) {
-                                Text(SimpleDateFormat(stringResource(R.string.time_pattern), Locale.getDefault()).format(Date(eventDate)))
-                            }
-                        }
+                    IconButton(onClick = { viewModel.discard(); onDismiss() }, enabled = !saving, modifier = Modifier.testTag("capture_discard")) {
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.pilot_discard))
                     }
-                    TextButton(onClick = { viewModel.discard(); onDismiss() }, enabled = !saving, modifier = Modifier.align(Alignment.End)) { Text(stringResource(R.string.pilot_discard)) }
                 }
             }
         }
@@ -154,22 +177,16 @@ fun AddEventSheet(
         confirmButton = { TextButton(onClick = { viewModel.resolveSharedDraft(true) }) { Text(stringResource(R.string.capture_resume_draft)) } },
         dismissButton = { TextButton(onClick = { viewModel.resolveSharedDraft(false) }) { Text(stringResource(if (initialText != null) R.string.capture_start_shared else R.string.capture_start_context)) } }
     )
-    if (showPeople) AlertDialog(modifier = Modifier.exposeTestTags(),
-        onDismissRequest = { showPeople = false }, title = { Text(stringResource(R.string.capture_people)) },
-        text = {
-            Column {
-                SearchField(personQuery, { personQuery = it }, stringResource(R.string.capture_people_hint), "clear_capture_person_search", Modifier.fillMaxWidth().testTag("event_person_search"))
-                LazyColumn(Modifier.heightIn(max = 280.dp)) {
-                    items(contacts.filter { it.displayName.contains(personQuery.trim(), true) && it.id !in selectedContactIds }, key = { it.id }) { person ->
-                        TextButton(onClick = { viewModel.onContactSelected(AutocompleteContact(person.id, person.displayName)); personQuery = ""; showPeople = false }, modifier = Modifier.fillMaxWidth().testTag("event_person_option_${person.id}")) { Text(person.displayName) }
-                    }
-                }
-                if (contacts.isEmpty() && personQuery.isBlank()) Text(stringResource(R.string.capture_empty_people))
-                if (personQuery.isNotBlank()) TextButton(onClick = {
-                    viewModel.createPerson(personQuery) { personQuery = ""; showPeople = false }
-                }, modifier = Modifier.testTag("capture_create_person")) { Text(stringResource(R.string.capture_create_person, personQuery.trim())) }
-            }
-        }, confirmButton = { TextButton(onClick = { showPeople = false }) { Text(stringResource(R.string.pilot_done)) } }
+    if (showPeople) PersonPicker(
+        onDismiss = { showPeople = false; pendingPersonStart = -1 },
+        onPersonSelected = { person ->
+            if (pendingPersonStart >= 0) viewModel.insertPersonToken(person, pendingPersonStart, pendingPersonEnd)
+            else viewModel.onContactSelected(person)
+            pendingPersonStart = -1; pendingPersonQuery = ""; showPeople = false
+        },
+        selectedIds = if (isFact || pendingPersonStart >= 0) emptySet() else selectedContactIds,
+        initialQuery = pendingPersonQuery,
+        startCreating = pendingPersonStart >= 0
     )
     if (showTags) AlertDialog(modifier = Modifier.exposeTestTags(),
         onDismissRequest = { showTags = false }, title = { Text(stringResource(R.string.capture_tags)) },
