@@ -243,3 +243,22 @@ ID, count, timings and terminal cleanup result. Health/builds alone are not pass
 
 Lost drafts are best effort and do not fail acceptance. Device reboot, sudden
 power loss and additional Android versions remain deferred.
+
+### Live v6 validation (2026-11-23)
+
+Refreshed runner PID `275278`, source hash
+`8fe595549c68cc988582795e66fe945cdc5584b4277c79e90d961084795803eb`,
+passed all three normal-app recovery cases in job
+`62431ba299f248ed9ac84aaaa3a83349` on the exact signed disposable release APK.
+Total 719.749 seconds; cleanup 0.368 seconds. PIDs changed for each restart;
+original IDs, associations, edits, completion and recoverable deletion survived.
+All 6,003,088 output-log bytes were consumed, and app-only capture hashes were
+verified. A prior run timed out; reusing current verified accessibility refs
+removed redundant dumps while preserving input invalidation and target guards.
+
+After cleanup and debug-pair staging, focused file-backed durability job
+`cfc9b835beb24b53acbbad2b671417b3` passed 5 tests (4.844 seconds total), then
+unfiltered job `58fa6451b300440fa599ab40883927fc` passed 165 tests
+(278.535 seconds total). Both completed cleanup; all output chunks were read.
+Final health reported idle. Full APK/source hashes, PIDs and timings are recorded
+in [the validation report](../../docs/validation/followup-2026-11-23.md).
