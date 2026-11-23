@@ -161,6 +161,87 @@ class DogfoodWorkflowTest {
         assertEquals(setOf(maya, linked), runBlocking { db.eventDao().getContactIdsForEvent(saved.id).toSet() })
     }
 
+    @Test fun tagKeyboardFilteringMixedMentionsAndTokenIdentitySurviveReopen() {
+        val tea = runBlocking { db.tagDao().insert(Tag(name = "tea")) }
+        runBlocking { db.tagDao().insert(Tag(name = "travel")) }
+        ui.onNodeWithTag("add_event_fab").performClick()
+        ui.waitUntilTagDisplayed("note_text_field")
+        ui.waitForKeyboard(true)
+        ui.onNodeWithTag("note_text_field").performTextInput("#")
+        assertSuggestionsAvoidKeyboardAndField()
+        tapImeLetterT()
+        ui.onNodeWithTag("note_text_field").assertTextContains("#t", ignoreCase = true)
+        ui.onNodeWithTag("note_text_field").performTextInput("e")
+        ui.onNodeWithText("#tea").assertIsDisplayed().performClick()
+        ui.onNodeWithTag("note_text_field").performTextInput("with @Ma")
+        ui.onNodeWithText("Maya Typo").performClick()
+        ui.onNodeWithTag("save_event_button").performClick()
+        ui.waitUntil(5_000) { runBlocking { db.eventDao().getAllOnce().size == 2 } }
+        val saved = runBlocking { db.eventDao().getAllOnce().first { it.id != note } }
+        assertEquals(listOf(tea), runBlocking { db.eventDao().getTagIdsForEvent(saved.id) })
+        assertEquals(listOf(maya), runBlocking { db.eventDao().getContactIdsForEvent(saved.id) })
+        val targets = com.idontremember.personalcrm.data.capture.InlineTokens.decode(saved.inlineTokens).map { it.target }.toSet()
+        assertEquals(setOf(com.idontremember.personalcrm.data.capture.TokenTarget.Tag("tea"),
+            com.idontremember.personalcrm.data.capture.TokenTarget.Person(maya)), targets)
+        ui.waitUntilTagDisplayed("recall_event_${saved.id}")
+        ui.onNodeWithTag("recall_event_${saved.id}").performClick()
+        ui.waitUntilTagDisplayed("event_detail_screen")
+        ui.onNodeWithTag("edit_event_button").performClick()
+        ui.waitUntilTagDisplayed("note_text_field")
+        ui.onNodeWithTag("note_text_field").assertTextContains(saved.note)
+        ui.onNodeWithTag("note_text_field").performTextReplacement("Plain text remains")
+        ui.onNodeWithTag("save_event_edit_button").performClick()
+        ui.waitUntil(5_000) { runBlocking { db.eventDao().getTagIdsForEvent(saved.id).isEmpty() } }
+        assertTrue(runBlocking { db.eventDao().getContactIdsForEvent(saved.id).isEmpty() })
+    }
+
+    @Test fun newTagDraftAndExplicitDismissalKeepLiteralTextIndependent() {
+        ui.onNodeWithTag("add_event_fab").performClick()
+        ui.waitUntilTagDisplayed("note_text_field")
+        ui.waitForKeyboard(true)
+        ui.onNodeWithTag("note_text_field").performTextInput("#newtag")
+        ui.onNodeWithText(ui.activity.getString(R.string.create_tag_option, "newtag")).performScrollTo().performClick()
+        ui.onNodeWithTag("note_text_field").performTextInput("and #literal")
+        ui.onNodeWithTag("inline_keep_text").performScrollTo().performClick()
+        ui.onNodeWithTag("note_text_field").performTextInput(" prose")
+        ui.onNodeWithTag("mention_suggestions").assertDoesNotExist()
+        ui.onNodeWithContentDescription("Close").performClick()
+        ui.waitUntilTagDisplayed("add_event_fab")
+        ui.activityRule.scenario.recreate()
+        ui.waitUntilTagDisplayed("add_event_fab")
+        ui.onNodeWithTag("add_event_fab").performClick()
+        ui.waitUntilTagDisplayed("note_text_field")
+        ui.onNodeWithTag("note_text_field").assertTextContains("#newtag and #literal prose")
+        ui.onNodeWithTag("save_event_button").performClick()
+        ui.waitUntil(5_000) { runBlocking { db.eventDao().getAllOnce().size == 2 } }
+        val saved = runBlocking { db.eventDao().getAllOnce().first { it.id != note } }
+        val tag = runBlocking { db.tagDao().getByName("newtag")!! }
+        assertEquals(listOf(tag.id), runBlocking { db.eventDao().getTagIdsForEvent(saved.id) })
+        assertNull(runBlocking { db.tagDao().getByName("literal") })
+        assertEquals(listOf(com.idontremember.personalcrm.data.capture.TokenTarget.Tag("newtag")),
+            com.idontremember.personalcrm.data.capture.InlineTokens.decode(saved.inlineTokens).map { it.target })
+    }
+
+    private fun tapImeLetterT() {
+        var x = 0f; var y = 0f
+        ui.runOnUiThread {
+            val decor = ui.activity.window.decorView
+            val insets = ViewCompat.getRootWindowInsets(decor)!!
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            assertTrue("Requires the dedicated emulator's visible QWERTY keyboard", ime > 0)
+            val density = ui.activity.resources.displayMetrics.density
+            x = decor.width * .45f
+            y = decor.height - ime + 64 * density
+        }
+        val now = SystemClock.uptimeMillis()
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        val down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0)
+        val up = MotionEvent.obtain(now, now + 40, MotionEvent.ACTION_UP, x, y, 0)
+        try { automation.injectInputEvent(down, true); automation.injectInputEvent(up, true) }
+        finally { down.recycle(); up.recycle() }
+        ui.waitForIdle()
+    }
+
     private fun assertSuggestionsAvoidKeyboardAndField() {
         val menu = ui.onNodeWithTag("mention_suggestions").fetchSemanticsNode()
         val field = ui.onNodeWithTag("note_text_field").fetchSemanticsNode()

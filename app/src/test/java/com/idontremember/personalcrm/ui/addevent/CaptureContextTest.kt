@@ -44,6 +44,18 @@ class CaptureContextTest {
         assertEquals(consecutive.lastIndexOf('@'), trigger.startIndex)
     }
 
+    @Test fun tagFilteringEndsAtWhitespaceAndMixedTriggersUseTheirOwnQuery() {
+        for (text in listOf("#", "#t", "#te", "#tea")) {
+            assertEquals(TriggerType.TAG, detectTrigger(text, text.length)?.type)
+            assertEquals(text.drop(1), detectTrigger(text, text.length)?.query)
+        }
+        assertNull(detectTrigger("#tea ", 5))
+        val mixed = "@Maya Chen #tea @Alex"
+        assertEquals("Alex", detectTrigger(mixed, mixed.length)?.query)
+        assertEquals(TriggerType.CONTACT, detectTrigger(mixed, mixed.length)?.type)
+        assertNull(detectTrigger("mail@example.com", 16))
+    }
+
     @Test fun datePickerKeepsLocalTimeInsteadOfSwitchingToUtcMidnight() {
         val zone = TimeZone.getTimeZone("America/Los_Angeles")
         val original = Calendar.getInstance(zone).apply { set(2026, Calendar.NOVEMBER, 1, 17, 35, 0); set(Calendar.MILLISECOND, 0) }
