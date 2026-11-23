@@ -113,3 +113,9 @@ If host and sandbox disagree, reopen after `os.posix_fadvise(fd, 0, 0,
 os.POSIX_FADV_DONTNEED)` and verify the contents before assuming an action was
 not performed. This recovered the completed host cleanup log during live QA.
 Do not overwrite another agent's report based on stale cached contents.
+
+## Contributor references
+
+For collecting feedback from the maintainer's phone, see [development feedback](development-feedback.md). App instructions live in [Using Personal CRM](using-the-app.md); licensing and third-party notices are summarized in [licensing](licensing.md).
+
+Keep user-visible text, accessibility labels and date patterns in `app/src/main/res/values/`. Reuse the controls and empty/loading/error states in `ui/components`; see [usability principles](usability-principles.md) before changing interactions. Runtime pitfalls and database migration requirements are listed above rather than maintained as a separate architecture inventory.
