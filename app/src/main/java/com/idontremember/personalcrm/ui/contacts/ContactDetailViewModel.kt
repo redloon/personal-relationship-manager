@@ -1,5 +1,7 @@
 package com.idontremember.personalcrm.ui.contacts
 
+import com.idontremember.personalcrm.data.contacts.InteractionRepository
+import com.idontremember.personalcrm.data.contacts.InteractionSnapshot
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.idontremember.personalcrm.data.db.entity.Contact
@@ -22,6 +24,7 @@ import javax.inject.Inject
 class ContactDetailViewModel @Inject constructor(
     private val contactRepository: ContactRepository,
     private val recovery: RecoveryRepository,
+    interactions: InteractionRepository,
     settingsRepository: SettingsRepository
 ) : ViewModel() {
 
@@ -37,6 +40,8 @@ class ContactDetailViewModel @Inject constructor(
 
     /** P2: false until the first query emission — drives the shared `LoadingState`;
      *  a null contact after this is "not found" and renders the shared `ErrorState`. */
+    val interactionSnapshot: StateFlow<InteractionSnapshot?> = interactions.snapshots.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     private val _contactLoaded = MutableStateFlow(false)
     val contactLoaded: StateFlow<Boolean> = _contactLoaded
 
@@ -45,9 +50,6 @@ class ContactDetailViewModel @Inject constructor(
 
     private val _events = MutableStateFlow<List<Event>>(emptyList())
     val events: StateFlow<List<Event>> = _events
-
-    private val _showAddFactDialog = MutableStateFlow(false)
-    val showAddFactDialog: StateFlow<Boolean> = _showAddFactDialog
 
     fun setContactId(id: Long) {
         if (contactId != 0L) return // Already set
@@ -71,22 +73,6 @@ class ContactDetailViewModel @Inject constructor(
             contactRepository.getEventsForContact(contactId).collect {
                 _events.value = it
             }
-        }
-    }
-
-    fun onAddFactClick() {
-        _showAddFactDialog.value = true
-    }
-
-    fun onDismissAddFact() {
-        _showAddFactDialog.value = false
-    }
-
-    fun addFact(text: String) {
-        if (text.isBlank()) return
-        viewModelScope.launch {
-            contactRepository.addFact(contactId, text)
-            _showAddFactDialog.value = false
         }
     }
 

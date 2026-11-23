@@ -38,4 +38,6 @@ For each finding, record the violated principle IDs, concrete reproduction, seve
 ## Deferred questions
 
 - Surface unlinked notes deliberately: define whether this means no people, no tags, or both before building a dedicated view. Do not invent a virtual person to hold them.
-- Repair duplicate people through general merge/delete tools, with affected-data preview and recovery. For now, prevent accidental duplicates while allowing distinct people with the same name.
+- General merge remains deferred. Verified local profiles can be permanently deleted after an affected-data confirmation; imported, previously linked, and older unverified profiles remain protected. Preserve event prose and allow distinct people with the same name.
+
+People recency and counts use past, non-deleted events only. Facts do not imply an interaction. This confirmed preference comes from the 2026-11-22 People management follow-up; audit both display and sorting, including missing/future events.

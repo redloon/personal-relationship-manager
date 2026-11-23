@@ -2,13 +2,25 @@
 
 Record important, non-obvious product decisions here, briefly.
 
+## 2026-11-22 — Unlinked people, permanent deletion and interaction sorting
+
+Unlinked people is the user-facing name for profiles without a current Android attachment; hidden profiles remain in Hidden people. Newly created local profiles may be permanently deleted after an affected-data confirmation from any People list. Imported or ever-linked profiles are protected permanently. Earlier profiles with unverifiable history are protected too; a missing attachment is not proof of local creation. This adds bounded local-profile deletion to the earlier management decision; general merge remains deferred.
+
+Person deletion removes their facts, follow-ups (including trash), relationships and direct tag links. Event notes remain, even without any people; their prose, dates, shared tags and other people are preserved. Removed-person inline metadata becomes ordinary original prose. Person deletion has no Undo or 30-day retention. Mixed protected selections are rejected together and eligibility/counts are rechecked transactionally.
+
+Last interaction and interaction count derive solely from non-deleted events whose event date/time has occurred. Facts and future events never affect these metrics. People subtitles intentionally show relative recency; profile dates continue honoring the date-display preference. No manually maintained last-seen field or relationship score.
+
+People, Unlinked people and Hidden people independently remember name, last interaction, date-added or interaction-count sorting in either direction. Default is most-recent interaction. Missing interaction dates stay last in either direction; metric ties use case-insensitive name then person ID. Date added retains the original profile creation time through restore.
+
+A protected-by-default deletion capability is backed up from portable format 5 onward. Older backups restore as protected; imported attachments are protected before portable restore detaches device identities. New local profiles retain eligibility across backup/restore only if never linked.
+
 ## 2026-11-22 — App-only people and directory search
 
-App-only people are temporary profiles without an Android attachment, including restored or detached profiles awaiting relinking. People and Settings offer the same management page, excluding hidden profiles. Correct names and remembered context through the normal profile; no separate inline editing, app phone/email editor, Android contact creation, or general merge/delete flow. Explicit linking adopts the Android name and keeps app identity, context and visibility. Android Contacts remain authoritative for attached names and contact details.
+App-only people are temporary profiles without an Android attachment, including restored or detached profiles awaiting relinking. People and Settings offer the same management page, excluding hidden profiles. Correct names and remembered context through the normal profile; no separate inline editing, app phone/email editor, Android contact creation, or general merge flow. Bounded deletion is governed by the newer Unlinked people decision. Explicit linking adopts the Android name and keeps app identity, context and visibility. Android Contacts remain authoritative for attached names and contact details.
 
 People searches only names, phone numbers and email, using case-insensitive terms that must all match. It opens an unfiltered profile and retains its directory query on return. Home remains universal recall, including saved context. This supersedes the earlier People deep-context search example in UX-05 (dogfood #45).
 
-Mention suggestions must survive keyboard touches and incremental full-name typing. Choosing Keep as text dismisses suggestions deliberately; ordinary keyboard input does not. Suggestions fit above or below the typing field within the space above the keyboard; long menus scroll and leave the header actions unobstructed. Last interaction displays the latest non-deleted event date, never a fact's recorded date or a manually edited date.
+Mention suggestions must survive keyboard touches and incremental full-name typing. Choosing Keep as text dismisses suggestions deliberately; ordinary keyboard input does not. Suggestions fit above or below the typing field within the space above the keyboard; long menus scroll and leave the header actions unobstructed. Last interaction uses the past-event-only policy recorded above.
 
 Opening a configured backup folder is a best-effort viewing action with read access. An unavailable viewer or revoked access reports failure without changing backup configuration or reopening the folder picker.
 

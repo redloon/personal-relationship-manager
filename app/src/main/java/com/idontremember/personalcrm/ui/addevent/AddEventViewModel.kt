@@ -1,10 +1,11 @@
 package com.idontremember.personalcrm.ui.addevent
 
+import com.idontremember.personalcrm.data.capture.CaptureDraft
+import com.idontremember.personalcrm.data.capture.CaptureDraftStore
 import com.idontremember.personalcrm.data.capture.CaptureLinks
 import com.idontremember.personalcrm.data.capture.InlineToken
 import com.idontremember.personalcrm.data.capture.InlineTokens
 import com.idontremember.personalcrm.data.capture.TokenTarget
-import android.content.Context
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.ViewModel
@@ -17,10 +18,9 @@ import com.idontremember.personalcrm.data.repository.EventRepository
 import com.idontremember.personalcrm.data.repository.TagRepository
 import com.idontremember.personalcrm.data.settings.DefaultEventTime
 import com.idontremember.personalcrm.data.settings.SettingsRepository
-import com.idontremember.personalcrm.ui.components.AutocompleteContact
-import com.idontremember.personalcrm.ui.components.AutocompleteTag
+import com.idontremember.personalcrm.data.capture.PersonChoice
+import com.idontremember.personalcrm.data.capture.TagChoice
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,9 +29,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-import org.json.JSONArray
-import org.json.JSONObject
 import javax.inject.Inject
 
 @HiltViewModel
@@ -41,9 +41,8 @@ class AddEventViewModel @Inject constructor(
     private val tagRepository: TagRepository,
     private val settingsRepository: SettingsRepository,
     private val factDao: ContactFactDao,
-    @ApplicationContext context: Context
+    private val drafts: CaptureDraftStore
 ) : ViewModel() {
-    private val draftPrefs = context.getSharedPreferences("capture_draft", Context.MODE_PRIVATE)
     private var draftKey = "draft"
     private var existingEventId: Long? = null
     private var existingFactId: Long? = null
@@ -66,7 +65,9 @@ class AddEventViewModel @Inject constructor(
     val noteText: StateFlow<TextFieldValue> = _noteText
     private val _selectedContactIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedContactIds: StateFlow<Set<Long>> = _selectedContactIds
-    val selectedPeople = combine(contactRepository.getContactsIncludingHidden(), selectedContactIds) { people, ids ->
+    private val allPeople = contactRepository.getContactsIncludingHidden()
+        .shareIn(viewModelScope, SharingStarted.Eagerly, replay = 1)
+    val selectedPeople = combine(allPeople, selectedContactIds) { people, ids ->
         people.filter { it.id in ids }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     private val _selectedTagNames = MutableStateFlow<Set<String>>(emptySet())
@@ -86,6 +87,19 @@ class AddEventViewModel @Inject constructor(
     private val _sharedDraftConflict = MutableStateFlow(false)
     val sharedDraftConflict: StateFlow<Boolean> = _sharedDraftConflict
 
+    init {
+        viewModelScope.launch {
+            allPeople.collect { people ->
+                if (_ready.value && !_saving.value) reconcilePeople(people.map { it.id }.toSet())
+            }
+        }
+    }
+    private fun reconcilePeople(ids: Set<Long>) {
+        val before = currentLinks()
+        val after = before.reconcilePeople(ids)
+        if (after != before) { applyLinks(after); persistDraft() }
+    }
+
     fun initialize(eventId: Long? = null, factId: Long? = null, contactId: Long? = null, sharedText: String? = null, initialIsFact: Boolean = false) {
         loadJob?.cancel()
         existingEventId = eventId
@@ -104,7 +118,9 @@ class AddEventViewModel @Inject constructor(
         pendingIsFact = initialIsFact
         loadJob = viewModelScope.launch {
             try {
-                val stored = draftPrefs.getString(draftKey, null)?.let { runCatching { JSONObject(it) }.getOrNull() }
+                val existingEvent = eventId?.let { eventRepository.getEventWithMeta(it) ?: error("Note unavailable") }
+                val existingFact = factId?.let { factDao.getById(it) ?: error("Fact unavailable") }
+                val stored = drafts.loadCapture(draftKey)
                 if (stored != null) {
                     readDraft(stored)
                     _resumingDraft.value = true
@@ -112,7 +128,7 @@ class AddEventViewModel @Inject constructor(
                         ((contactId != null && _selectedContactIds.value != setOf(contactId)) ||
                         ((contactId != null || initialIsFact) && _isFact.value != initialIsFact)))) _sharedDraftConflict.value = true
                 } else if (eventId != null) {
-                    val meta = eventRepository.getEventWithMeta(eventId) ?: error("Note unavailable")
+                    val meta = requireNotNull(existingEvent)
                     _noteText.value = meta.event.note.asTextField()
                     _inlineTokens.value = InlineTokens.decode(meta.event.inlineTokens)
                     _selectedContactIds.value = meta.contacts.map { it.id }.toSet()
@@ -120,7 +136,7 @@ class AddEventViewModel @Inject constructor(
                     _eventDate.value = meta.event.eventDate
                     _isFact.value = false
                 } else if (factId != null) {
-                    val fact = factDao.getById(factId) ?: error("Fact unavailable")
+                    val fact = requireNotNull(existingFact)
                     _noteText.value = fact.text.asTextField()
                     _selectedContactIds.value = setOf(fact.contactId)
                     _selectedTagNames.value = emptySet()
@@ -131,14 +147,13 @@ class AddEventViewModel @Inject constructor(
                     _isFact.value = initialIsFact
                     if (!pendingSharedText.isNullOrBlank() || contactId != null) persistDraft()
                 }
+                reconcilePeople(allPeople.first().map { it.id }.toSet())
                 acceptingChanges = true
                 _ready.value = true
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { _saveFailed.value = true }
         }
     }
-
-    fun reloadDraft() = initialize()
 
     fun resolveSharedDraft(resume: Boolean) {
         val incoming = pendingSharedText.orEmpty()
@@ -149,6 +164,7 @@ class AddEventViewModel @Inject constructor(
                 freshCapture(pendingContactId, incoming)
                 _isFact.value = pendingIsFact
                 persistDraft()
+                reconcilePeople(allPeople.first().map { it.id }.toSet())
                 acceptingChanges = true
                 _ready.value = true
             }
@@ -170,15 +186,10 @@ class AddEventViewModel @Inject constructor(
         }
     }
 
-    private fun readDraft(value: JSONObject) {
-        _noteText.value = value.optString("note", "").asTextField()
-        _selectedContactIds.value = value.optJSONArray("contacts").toLongSet()
-        _selectedTagNames.value = value.optJSONArray("tags").toStringSet()
-        _eventDate.value = value.optLong("date", System.currentTimeMillis())
-        _isFact.value = value.optBoolean("fact", existingFactId != null)
-        _inlineTokens.value = runCatching {
-            InlineTokens.decode(value.optString("tokens", "[]")).also { InlineTokens.validate(_noteText.value.text, it, _selectedContactIds.value, _selectedTagNames.value) }
-        }.getOrDefault(emptyList())
+    private fun readDraft(value: CaptureDraft) {
+        _noteText.value = value.text.asTextField()
+        applyLinks(value.links)
+        _eventDate.value = value.eventDate
     }
 
     private inline fun change(block: () -> Unit) {
@@ -198,47 +209,31 @@ class AddEventViewModel @Inject constructor(
         applyLinks(currentLinks().edit(_noteText.value.text, value.text, _noteText.value.selection.start, _noteText.value.selection.end, value.selection.start))
         _noteText.value = value
     }
-    private fun unlinkRemovedTokens(next: List<InlineToken>) {
-        for (target in InlineTokens.removedTargets(_inlineTokens.value, next)) when (target) {
-            is TokenTarget.Person -> _selectedContactIds.value = _selectedContactIds.value - target.id
-            is TokenTarget.Tag -> _selectedTagNames.value = _selectedTagNames.value - target.name
-        }
-    }
-    fun insertPersonToken(person: AutocompleteContact, start: Int, end: Int) = change {
-        val inserted = InlineTokens.insert(_noteText.value.text, start, end, "@${person.displayName}", TokenTarget.Person(person.id), _inlineTokens.value)
-        unlinkRemovedTokens(inserted.tokens)
-        _inlineTokens.value = inserted.tokens
+    private fun insertToken(label: String, target: TokenTarget, start: Int, end: Int) {
+        val inserted = currentLinks().insert(_noteText.value.text, start, end, label, target)
+        applyLinks(inserted.links)
         _noteText.value = TextFieldValue(inserted.text, TextRange(inserted.cursor))
-        _selectedContactIds.value = _selectedContactIds.value + person.id
     }
-    fun insertTagToken(tag: AutocompleteTag, start: Int, end: Int) = change {
+    fun insertPersonToken(person: PersonChoice, start: Int, end: Int) = change {
+        insertToken("@${person.displayName}", TokenTarget.Person(person.id), start, end)
+    }
+    fun insertTagToken(tag: TagChoice, start: Int, end: Int) = change {
         val name = tag.name.trim().removePrefix("#").lowercase(java.util.Locale.ROOT)
-        val inserted = InlineTokens.insert(_noteText.value.text, start, end, "#$name", TokenTarget.Tag(name), _inlineTokens.value)
-        unlinkRemovedTokens(inserted.tokens)
-        _inlineTokens.value = inserted.tokens
-        _noteText.value = TextFieldValue(inserted.text, TextRange(inserted.cursor))
-        _selectedTagNames.value = _selectedTagNames.value + name
+        insertToken("#$name", TokenTarget.Tag(name), start, end)
     }
-    fun onContactSelected(contact: AutocompleteContact) = change {
+    fun onContactSelected(contact: PersonChoice) = change {
         applyLinks(currentLinks().selectPerson(contact.id))
     }
-    fun onTagSelected(tag: AutocompleteTag) = change {
-        val name = tag.name.trim().removePrefix("#").lowercase()
-        if (name.isNotBlank()) _selectedTagNames.value = _selectedTagNames.value + name
-    }
-    fun removeContact(id: Long) = change { _selectedContactIds.value = _selectedContactIds.value - id; _inlineTokens.value = _inlineTokens.value.filterNot { it.target == TokenTarget.Person(id) } }
-    fun removeTag(name: String) = change { _selectedTagNames.value = _selectedTagNames.value - name; _inlineTokens.value = _inlineTokens.value.filterNot { it.target == TokenTarget.Tag(name) } }
+    fun onTagSelected(tag: TagChoice) = change { applyLinks(currentLinks().selectTag(tag.name)) }
+    fun removeContact(id: Long) = change { applyLinks(currentLinks().removePerson(id)) }
+    fun removeTag(name: String) = change { applyLinks(currentLinks().removeTag(name)) }
     fun onDateChanged(date: Long) = change { _eventDate.value = date }
     fun setFact(value: Boolean) = change {
         if (existingEventId == null && existingFactId == null) applyLinks(currentLinks().withFactMode(value))
     }
 
     private fun persistDraft() {
-        val value = JSONObject().put("note", _noteText.value.text)
-            .put("contacts", JSONArray(_selectedContactIds.value.toList()))
-            .put("tags", JSONArray(_selectedTagNames.value.toList()))
-            .put("date", _eventDate.value).put("fact", _isFact.value).put("tokens", InlineTokens.encode(_inlineTokens.value))
-        draftPrefs.edit().putString(draftKey, value.toString()).apply()
+        drafts.saveCapture(draftKey, CaptureDraft(_noteText.value.text, currentLinks(), _eventDate.value))
     }
 
     fun save() {
@@ -261,7 +256,7 @@ class AddEventViewModel @Inject constructor(
                     else -> eventRepository.createEvent(note, _selectedContactIds.value.toList(), _selectedTagNames.value.toList(), _eventDate.value, _inlineTokens.value)
                 }
                 acceptingChanges = false
-                draftPrefs.edit().remove(draftKey).apply()
+                drafts.remove(draftKey)
                 _saved.value = true
                 try { if (!_isFact.value) settingsRepository.setLastUsedEventTimestamp(_eventDate.value) }
                 catch (_: Exception) { /* Save has already committed. */ }
@@ -271,11 +266,11 @@ class AddEventViewModel @Inject constructor(
         }
     }
 
-    fun getAutocompleteTags() = tags.value.map { AutocompleteTag(it.id, it.name) }
+    fun getAutocompleteTags() = tags.value.map { TagChoice(it.id, it.name) }
     fun close() { acceptingChanges = false; loadJob?.cancel() }
     fun discard() { close(); reset() }
     fun reset(clearDraft: Boolean = true) {
-        if (clearDraft) draftPrefs.edit().remove(draftKey).apply()
+        if (clearDraft) drafts.remove(draftKey)
         _inlineTokens.value = emptyList()
         _resumingDraft.value = false
         _noteText.value = TextFieldValue("")
@@ -289,5 +284,3 @@ class AddEventViewModel @Inject constructor(
 }
 
 private fun String.asTextField() = TextFieldValue(this, TextRange(length))
-private fun JSONArray?.toLongSet(): Set<Long> = if (this == null) emptySet() else (0 until length()).mapNotNull { optLong(it).takeIf { id -> id > 0 } }.toSet()
-private fun JSONArray?.toStringSet(): Set<String> = if (this == null) emptySet() else (0 until length()).map { optString(it) }.filter { it.isNotBlank() }.toSet()

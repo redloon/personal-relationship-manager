@@ -7,12 +7,13 @@ import com.idontremember.personalcrm.data.db.MIGRATION_4_5
 import com.idontremember.personalcrm.data.db.MIGRATION_3_4
 import com.idontremember.personalcrm.data.db.MIGRATION_2_3
 import com.idontremember.personalcrm.data.db.MIGRATION_1_2
-import com.idontremember.personalcrm.data.db.dao.PilotDao
+import com.idontremember.personalcrm.data.db.dao.ProfileLinksDao
 import com.idontremember.personalcrm.data.db.dao.ContactDao
 import com.idontremember.personalcrm.data.db.dao.ContactFactDao
 import com.idontremember.personalcrm.data.db.dao.EventDao
 import com.idontremember.personalcrm.data.db.dao.TagDao
 import dagger.Module
+import com.idontremember.personalcrm.data.db.MIGRATION_5_6
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -30,11 +31,11 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "personal_crm.db"
-        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
+        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build()
     }
 
     @Provides
-    fun providePilotDao(db: AppDatabase): PilotDao = db.pilotDao()
+    fun provideProfileLinksDao(db: AppDatabase): ProfileLinksDao = db.profileLinksDao()
 
     @Provides
     fun provideContactDao(db: AppDatabase): ContactDao = db.contactDao()

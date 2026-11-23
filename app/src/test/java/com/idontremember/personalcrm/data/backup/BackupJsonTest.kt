@@ -66,7 +66,7 @@ class BackupJsonTest {
     }
 
     @Test fun visibilityRoundTripsAndLegacyBackupsDefaultVisible() {
-        assertEquals(4, snapshot.schemaVersion)
+        assertEquals(5, snapshot.schemaVersion)
         val hidden = snapshot.copy(contacts = snapshot.contacts.map { it.copy(isHidden = true) })
         assertEquals(hidden, BackupJson.decode(BackupJson.encode(hidden)))
         val legacy = BackupJson.encode(snapshot.copy(schemaVersion = 3))

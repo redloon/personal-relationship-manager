@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -38,7 +39,7 @@ import com.idontremember.personalcrm.ui.followups.FollowUpEditor
 import com.idontremember.personalcrm.ui.followups.FollowUpReader
 import com.idontremember.personalcrm.ui.reading.FactReaderSheet
 import com.idontremember.personalcrm.ui.reading.RecordPreview
-import com.idontremember.personalcrm.ui.pilot.*
+import com.idontremember.personalcrm.ui.recall.*
 import java.text.DateFormat
 import java.util.Date
 
@@ -57,6 +58,7 @@ fun ContactDetailScreen(
     val context = LocalContext.current
     val contact by viewModel.contact.collectAsState()
     val loaded by viewModel.contactLoaded.collectAsState()
+    val interactions by viewModel.interactionSnapshot.collectAsStateWithLifecycle()
     val facts by viewModel.facts.collectAsState()
     val events by viewModel.events.collectAsState()
     val dateDisplay by viewModel.dateDisplay.collectAsState()
@@ -124,16 +126,18 @@ fun ContactDetailScreen(
             else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).testTag("contact_detail_screen"), contentPadding = PaddingValues(bottom = 16.dp)) {
                 item {
                     if (contact?.androidContactId == null) Text(stringResource(R.string.people_app_only_status), style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("app_only_status"))
-                    val latest = events.maxOfOrNull { it.eventDate }
-                    Text(stringResource(R.string.people_last_interaction, latest?.let { formatEventDateText(it, dateDisplay) }
-                        ?: stringResource(R.string.people_no_interactions)), style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(vertical = 8.dp).testTag("last_interaction"))
+                    interactions?.let { snapshot ->
+                        val latest = snapshot.forPerson(contactId).lastInteractionAt
+                        Text(stringResource(R.string.people_last_interaction, latest?.let { formatEventDateText(it, dateDisplay, now = snapshot.asOf) }
+                            ?: stringResource(R.string.people_no_interactions)), style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(vertical = 8.dp).testTag("last_interaction"))
+                    }
                 }
                 item { SearchField(query, { query = it }, stringResource(R.string.recall_person_search), "clear_person_search", Modifier.fillMaxWidth().testTag("person_search")) }
                 if (query.isNotBlank()) {
-                    val matches = RecallSearch.find(entries.orEmpty(), query, contactId).filter { it.kind != "person" }
+                    val matches = RecallSearch.find(entries.orEmpty(), query, contactId).filter { it.kind.isCapture }
                     if (matches.isEmpty()) item { EmptyState(stringResource(R.string.recall_no_results), testTag = "person_search_empty") }
-                    items(matches, key = { it.key }) { row -> RecallNoteRow(row, query, dateDisplay = dateDisplay) { when(row.kind) { "fact" -> readingFact = row.id; "followup" -> readingFollowUp = row.id; else -> onEventClick(row.id) } } }
+                    items(matches, key = { it.key }) { row -> RecallNoteRow(row, query, dateDisplay = dateDisplay) { row.target.openCapture(onEventClick, { readingFact = it }, { readingFollowUp = it }) } }
                 } else {
                     item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         SectionLabel(stringResource(R.string.section_facts))

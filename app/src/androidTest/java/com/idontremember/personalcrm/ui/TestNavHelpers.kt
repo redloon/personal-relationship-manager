@@ -14,7 +14,7 @@ import androidx.compose.ui.test.performClick
  * Home and People retain separate histories. Reselecting a tab returns to its root.
  * Event history is a secondary Home action (nav_tab_events).
  */
-fun ComposeTestRule.navigateToEventsTab() {
+fun ComposeTestRule.navigateToHistory() {
     onNodeWithTag("nav_tab_home").performClick()
     onNodeWithTag("nav_tab_home").performClick() // Reselect restores the Home root if its history was retained.
     waitUntilTagExists("nav_tab_events")

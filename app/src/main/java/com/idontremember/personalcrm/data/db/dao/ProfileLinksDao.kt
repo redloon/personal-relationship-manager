@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.Flow
 import com.idontremember.personalcrm.data.search.TagPerson
 
 @Dao
-interface PilotDao {
+interface ProfileLinksDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun addTag(link: ContactTag)
     @Delete suspend fun removeTag(link: ContactTag)
     @Query("SELECT * FROM contact_tags") suspend fun allContactTags(): List<ContactTag>

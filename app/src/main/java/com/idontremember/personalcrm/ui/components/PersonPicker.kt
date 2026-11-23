@@ -1,5 +1,7 @@
 package com.idontremember.personalcrm.ui.components
 
+import com.idontremember.personalcrm.data.capture.PersonChoice
+import com.idontremember.personalcrm.data.capture.TagChoice
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,7 +32,7 @@ import javax.inject.Inject
 @Composable
 fun PersonPicker(
     onDismiss: () -> Unit,
-    onPersonSelected: (AutocompleteContact) -> Unit,
+    onPersonSelected: (PersonChoice) -> Unit,
     selectedIds: Set<Long> = emptySet(),
     initialQuery: String = "",
     startCreating: Boolean = false,
@@ -55,7 +57,7 @@ fun PersonPicker(
                 else SearchField(query, { query = it }, stringResource(R.string.capture_people_hint), "clear_capture_person_search", Modifier.fillMaxWidth().testTag("event_person_search"))
                 LazyColumn(Modifier.heightIn(max = 220.dp)) {
                     items(matching, key = { it.id }) { person ->
-                        TextButton(onClick = { onPersonSelected(AutocompleteContact(person.id, person.displayName, person.phoneNumber)) }, enabled = !creating,
+                        TextButton(onClick = { onPersonSelected(PersonChoice(person.id, person.displayName, person.phoneNumber)) }, enabled = !creating,
                             modifier = Modifier.fillMaxWidth().testTag("event_person_option_${person.id}")) {
                             Column(Modifier.fillMaxWidth()) {
                                 Text(if (createMode) stringResource(R.string.usability_use_existing, person.displayName) else person.displayName)
@@ -85,7 +87,7 @@ class PersonPickerViewModel @Inject constructor(private val repository: ContactR
     val contacts = repository.getAllContacts().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val creating = MutableStateFlow(false)
     val failed = MutableStateFlow(false)
-    fun create(name: String, allowDuplicate: Boolean, onCreated: (AutocompleteContact) -> Unit) {
+    fun create(name: String, allowDuplicate: Boolean, onCreated: (PersonChoice) -> Unit) {
         if (name.isBlank() || creating.value) return
         creating.value = true
         failed.value = false
@@ -93,7 +95,7 @@ class PersonPickerViewModel @Inject constructor(private val repository: ContactR
             try {
                 val id = repository.createLocalContact(name, allowDuplicate)
                 val person = repository.getContactById(id) ?: error("Person unavailable")
-                onCreated(AutocompleteContact(id, person.displayName, person.phoneNumber))
+                onCreated(PersonChoice(id, person.displayName, person.phoneNumber))
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { failed.value = true }
             finally { creating.value = false }

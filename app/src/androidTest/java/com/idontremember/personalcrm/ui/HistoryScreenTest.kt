@@ -22,7 +22,7 @@ import javax.inject.Inject
  * so setup clears the whole test database before checking its empty state.
  */
 @HiltAndroidTest
-class EventsListScreenTest {
+class HistoryScreenTest {
 
     @get:Rule(order = 0)
     var hiltRule = HiltAndroidRule(this)
@@ -41,20 +41,20 @@ class EventsListScreenTest {
 
     @Test
     fun eventsTab_showsEventsScreen() {
-        composeTestRule.navigateToEventsTab()
+        composeTestRule.navigateToHistory()
         composeTestRule.onNodeWithTag("events_list_screen").assertIsDisplayed()
     }
 
     @Test
     fun eventsTab_showsSearchFieldAndFab() {
-        composeTestRule.navigateToEventsTab()
+        composeTestRule.navigateToHistory()
         composeTestRule.onNodeWithTag("events_search_field").assertIsDisplayed()
         composeTestRule.onNodeWithTag("add_event_fab").assertIsDisplayed()
     }
 
     @Test
     fun history_showsEmptyStateWhenNoCapturedRecords() {
-        composeTestRule.navigateToEventsTab()
+        composeTestRule.navigateToHistory()
         // P2: the shared EmptyState composable renders this — tag + localized text.
         composeTestRule.waitUntilTagDisplayed("events_empty_state")
         composeTestRule.onNodeWithTag("events_empty_state").assertIsDisplayed()

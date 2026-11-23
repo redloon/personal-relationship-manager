@@ -76,7 +76,7 @@ class NavigationTest {
     @Test
     fun bottomNav_switchesBetweenTopLevelScreens() {
         // Tabs clear the back stack to the target top-level route
-        composeTestRule.navigateToEventsTab()
+        composeTestRule.navigateToHistory()
         composeTestRule.onNodeWithTag("events_list_screen").assertIsDisplayed()
 
         composeTestRule.navigateToContactsTab()

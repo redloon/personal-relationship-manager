@@ -27,7 +27,7 @@ import javax.inject.Inject
  * seeding to keep each test deterministic.
  */
 @HiltAndroidTest
-class EventsSearchTest {
+class HistorySearchTest {
 
     @get:Rule(order = 0)
     var hiltRule = HiltAndroidRule(this)
@@ -60,7 +60,7 @@ class EventsSearchTest {
     }
 
     private fun navigateToEvents() {
-        composeTestRule.navigateToEventsTab()
+        composeTestRule.navigateToHistory()
         composeTestRule.waitUntil(timeoutMillis = 5_000) {
             try {
                 composeTestRule.onNodeWithTag("events_list").assertIsDisplayed()

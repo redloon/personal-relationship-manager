@@ -2,7 +2,7 @@ package com.idontremember.personalcrm.data.db.dao
 
 import androidx.room.Dao
 import androidx.room.Query
-import com.idontremember.personalcrm.data.search.RecallEntry
+import com.idontremember.personalcrm.data.search.RecallRow
 import kotlinx.coroutines.flow.Flow
 
 /** A single reactive snapshot; no per-row metadata lookups or stale person chips. */
@@ -41,5 +41,5 @@ interface RecallDao {
             NULL, NULL, t.created_at
         FROM tags t
     """)
-    fun entries(): Flow<List<RecallEntry>>
+    fun rows(): Flow<List<RecallRow>>
 }

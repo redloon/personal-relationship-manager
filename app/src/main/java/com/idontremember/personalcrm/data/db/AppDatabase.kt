@@ -24,9 +24,10 @@
  *   1 = initial schema: contacts, contact_facts, events, event_contacts, tags,
  *       event_tags (see app/schemas/.../1.json for the authoritative snapshot).
  *   2 = direct contact tags and shared relationships.
+ *   3 = recoverable notes, provider lookup keys, explicit follow-ups.
  *   4 = explicit inline token metadata, preserving original prose.
  *   5 = non-destructive person hiding and shared visible_contacts view.
- *   3 = recoverable notes, provider lookup keys, explicit follow-ups.
+ *   6 = protected-by-default person deletion eligibility.
  * ============================================================================
  */
 package com.idontremember.personalcrm.data.db
@@ -36,7 +37,7 @@ import com.idontremember.personalcrm.data.db.dao.FollowUpDao
 import com.idontremember.personalcrm.data.db.dao.RecallDao
 import androidx.room.Database
 import androidx.room.RoomDatabase
-import com.idontremember.personalcrm.data.db.dao.PilotDao
+import com.idontremember.personalcrm.data.db.dao.ProfileLinksDao
 import com.idontremember.personalcrm.data.db.entity.ContactTag
 import com.idontremember.personalcrm.data.db.entity.Relationship
 import com.idontremember.personalcrm.data.db.dao.ContactDao
@@ -63,13 +64,13 @@ import com.idontremember.personalcrm.data.db.entity.Tag
         Relationship::class
     ],
     views = [com.idontremember.personalcrm.data.db.entity.VisibleContact::class],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun followUpDao(): FollowUpDao
     abstract fun recallDao(): RecallDao
-    abstract fun pilotDao(): PilotDao
+    abstract fun profileLinksDao(): ProfileLinksDao
     abstract fun contactDao(): ContactDao
     abstract fun contactFactDao(): ContactFactDao
     abstract fun eventDao(): EventDao

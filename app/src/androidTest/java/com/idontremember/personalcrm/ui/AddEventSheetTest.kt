@@ -57,6 +57,7 @@ class AddEventSheetTest {
     lateinit var eventRepository: EventRepository
     @Inject lateinit var contactDao: ContactDao
     @Inject lateinit var factDao: ContactFactDao
+    @Inject lateinit var database: com.idontremember.personalcrm.data.db.AppDatabase
 
     @Before
     fun setup() {
@@ -69,7 +70,7 @@ class AddEventSheetTest {
     }
 
     private fun openAddEventSheet() {
-        composeTestRule.navigateToEventsTab()
+        composeTestRule.navigateToHistory()
         composeTestRule.waitUntilTagExists("add_event_fab")
         composeTestRule.onNodeWithTag("add_event_fab").performClick()
         composeTestRule.waitUntilTagDisplayed("add_event_sheet")
@@ -121,7 +122,8 @@ class AddEventSheetTest {
         composeTestRule.onNodeWithTag("note_text_field").performTextInput("Remember @Temporary")
         composeTestRule.waitUntil(10_000) { composeTestRule.onAllNodesWithText("Temporary Person").fetchSemanticsNodes().isNotEmpty() }
         composeTestRule.onNodeWithText("Temporary Person").performClick()
-        runBlocking { contactDao.getById(id)?.let { contactDao.delete(it) } }
+        database.openHelper.writableDatabase.execSQL("CREATE TRIGGER capture_fail_insert BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'forced save failure'); END")
+        try {
         composeTestRule.onNodeWithTag("save_event_button").assertIsDisplayed().performClick()
         composeTestRule.waitUntilTagExists("event_save_error", 10_000)
         composeTestRule.waitUntilTagDisplayed("event_save_error", 10_000)
@@ -131,6 +133,25 @@ class AddEventSheetTest {
         composeTestRule.waitUntilTagDisplayed("add_event_sheet")
         composeTestRule.onNodeWithTag("note_text_field").assertTextContains("Remember @Temporary Person ")
         composeTestRule.onNodeWithTag("capture_discard").performClick()
+        } finally { database.openHelper.writableDatabase.execSQL("DROP TRIGGER IF EXISTS capture_fail_insert") }
+    }
+
+    @Test fun deletingASelectedPersonReconcilesTheDraftWithoutLosingProse() {
+        val id = runBlocking { contactDao.insert(Contact(displayName = "Draft Person")) }
+        openAddEventSheet()
+        composeTestRule.onNodeWithTag("note_text_field").performTextInput("Remember @Draft")
+        composeTestRule.onNodeWithText("Draft Person").performClick()
+        runBlocking { contactDao.getById(id)?.let { contactDao.delete(it) } }
+        composeTestRule.waitUntil(5_000) {
+            val raw = composeTestRule.activity.getSharedPreferences("capture_draft", 0).getString("draft", null)
+            raw != null && org.json.JSONObject(raw).getJSONArray("contacts").length() == 0
+        }
+        composeTestRule.onNodeWithTag("note_text_field").assertTextContains("Remember @Draft Person ")
+        composeTestRule.onNodeWithTag("save_event_button").performClick()
+        composeTestRule.waitUntil(5_000) { runBlocking { eventRepository.getAllEvents().first().any { it.note == "Remember @Draft Person " } } }
+        val saved = runBlocking { eventRepository.getAllEvents().first().first { it.note == "Remember @Draft Person " } }
+        org.junit.Assert.assertTrue(runBlocking { eventRepository.getEventWithMeta(saved.id)!!.contacts.isEmpty() })
+        org.junit.Assert.assertEquals("[]", saved.inlineTokens)
     }
 
     @Test
@@ -226,7 +247,7 @@ class AddEventSheetTest {
     fun editingTagsUsesSharedComposerAndKeepsEventDate() {
         val eventDate = 1_700_000_000_000L
         val id = runBlocking { eventRepository.createEvent("Original tagged note", emptyList(), listOf("before"), eventDate) }
-        composeTestRule.navigateToEventsTab()
+        composeTestRule.navigateToHistory()
         composeTestRule.waitUntilTagDisplayed("events_list_screen")
         composeTestRule.onNodeWithText("Original tagged note").performClick()
         composeTestRule.waitUntilTagDisplayed("event_detail_screen")
@@ -302,7 +323,7 @@ class AddEventSheetTest {
     fun deletingANoteCanBeUndoneWithoutLosingItsPeople() {
         val contactId = runBlocking { contactDao.insert(Contact(displayName = "Morgan Recovery")) }
         val eventId = runBlocking { eventRepository.createEvent("Keep this memory", listOf(contactId), listOf("recovery")) }
-        composeTestRule.navigateToEventsTab()
+        composeTestRule.navigateToHistory()
         composeTestRule.onNodeWithText("Keep this memory").performClick()
         composeTestRule.waitUntilTagDisplayed("event_detail_screen")
         composeTestRule.onNodeWithContentDescription(composeTestRule.activity.getString(com.idontremember.personalcrm.R.string.cd_delete_event)).performClick()

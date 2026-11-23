@@ -36,3 +36,10 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
         db.execSQL("CREATE VIEW `visible_contacts` AS SELECT * FROM contacts WHERE is_hidden = 0")
     }
 }
+
+/** Unknown historical origin is deliberately protected from person deletion. */
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE contacts ADD COLUMN deletion_allowed INTEGER NOT NULL DEFAULT 0")
+    }
+}

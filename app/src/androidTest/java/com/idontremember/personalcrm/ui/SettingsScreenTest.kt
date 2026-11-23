@@ -74,7 +74,7 @@ class SettingsScreenTest {
 
     @Test
     fun gearOnEventsScreen_opensSettings() {
-        composeTestRule.navigateToEventsTab()
+        composeTestRule.navigateToHistory()
         composeTestRule.waitUntilTagExists("settings_button")
         composeTestRule.onNodeWithTag("settings_button").assertIsDisplayed()
 

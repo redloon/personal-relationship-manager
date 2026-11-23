@@ -26,11 +26,11 @@ class CaptureContextTest {
 
     @Test fun unresolvedFullNamesAreNotTerminatedByExistingShorterNames() {
         val text = "Met @Alice Smith yesterday"
-        assertEquals("Alice Smith yesterday", detectTrigger(text, text.length, listOf("Alice", "Alice Smith"))?.query)
-        assertEquals("Maya C", detectTrigger("@Maya C", 7, listOf("Maya"))?.query)
+        assertEquals("Alice Smith yesterday", detectTrigger(text, text.length)?.query)
+        assertEquals("Maya C", detectTrigger("@Maya C", 7)?.query)
         assertEquals("Maya ", detectTrigger("@Maya ", 6)?.query)
         val typing = "Met @Alice Sm"
-        assertEquals("Alice Sm", detectTrigger(typing, typing.length, listOf("Alice", "Alice Smith"))?.query)
+        assertEquals("Alice Sm", detectTrigger(typing, typing.length)?.query)
     }
 
     @Test fun incrementalMentionTypingKeepsSpacesAndUsesTheLatestTrigger() {

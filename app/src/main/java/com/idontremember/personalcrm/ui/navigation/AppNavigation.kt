@@ -35,16 +35,15 @@ import com.idontremember.personalcrm.ui.addevent.observeCaptureDraft
 import com.idontremember.personalcrm.ui.followups.FollowUpEditor
 import com.idontremember.personalcrm.ui.followups.FollowUpReader
 import com.idontremember.personalcrm.ui.followups.FollowUpsOverlay
-import com.idontremember.personalcrm.ui.pilot.Dashboard
-import com.idontremember.personalcrm.ui.pilot.TagsScreen
-import com.idontremember.personalcrm.ui.pilot.TagDetailScreen
+import com.idontremember.personalcrm.ui.home.HomeScreen
+import com.idontremember.personalcrm.ui.tags.TagsScreen
+import com.idontremember.personalcrm.ui.tags.TagDetailScreen
 import com.idontremember.personalcrm.ui.events.HistoryScreen
 import com.idontremember.personalcrm.ui.reading.FactReaderSheet
 import com.idontremember.personalcrm.ui.contacts.ContactDetailScreen
-import com.idontremember.personalcrm.ui.contacts.PeopleListScope
+import com.idontremember.personalcrm.data.contacts.PeopleListScope
 import com.idontremember.personalcrm.ui.contacts.ContactsListScreen
 import com.idontremember.personalcrm.ui.events.EventDetailScreen
-import com.idontremember.personalcrm.ui.events.EventsListScreen
 import com.idontremember.personalcrm.ui.settings.SettingsScreen
 import kotlinx.serialization.Serializable
 
@@ -75,9 +74,6 @@ data object EventsRoute : NavKey
 
 @Serializable
 data class EventDetailRoute(val eventId: Long) : NavKey
-
-@Serializable
-data object AddEventRoute : NavKey
 
 @Serializable
 data object SettingsRoute : NavKey
@@ -113,9 +109,8 @@ fun AppNavigation() {
                 modifier = Modifier.padding(padding).consumeWindowInsets(padding),
                 entryDecorators = if(selectedTab == "people") peopleDecorators else homeDecorators,
                 entryProvider = fun(route: NavKey): NavEntry<NavKey> = when(route) {
-                    DashboardRoute -> NavEntry(route) { Dashboard(
+                    DashboardRoute -> NavEntry(route) { HomeScreen(
                         onContact = { homeStack.add(ContactDetailRoute(it)) },
-                        onContacts = { selectedTab = "people" },
                         onEvents = { homeStack.add(EventsRoute) },
                         onTags = { homeStack.add(TagsRoute) },
                         onSettings = { homeStack.add(SettingsRoute) },
@@ -128,7 +123,7 @@ fun AppNavigation() {
                         onContactSearch = { id, query -> homeStack.add(ContactDetailRoute(id, query)) },
                         hasDraft = hasDraft
                     ) }
-                    TagsRoute -> NavEntry(route) { TagsScreen(onBack = { backStack.removeLastOrNull() }, onContact = { backStack.add(ContactDetailRoute(it)) }, onTag = { backStack.add(TagDetailRoute(it)) }) }
+                    TagsRoute -> NavEntry(route) { TagsScreen(onBack = { backStack.removeLastOrNull() }, onTag = { backStack.add(TagDetailRoute(it)) }) }
                     is TagDetailRoute -> NavEntry(route) { TagDetailScreen(tagId = route.tagId, onBack = { backStack.removeLastOrNull() }, onContact = { backStack.add(ContactDetailRoute(it)) }, onEvent = { backStack.add(EventDetailRoute(it)) }) }
                     ContactsRoute -> NavEntry(route) { ContactsListScreen(onContactClick = { backStack.add(ContactDetailRoute(it)) }, onSettingsClick = { backStack.add(SettingsRoute) }, onHiddenPeople = { backStack.add(HiddenPeopleRoute) }, onAppOnlyPeople = { backStack.add(AppOnlyPeopleRoute) }) }
                     AppOnlyPeopleRoute -> NavEntry(route) { ContactsListScreen(scope = PeopleListScope.APP_ONLY, onBack = { backStack.removeLastOrNull() }, onContactClick = { backStack.add(ContactDetailRoute(it)) }, onSettingsClick = { backStack.add(SettingsRoute) }) }
@@ -137,7 +132,6 @@ fun AppNavigation() {
                     EventsRoute -> NavEntry(route) { HistoryScreen(onBack = { backStack.removeLastOrNull() }, onEvent = { backStack.add(EventDetailRoute(it)) }, onFact = { readingFact = it }, onFollowUp = { readingFollowUp = it }, onSettings = { backStack.add(SettingsRoute) }, onAdd = { showAddEventSheet = true }, onContact = { backStack.add(ContactDetailRoute(it)) }) }
                     SettingsRoute -> NavEntry(route) { SettingsScreen(onBack = { backStack.removeLastOrNull() }, onHiddenPeople = { backStack.add(HiddenPeopleRoute) }, onAppOnlyPeople = { backStack.add(AppOnlyPeopleRoute) }) }
                     is EventDetailRoute -> NavEntry(route) { EventDetailScreen(eventId = route.eventId, onBack = { backStack.removeLastOrNull() }, onContactClick = { backStack.add(ContactDetailRoute(it)) }) }
-                    AddEventRoute -> NavEntry(route) { AddEventSheet(onDismiss = { backStack.removeLastOrNull() }, onSaved = { backStack.removeLastOrNull() }) }
                     else -> NavEntry(route) { Text(stringResource(R.string.unknown_route)) }
                 }
             )

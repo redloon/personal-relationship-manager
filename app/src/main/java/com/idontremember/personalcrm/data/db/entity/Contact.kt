@@ -38,5 +38,10 @@ data class Contact(
 
     @ColumnInfo(name = "lookup_key") val lookupKey: String? = null,
 
-    @ColumnInfo(name = "is_hidden", defaultValue = "0") val isHidden: Boolean = false
+    @ColumnInfo(name = "is_hidden", defaultValue = "0") val isHidden: Boolean = false,
+
+    @ColumnInfo(name = "deletion_allowed", defaultValue = "0") val deletionAllowed: Boolean = false
 )
+
+/** Missing provenance is protected; an attachment always wins over a persisted capability. */
+val Contact.canDelete: Boolean get() = deletionAllowed && androidContactId == null

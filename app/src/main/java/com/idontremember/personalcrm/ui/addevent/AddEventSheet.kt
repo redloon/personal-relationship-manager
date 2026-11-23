@@ -19,8 +19,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.selected
@@ -29,8 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.idontremember.personalcrm.ui.components.exposeTestTags
 import com.idontremember.personalcrm.R
-import com.idontremember.personalcrm.ui.components.AutocompleteContact
-import com.idontremember.personalcrm.ui.components.AutocompleteTag
+import com.idontremember.personalcrm.data.capture.PersonChoice
+import com.idontremember.personalcrm.data.capture.TagChoice
 import com.idontremember.personalcrm.ui.components.AutocompleteTextField
 import com.idontremember.personalcrm.ui.components.PersonPicker
 import com.idontremember.personalcrm.ui.components.ContactChip
@@ -56,7 +54,6 @@ fun AddEventSheet(
     initialText: String? = null,
     initialIsFact: Boolean = false
 ) {
-    val density = LocalDensity.current
     var suggestionWidth by remember { mutableStateOf(112.dp) }
     val noteText by viewModel.noteText.collectAsState()
     val inlineTokens by viewModel.inlineTokens.collectAsState()
@@ -94,23 +91,17 @@ fun AddEventSheet(
 
     ModalBottomSheet(onDismissRequest = close, sheetState = sheetState, modifier = Modifier.exposeTestTags().testTag("add_event_sheet")) {
         Column(Modifier.fillMaxWidth().imePadding().heightIn(max = maxHeight).padding(horizontal = 16.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(when {
+            CaptureHeader(
+                title = stringResource(when {
                     existingFactId != null -> R.string.capture_edit_fact
                     editing -> R.string.capture_edit_note
                     resumingDraft && !conflict -> R.string.usability_resume_draft
                     isFact -> R.string.usability_add_fact
                     else -> R.string.capture_add_note
-                }), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f).onSizeChanged { suggestionWidth = with(density) { it.width.toDp().coerceAtLeast(1.dp) } })
-                IconButton(onClick = close, enabled = !saving) {
-                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_close))
-                }
-                Button(onClick = viewModel::save,
-                    enabled = ready && noteText.text.isNotBlank() && !saving && !conflict && (!isFact || selectedContactIds.size == 1),
-                    modifier = Modifier.testTag(if (editing) "save_event_edit_button" else "save_event_button")) {
-                    Text(stringResource(if (saving) R.string.capture_saving else R.string.capture_save))
-                }
-            }
+                }),
+                saving = saving, saveEnabled = ready && noteText.text.isNotBlank() && !saving && !conflict && (!isFact || selectedContactIds.size == 1),
+                editing = editing, onClose = close, onSave = viewModel::save, onSuggestionWidth = { suggestionWidth = it }
+            )
             if (saveFailed && ready) ErrorState(
                 message = stringResource(R.string.event_save_error),
                 modifier = Modifier.fillMaxWidth(),
@@ -128,7 +119,7 @@ fun AddEventSheet(
                 AutocompleteTextField(
                     suggestionMaxWidth = suggestionWidth,
                     value = noteText, onValueChange = viewModel::onNoteChanged,
-                    contacts = contacts.map { AutocompleteContact(it.id, it.displayName, it.phoneNumber) }, tags = viewModel.getAutocompleteTags(),
+                    contacts = contacts.map { PersonChoice(it.id, it.displayName, it.phoneNumber) }, tags = viewModel.getAutocompleteTags(),
                     onContactSelected = viewModel::insertPersonToken, onTagSelected = viewModel::insertTagToken,
                     autoFocus = autoFocus && !conflict && !showPeople && !showTags && !showDate && !showTime, enableTags = !isFact, enableContacts = !isFact,
                     inlineTokens = if (isFact) emptyList() else inlineTokens,
@@ -194,22 +185,12 @@ fun AddEventSheet(
         initialQuery = pendingPersonQuery,
         startCreating = pendingPersonStart >= 0
     )
-    if (showTags) AlertDialog(modifier = Modifier.exposeTestTags(),
-        onDismissRequest = { showTags = false }, title = { Text(stringResource(R.string.capture_tags)) },
-        text = {
-            Column {
-                SearchField(tagQuery, { tagQuery = it }, stringResource(R.string.capture_tag_hint), "clear_capture_tag_search", Modifier.fillMaxWidth().testTag("capture_tag_search"))
-                LazyColumn(Modifier.heightIn(max = 280.dp)) {
-                    items(tags.filter { it.name.contains(tagQuery.trim(), true) && it.name !in selectedTagNames }, key = { it.id }) { tag ->
-                        TextButton(onClick = { viewModel.onTagSelected(AutocompleteTag(tag.id, tag.name)); tagQuery = ""; showTags = false }, modifier = Modifier.fillMaxWidth()) { Text(tag.name) }
-                    }
-                }
-                if (tagQuery.trim().removePrefix("#").isNotBlank()) TextButton(onClick = {
-                    viewModel.onTagSelected(AutocompleteTag(-1, tagQuery.trim().removePrefix("#").lowercase()))
-                    tagQuery = ""; showTags = false
-                }) { Text(stringResource(R.string.capture_create_tag, tagQuery.trim().removePrefix("#"))) }
-            }
-        }, confirmButton = { TextButton(onClick = { showTags = false }) { Text(stringResource(R.string.pilot_done)) } }
+    if (showTags) com.idontremember.personalcrm.ui.components.TagPicker(
+        tags.filter { it.name !in selectedTagNames }, tagQuery, { tagQuery = it },
+        onDismiss = { showTags = false },
+        onSelect = { viewModel.onTagSelected(TagChoice(it.id, it.name)); tagQuery = ""; showTags = false },
+        onCreate = { viewModel.onTagSelected(TagChoice(-1, it)); tagQuery = ""; showTags = false },
+        capture = true
     )
     if (showDate) {
         val calendar = Calendar.getInstance().apply { timeInMillis = eventDate }

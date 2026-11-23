@@ -27,6 +27,17 @@ class CaptureLinksTest {
         assertEquals(setOf(7L), deleted.withFactMode(false).contactIds)
     }
 
+    @Test fun insertedTagAndMissingPersonReconciliationPreserveProseAndOtherLinks() {
+        val inserted = linked.insert("Met @Maya #t", 10, 12, "#tea", TokenTarget.Tag("tea"))
+        assertEquals("Met @Maya #tea ", inserted.text)
+        assertEquals(setOf("tea"), inserted.links.tagNames)
+        val reconciled = inserted.links.reconcilePeople(emptySet())
+        assertTrue(reconciled.contactIds.isEmpty())
+        assertEquals(setOf("tea"), reconciled.tagNames)
+        assertEquals(listOf(TokenTarget.Tag("tea")), reconciled.tokens.map { it.target })
+        assertEquals(emptyList<InlineToken>(), reconciled.removeTag("tea").tokens)
+    }
+
     @Test fun choosingADifferentFactPersonDropsOnlyFormerPersonTokens() {
         val tagged = linked.copy(tagNames = setOf("tea"), tokens = linked.tokens + InlineToken(10, 14, TokenTarget.Tag("tea")))
         val changed = tagged.withFactMode(true).selectPerson(8)

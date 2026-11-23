@@ -1,8 +1,9 @@
-package com.idontremember.personalcrm.ui.pilot
+package com.idontremember.personalcrm.ui.recall
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.idontremember.personalcrm.data.search.RecallKind
 import com.idontremember.personalcrm.data.search.RecallEntry
 import com.idontremember.personalcrm.data.search.RecallSearch
 import com.idontremember.personalcrm.data.search.SearchRepository
@@ -20,7 +21,8 @@ import javax.inject.Inject
 class RecallViewModel @Inject constructor(repository: SearchRepository, settings: SettingsRepository, private val state: SavedStateHandle) : ViewModel() {
     val dateDisplay = settings.dateDisplay.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DateDisplay.ABSOLUTE)
     val query = state.getStateFlow("recall_query", "")
-    val kind = state.getStateFlow<String?>("recall_kind", null)
+    val kind = state.getStateFlow<String?>("recall_kind", null).map(RecallKind::fromWireOrNull)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RecallKind.fromWireOrNull(state["recall_kind"]))
     private val retry = MutableStateFlow(0)
     private val _error = MutableStateFlow(false)
     val error: StateFlow<Boolean> = _error
@@ -34,7 +36,7 @@ class RecallViewModel @Inject constructor(repository: SearchRepository, settings
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
     val history = combine(entries, query, kind) { values, q, k -> values?.let { withContext(Dispatchers.Default) { RecallSearch.history(it, q, k) } } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-    fun filter(kind: String?) { state["recall_kind"] = kind }
+    fun filter(kind: RecallKind?) { state["recall_kind"] = kind?.wireValue }
     fun search(query: String) { state["recall_query"] = query }
     fun retry() { _error.value = false; retry.value++ }
 }

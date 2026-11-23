@@ -29,10 +29,10 @@ class RecallDaoTest {
         val tag = db.tagDao().insert(Tag(name = "Outdoors"))
         db.eventDao().insertEventTag(EventTag(event, tag))
         val follow = db.followUpDao().insert(FollowUp(contactId = alice, text = "Ask about the trail"))
-        val rows = db.recallDao().entries().first()
+        val rows = db.recallDao().rows().first().map { it.toEntry() }
         assertEquals(listOf(fact), RecallSearch.find(rows, "Alice climbing").map { it.id })
-        assertTrue(RecallSearch.find(rows, "Alice outdoors").any { it.kind == "event" && it.id == event })
-        assertTrue(RecallSearch.find(rows, "trail").any { it.kind == "followup" && it.id == follow })
+        assertTrue(RecallSearch.find(rows, "Alice outdoors").any { it.kind == RecallKind.EVENT && it.id == event })
+        assertTrue(RecallSearch.find(rows, "trail").any { it.kind == RecallKind.FOLLOW_UP && it.id == follow })
     }
 
     @Test fun deletedContextIsExcludedAndRenameDoesNotRewriteEvent() = runBlocking {
@@ -42,18 +42,18 @@ class RecallDaoTest {
         db.eventDao().insertEventContact(EventContact(event, alice))
         val before = db.contactDao().getById(alice)!!
         db.contactDao().update(before.copy(displayName = "New Alice"))
-        val rows = db.recallDao().entries().first()
-        assertFalse(rows.any { it.kind == "fact" && it.id == fact })
-        assertTrue(RecallSearch.find(rows, "New Alice").any { it.kind == "event" && it.id == event })
+        val rows = db.recallDao().rows().first().map { it.toEntry() }
+        assertFalse(rows.any { it.kind == RecallKind.FACT && it.id == fact })
+        assertTrue(RecallSearch.find(rows, "New Alice").any { it.kind == RecallKind.EVENT && it.id == event })
         assertEquals("Met @Old Alice", db.eventDao().getById(event)!!.note)
     }
     @Test fun tagEntitiesAndFollowUpStateAreAvailableWithoutPerRowQueries() = runBlocking {
         val person = db.contactDao().insert(Contact(displayName = "Maya"))
         val tag = db.tagDao().insert(Tag(name = "dog-owner"))
         val follow = db.followUpDao().insert(FollowUp(contactId = person, text = "Ask about dog", dueDate = "2026-11-10", completedAt = 7, createdAt = 3))
-        val rows = db.recallDao().entries().first()
-        assertEquals(listOf(tag), RecallSearch.find(rows, "dog-owner", kind = "tag").map { it.id })
-        val result = rows.single { it.kind == "followup" && it.id == follow }
+        val rows = db.recallDao().rows().first().map { it.toEntry() }
+        assertEquals(listOf(tag), RecallSearch.find(rows, "dog-owner", kind = RecallKind.TAG).map { it.id })
+        val result = rows.single { it.kind == RecallKind.FOLLOW_UP && it.id == follow }
         assertEquals("2026-11-10", result.dueDate)
         assertEquals(7L, result.completedAt)
         assertEquals(3L, result.createdAt)
@@ -70,17 +70,17 @@ class RecallDaoTest {
         db.eventDao().insertEventTag(EventTag(linked, dogOwner))
         db.eventDao().insertEventTag(EventTag(bare, dogOwner))
         db.eventDao().insertEventTag(EventTag(other, dog))
-        db.pilotDao().addTag(ContactTag(person, dogOwner))
-        assertEquals(setOf(linked, bare), db.pilotDao().noteIdsForTag(dogOwner).first().toSet())
-        val members = db.pilotDao().peopleForTag(dogOwner).first()
+        db.profileLinksDao().addTag(ContactTag(person, dogOwner))
+        assertEquals(setOf(linked, bare), db.profileLinksDao().noteIdsForTag(dogOwner).first().toSet())
+        val members = db.profileLinksDao().peopleForTag(dogOwner).first()
         assertEquals(1, members.size)
         assertTrue(members.single().direct)
         assertTrue(members.single().viaNote)
         val event = db.eventDao().getById(linked)!!
         db.eventDao().update(event.copy(deletedAt = 100))
-        val after = db.pilotDao().peopleForTag(dogOwner).first().single()
+        val after = db.profileLinksDao().peopleForTag(dogOwner).first().single()
         assertTrue(after.direct)
         assertFalse(after.viaNote)
-        assertEquals(listOf(bare), db.pilotDao().noteIdsForTag(dogOwner).first())
+        assertEquals(listOf(bare), db.profileLinksDao().noteIdsForTag(dogOwner).first())
     }
 }

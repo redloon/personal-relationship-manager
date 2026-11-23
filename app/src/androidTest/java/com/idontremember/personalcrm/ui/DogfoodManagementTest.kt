@@ -69,7 +69,7 @@ class DogfoodManagementTest {
         ui.onNodeWithText("Unrelated Person").assertDoesNotExist()
         ui.onNodeWithText("Alex Rivera").performClick()
         ui.onNodeWithTag("relationship_confirm").performClick()
-        ui.waitUntil(5_000) { runBlocking { db.pilotDao().allRelationships().any {
+        ui.waitUntil(5_000) { runBlocking { db.profileLinksDao().allRelationships().any {
             setOf(it.contactA, it.contactB) == setOf(maya, alex) && it.label == "Spouse"
         } } }
     }

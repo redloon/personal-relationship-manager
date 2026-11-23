@@ -54,7 +54,7 @@ class UsabilityNavigationTest {
             val person = db.contactDao().insert(Contact(displayName = "History Person"))
             db.contactFactDao().insert(ContactFact(contactId = person, text = "Collects antique maps"))
         }
-        ui.navigateToEventsTab()
+        ui.navigateToHistory()
         ui.waitUntilTagDisplayed("recall_fact_$factId", 10_000)
         ui.onNodeWithTag("recall_fact_$factId").performClick()
         ui.waitUntilTagDisplayed("fact_reader", 10_000)

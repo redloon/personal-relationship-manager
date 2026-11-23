@@ -2,13 +2,13 @@ package com.idontremember.personalcrm.data.search
 
 /** Literal matching is deliberate: a user's punctuation is never SQL syntax. */
 object RecallSearch {
-    fun find(entries: List<RecallEntry>, query: String, personId: Long? = null, kind: String? = null): List<RecallEntry> {
+    fun find(entries: List<RecallEntry>, query: String, personId: Long? = null, kind: RecallKind? = null): List<RecallEntry> {
         val terms = query.trim().split(Regex("\\s+")).filter(String::isNotBlank)
         val phrase = query.trim()
-        val matchingPeople = if (kind == "person" && terms.isNotEmpty()) entries.asSequence()
+        val matchingPeople = if (kind == RecallKind.PERSON && terms.isNotEmpty()) entries.asSequence()
             .filter { personId == null || it.belongsTo(personId) }
             .filter { row -> terms.all { row.searchText.contains(it, ignoreCase = true) } }
-            .flatMap { it.personIds.trim(',').split(',').mapNotNull(String::toLongOrNull).asSequence() }.toSet()
+            .flatMap { it.personIds.asSequence() }.toSet()
         else null
         return entries.asSequence()
             .filter { personId == null || it.belongsTo(personId) }
@@ -16,31 +16,31 @@ object RecallSearch {
             .filter {
                 when {
                     matchingPeople != null -> it.id in matchingPeople
-                    terms.isEmpty() -> kind != null || it.kind == "fact" || it.kind == "event"
+                    terms.isEmpty() -> kind != null || it.kind == RecallKind.FACT || it.kind == RecallKind.EVENT
                     else -> terms.all { term -> it.searchText.contains(term, ignoreCase = true) }
                 }
             }
             .distinctBy { it.key }
             .sortedWith(compareBy<RecallEntry> {
                 when {
-                    it.kind == "person" && it.title.equals(phrase, true) -> 0
-                    it.kind == "person" && it.title.startsWith(phrase, true) -> 1
-                    it.kind == "person" -> 2
+                    it.kind == RecallKind.PERSON && it.title.equals(phrase, true) -> 0
+                    it.kind == RecallKind.PERSON && it.title.startsWith(phrase, true) -> 1
+                    it.kind == RecallKind.PERSON -> 2
                     else -> 3
                 }
-            }.thenByDescending { it.date }.thenBy { it.kind }.thenBy { it.id })
+            }.thenByDescending { it.date }.thenBy { it.kind.wireValue }.thenBy { it.id })
             .toList()
     }
 
     /** History is captures, including completed intentions, ordered by when they were recorded. */
-    fun history(entries: List<RecallEntry>, query: String, kind: String? = null): List<RecallEntry> {
-        val captures = entries.filter { it.kind in setOf("event", "fact", "followup") }
+    fun history(entries: List<RecallEntry>, query: String, kind: RecallKind? = null): List<RecallEntry> {
+        val captures = entries.filter { it.kind.isCapture }
         val terms = query.trim().split(Regex("\\s+")).filter(String::isNotBlank)
         return captures.asSequence()
             .filter { kind == null || it.kind == kind }
             .filter { row -> terms.all { row.searchText.contains(it, ignoreCase = true) } }
             .distinctBy { it.key }
-            .sortedWith(compareByDescending<RecallEntry> { it.createdAt }.thenBy { it.kind }.thenBy { it.id })
+            .sortedWith(compareByDescending<RecallEntry> { it.createdAt }.thenBy { it.kind.wireValue }.thenBy { it.id })
             .toList()
     }
 
@@ -49,9 +49,9 @@ object RecallSearch {
         if (query.isBlank()) return emptyMap()
         val result = linkedMapOf<Long, String>()
         val terms = query.trim().split(Regex("\\s+")).filter(String::isNotBlank)
-        find(entries, query).sortedBy { if (it.kind == "person") 1 else 0 }.forEach { row ->
+        find(entries, query).sortedBy { if (it.kind == RecallKind.PERSON) 1 else 0 }.forEach { row ->
             val context = if (terms.any { row.text.contains(it, ignoreCase = true) }) row.text else row.searchText
-            row.personIds.trim(',').split(',').mapNotNull(String::toLongOrNull).forEach { id ->
+            row.personIds.forEach { id ->
                 result.putIfAbsent(id, excerpt(context, query))
             }
         }

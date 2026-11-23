@@ -48,7 +48,8 @@ class DogfoodWorkflowTest {
         ui.activity.getSharedPreferences("capture_draft", 0).edit().clear().commit()
         runBlocking {
             settings.setDateDisplay(DateDisplay.ABSOLUTE)
-            maya = db.contactDao().insert(Contact(displayName = "Maya Typo", phoneNumber = "5550100", email = "maya@example.com"))
+            maya = contacts.createLocalContact("Maya Typo")
+            db.contactDao().update(contacts.getContactById(maya)!!.copy(phoneNumber = "5550100", email = "maya@example.com"))
             linked = db.contactDao().insert(Contact(displayName = "Alex Android", androidContactId = 424242))
             db.contactDao().insert(Contact(displayName = "Hidden local", isHidden = true))
             note = db.eventDao().insert(Event(note = "Lantern bakery", eventDate = 1_700_000_000_000))
@@ -114,6 +115,7 @@ class DogfoodWorkflowTest {
         assertEquals("Lantern bakery", runBlocking { db.eventDao().getById(note)!!.note })
         val androidId = createAndroidPerson("Dogfood Android Canonical")
         runBlocking { contacts.linkAndroidContact(maya, androidId) }
+        assertFalse(runBlocking { contacts.getContactById(maya)!!.deletionAllowed })
         ui.onNodeWithTag("edit_person_button").performClick()
         ui.onNodeWithTag("open_android_contact").assertIsDisplayed()
         ui.onNodeWithTag("link_android_contact").assertDoesNotExist()

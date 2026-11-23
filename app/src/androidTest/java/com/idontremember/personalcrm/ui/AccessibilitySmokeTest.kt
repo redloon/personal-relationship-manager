@@ -141,7 +141,7 @@ class AccessibilitySmokeTest {
         assertTouchTargetAtLeast48dp("sync_button")
         assertTouchTargetAtLeast48dp("settings_button")
 
-        composeTestRule.navigateToEventsTab()
+        composeTestRule.navigateToHistory()
         composeTestRule.waitUntilTagDisplayed("events_empty_state")
         composeTestRule.onNodeWithTag("events_empty_state").assertIsDisplayed()
         assertTouchTargetAtLeast48dp("add_event_fab")

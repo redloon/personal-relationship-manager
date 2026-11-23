@@ -3,7 +3,7 @@ package com.idontremember.personalcrm
 import android.content.Context
 import androidx.room.Room
 import com.idontremember.personalcrm.data.db.AppDatabase
-import com.idontremember.personalcrm.data.db.dao.PilotDao
+import com.idontremember.personalcrm.data.db.dao.ProfileLinksDao
 import com.idontremember.personalcrm.data.db.dao.ContactDao
 import com.idontremember.personalcrm.data.db.dao.ContactFactDao
 import com.idontremember.personalcrm.data.db.dao.EventDao
@@ -36,7 +36,7 @@ object TestDatabaseModule {
     }
 
     @Provides
-    fun providePilotDao(db: AppDatabase): PilotDao = db.pilotDao()
+    fun provideProfileLinksDao(db: AppDatabase): ProfileLinksDao = db.profileLinksDao()
 
     @Provides
     fun provideContactDao(db: AppDatabase): ContactDao = db.contactDao()

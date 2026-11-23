@@ -203,11 +203,11 @@
     <string name="people_undo">Undo</string>
     <string name="people_visibility_failed">Couldn’t change visibility. Try again.</string>
     <string name="people_retry">Retry</string>
-    <string name="people_app_only_title">App-only people</string>
-    <string name="people_app_only_explanation">People not yet linked to an Android contact.</string>
-    <string name="people_app_only_search">Search app-only people</string>
-    <string name="people_app_only_empty">No app-only people.</string>
-    <string name="people_app_only_status">App-only person</string>
+    <string name="people_app_only_title">Unlinked people</string>
+    <string name="people_app_only_explanation">People not linked to your phone’s contacts.</string>
+    <string name="people_app_only_search">Search unlinked people</string>
+    <string name="people_app_only_empty">No unlinked people.</string>
+    <string name="people_app_only_status">Unlinked person</string>
     <string name="people_directory_search">Search names, phones, or emails</string>
     <string name="people_edit_name">Edit name</string>
     <string name="people_last_interaction">Last interaction: %1$s</string>

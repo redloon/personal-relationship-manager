@@ -1,5 +1,7 @@
 package com.idontremember.personalcrm.ui.contacts
 
+import com.idontremember.personalcrm.data.contacts.*
+import com.idontremember.personalcrm.data.settings.DateDisplay
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
@@ -21,6 +23,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
@@ -58,9 +63,20 @@ fun ContactsListScreen(
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) viewModel.syncContacts()
         else permission.launch(Manifest.permission.READ_CONTACTS)
     }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focus = LocalFocusManager.current
+    var showSort by rememberSaveable { mutableStateOf(false) }
+    val openSort = { keyboard?.hide(); focus.clearFocus(); showSort = true }
+    val order by viewModel.sort.collectAsStateWithLifecycle()
+    val canDelete by viewModel.canDeleteSelection.collectAsStateWithLifecycle()
+    val deletion by viewModel.deletion.collectAsStateWithLifecycle()
+    val requestDelete = {
+        keyboard?.hide(); focus.clearFocus()
+        viewModel.runAction(PeopleBulkAction.DELETE)
+    }
     var addPerson by rememberSaveable { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
-    val contacts by viewModel.contacts.collectAsState()
+    val contacts by viewModel.contacts.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
@@ -102,6 +118,19 @@ fun ContactsListScreen(
         }
     }
 
+    LaunchedEffect(viewModel, resources) {
+        viewModel.feedback.collect { feedback ->
+            val message = when (feedback) {
+                is PeopleFeedback.Deleted -> resources.getQuantityString(R.plurals.people_deleted_count, feedback.count, feedback.count)
+                PeopleFeedback.DeleteFailed -> resources.getString(R.string.people_delete_failed)
+                PeopleFeedback.Protected -> resources.getString(R.string.people_delete_protected)
+                PeopleFeedback.PreviewChanged -> resources.getString(R.string.people_delete_changed)
+                PeopleFeedback.SortFailed -> resources.getString(R.string.people_sort_failed)
+            }
+            snackbar.showSnackbar(message)
+        }
+    }
+
     val syncFeedback: String? = when (val state = syncState) {
         is ContactsListViewModel.SyncState.Success -> stringResource(R.string.sync_result, state.result.added, state.result.updated)
         is ContactsListViewModel.SyncState.Error -> stringResource(R.string.sync_error, state.message ?: stringResource(R.string.error_sync_failed))
@@ -126,9 +155,10 @@ fun ContactsListScreen(
                     selection = selection, busy = busy,
                     actionLabel = stringResource(if (hidden) R.string.people_unhide else R.string.people_hide),
                     onClose = viewModel::clearSelection,
-                    onAction = { snackbar.currentSnackbarData?.dismiss(); viewModel.changeSelectedVisibility() },
+                    onAction = { snackbar.currentSnackbarData?.dismiss(); viewModel.runAction(if (hidden) PeopleBulkAction.UNHIDE else PeopleBulkAction.HIDE) },
                     onSelectAll = viewModel::selectAllResults,
                     onClear = viewModel::clearSelection,
+                    onDelete = requestDelete, canDelete = canDelete, onSort = openSort,
                     contextTitle = contextTitle, contextIcon = contextIcon, colors = headerColors
                 )
             } else TopAppBar(
@@ -158,6 +188,8 @@ fun ContactsListScreen(
                             Icon(Icons.Default.MoreVert, stringResource(R.string.people_actions))
                         }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.exposeTestTags()) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.people_sort_menu_label, stringResource(order.label()))) },
+                                onClick = { menu = false; openSort() }, modifier = Modifier.testTag("people_sort_menu"))
                             DropdownMenuItem(text = { Text(stringResource(R.string.people_select)) },
                                 onClick = { menu = false; viewModel.startSelection() },
                                 modifier = Modifier.testTag("people_select_menu"))
@@ -205,7 +237,7 @@ fun ContactsListScreen(
                     }), modifier = Modifier.fillMaxSize(), testTag = "contacts_empty_state")
                 else -> LazyColumn(Modifier.fillMaxSize().testTag("contacts_list"), contentPadding = PaddingValues(bottom = 88.dp)) {
                     items(list, key = { it.id }) { contact ->
-                        SelectablePersonRow(contact,
+                        SelectablePersonRow(contact, order,
                             selection.active, contact.id in selection.ids, !busy,
                             onClick = {
                                 if (selection.active) viewModel.togglePerson(contact.id)
@@ -217,6 +249,8 @@ fun ContactsListScreen(
             }
         }
     }
+    if (showSort) PeopleSortDialog(order, onSelect = { viewModel.changeSort(it); showSort = false }, onDismiss = { showSort = false })
+    deletion?.let { PeopleDeletionDialog(it, busy, viewModel::confirmDeletion, viewModel::cancelDeletion) }
     if (addPerson) PersonPicker(onDismiss = { addPerson = false },
         onPersonSelected = { addPerson = false; onContactClick(it.id) }, startCreating = true)
 }
@@ -227,6 +261,7 @@ fun ContactsListScreen(
 private fun PeopleSelectionToolbar(
     selection: PeopleSelection, busy: Boolean, actionLabel: String,
     onClose: () -> Unit, onAction: () -> Unit, onSelectAll: () -> Unit, onClear: () -> Unit,
+    onDelete: () -> Unit, canDelete: Boolean, onSort: () -> Unit,
     contextTitle: String? = null, contextIcon: ImageVector? = null,
     colors: TopAppBarColors = TopAppBarDefaults.topAppBarColors()
 ) {
@@ -249,7 +284,7 @@ private fun PeopleSelectionToolbar(
             actions = {
                 if (contextTitle == null) TextButton(onClick = onAction, enabled = actionEnabled,
                     modifier = Modifier.testTag("people_visibility_action")) { Text(actionLabel) }
-                PeopleSelectionMenu(busy, onSelectAll, onClear)
+                PeopleSelectionMenu(busy, onSelectAll, onClear, onDelete, canDelete, onSort)
             }
         )
         if (contextTitle != null) Surface(color = colors.containerColor, contentColor = colors.titleContentColor) {
@@ -265,7 +300,7 @@ private fun PeopleSelectionToolbar(
 }
 
 @Composable
-private fun PeopleSelectionMenu(busy: Boolean, onSelectAll: () -> Unit, onClear: () -> Unit) {
+private fun PeopleSelectionMenu(busy: Boolean, onSelectAll: () -> Unit, onClear: () -> Unit, onDelete: () -> Unit, canDelete: Boolean, onSort: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { menu = true }, enabled = !busy, modifier = Modifier.testTag("people_selection_menu")) {
@@ -276,6 +311,13 @@ private fun PeopleSelectionMenu(busy: Boolean, onSelectAll: () -> Unit, onClear:
                 onClick = { menu = false; onSelectAll() }, modifier = Modifier.testTag("people_select_all"))
             DropdownMenuItem(text = { Text(stringResource(R.string.people_clear_selection)) },
                 onClick = { menu = false; onClear() }, modifier = Modifier.testTag("people_clear_selection"))
+            DropdownMenuItem(text = { Text(stringResource(R.string.people_sort_title)) }, enabled = !busy,
+                onClick = { menu = false; onSort() }, modifier = Modifier.testTag("people_sort_menu"))
+            DropdownMenuItem(
+                text = { Column { Text(stringResource(R.string.people_delete))
+                    if (!canDelete) Text(stringResource(R.string.people_delete_protected), style = MaterialTheme.typography.bodySmall) } },
+                enabled = canDelete && !busy, onClick = { menu = false; onDelete() },
+                modifier = Modifier.testTag("people_delete_action"))
         }
     }
 }
@@ -300,16 +342,24 @@ private fun contextAppBarHeight(): Dp = with(LocalDensity.current) {
 
 @Composable
 private fun SelectablePersonRow(
-    contact: Contact, selecting: Boolean, selected: Boolean, enabled: Boolean,
+    row: PeopleListItem, order: PeopleSort, selecting: Boolean, selected: Boolean, enabled: Boolean,
     onClick: () -> Unit, onLongClick: () -> Unit
 ) {
+    val contact = row.contact
     val selectLabel = stringResource(R.string.people_select_person)
     Box(Modifier.testTag("person_row_${contact.id}")) {
         ListItem(
             headlineContent = { Text(contact.displayName) },
             supportingContent = {
-                val details = listOfNotNull(contact.phoneNumber, contact.email).joinToString(" · ")
-                if (details.isNotBlank()) Text(details)
+                Column {
+                    val recent = row.stats.lastInteractionAt?.let { relativeDate(it, relativeDateStrings(LocalResources.current), row.asOf) }
+                        ?: stringResource(R.string.people_no_interactions)
+                    Text(stringResource(R.string.people_last_interaction, recent))
+                    if (order == PeopleSort.MOST_INTERACTIONS || order == PeopleSort.FEWEST_INTERACTIONS)
+                        Text(androidx.compose.ui.res.pluralStringResource(R.plurals.people_interactions, row.stats.interactionCount, row.stats.interactionCount))
+                    if (order == PeopleSort.ADDED_NEWEST || order == PeopleSort.ADDED_OLDEST)
+                        Text(stringResource(R.string.people_added_date, formatEventDateText(contact.createdAt, DateDisplay.ABSOLUTE, R.string.date_pattern_short)))
+                }
             },
             leadingContent = {
                 if (selecting) Checkbox(checked = selected, onCheckedChange = null, enabled = enabled)

@@ -5,10 +5,15 @@ import com.idontremember.personalcrm.data.capture.InlineTokens
 import com.idontremember.personalcrm.data.capture.TokenTarget
 import androidx.room.withTransaction
 import com.idontremember.personalcrm.data.db.AppDatabase
+import com.idontremember.personalcrm.data.db.rewriteEventTokens
 import com.idontremember.personalcrm.data.contacts.ContactsSyncManager
+import com.idontremember.personalcrm.data.contacts.PeopleDeletionPreview
+import com.idontremember.personalcrm.data.contacts.previewPeopleDeletion
+import com.idontremember.personalcrm.data.contacts.deletePeople
 import com.idontremember.personalcrm.data.db.dao.ContactDao
 import com.idontremember.personalcrm.data.db.dao.ContactFactDao
 import com.idontremember.personalcrm.data.db.dao.EventDao
+import com.idontremember.personalcrm.data.db.entity.canDelete
 import com.idontremember.personalcrm.data.db.entity.Contact
 import com.idontremember.personalcrm.data.db.entity.ContactFact
 import com.idontremember.personalcrm.data.db.entity.Event
@@ -58,13 +63,11 @@ class ContactRepository @Inject constructor(
 
     suspend fun syncContacts(): ContactsSyncManager.SyncResult = contactsSyncManager.syncContacts()
 
-    suspend fun insertManually(contact: Contact): Long = contactDao.insert(contact)
-
     suspend fun createLocalContact(name: String, allowDuplicate: Boolean = false): Long = database.withTransaction {
         val trimmed = name.trim()
         require(trimmed.isNotEmpty()) { "A name is required" }
         if (!allowDuplicate) contactDao.getAllIncludingHiddenOnce().firstOrNull { !it.isHidden && ContactNames.key(it.displayName) == ContactNames.key(trimmed) }?.let { return@withTransaction it.id }
-        contactDao.insert(Contact(displayName = trimmed))
+        contactDao.insert(Contact(displayName = trimmed, deletionAllowed = true))
     }
 
     suspend fun renameLocalContact(id: Long, name: String) {
@@ -85,7 +88,7 @@ class ContactRepository @Inject constructor(
             val keeper = contactDao.getById(appContactId) ?: error("Person unavailable")
             val imported = contactDao.getByAndroidContactId(androidId)
             if (imported != null && imported.id != appContactId) consolidate(appContactId, imported.id)
-            contactDao.update(keeper.copy(displayName = provider.displayName, androidContactId = androidId, lookupKey = provider.lookupKey,
+            contactDao.update(keeper.copy(deletionAllowed = false, displayName = provider.displayName, androidContactId = androidId, lookupKey = provider.lookupKey,
                 phoneNumber = provider.phoneNumber, email = provider.email, photoUri = provider.photoUri,
                 updatedAt = System.currentTimeMillis()))
         }
@@ -106,20 +109,15 @@ class ContactRepository @Inject constructor(
             }
         }
         for((a,b,label) in links) sql.execSQL("INSERT OR IGNORE INTO relationships(contact_a, contact_b, label) VALUES (?, ?, ?)", arrayOf<Any>(a,b,label))
-        val tokenUpdates = mutableListOf<Pair<Long, String>>()
-        sql.query("SELECT id, inline_tokens FROM events").use { cursor ->
-            while (cursor.moveToNext()) {
-                val tokens = InlineTokens.decode(cursor.getString(1))
-                if (tokens.any { it.target == TokenTarget.Person(remove) }) {
-                    tokenUpdates += cursor.getLong(0) to InlineTokens.encode(tokens.map { if (it.target == TokenTarget.Person(remove)) it.copy(target = TokenTarget.Person(keep)) else it })
-                }
-            }
+        database.rewriteEventTokens { tokens ->
+            tokens.map { if (it.target == TokenTarget.Person(remove)) it.copy(target = TokenTarget.Person(keep)) else it }
         }
-        for ((id, tokens) in tokenUpdates) sql.execSQL("UPDATE events SET inline_tokens = ? WHERE id = ?", arrayOf<Any>(tokens, id))
         sql.execSQL("DELETE FROM contacts WHERE id = ?", arrayOf(remove))
     }
 
-    suspend fun deleteContact(contact: Contact) = contactDao.delete(contact)
+
+    suspend fun previewPeopleDeletion(ids: Set<Long>) = database.previewPeopleDeletion(ids)
+    suspend fun deletePeople(preview: PeopleDeletionPreview) = database.deletePeople(preview)
 
     // --- Facts ---
 

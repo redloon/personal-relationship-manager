@@ -53,8 +53,8 @@ class DashboardTest {
         ui.onNodeWithTag("contact_detail_screen").performScrollToNode(hasTestTag("relationship_remove_$alice"))
         ui.onNodeWithTag("relationship_remove_$alice").assertIsDisplayed().performClick()
         // Check persistence before the UI; this distinguishes a missed tap from a stale row.
-        ui.waitUntil(10_000) { runBlocking { db.pilotDao().allRelationships().isEmpty() } }
-        assertTrue("Removing the relationship must delete its database link", runBlocking { db.pilotDao().allRelationships().isEmpty() })
+        ui.waitUntil(10_000) { runBlocking { db.profileLinksDao().allRelationships().isEmpty() } }
+        assertTrue("Removing the relationship must delete its database link", runBlocking { db.profileLinksDao().allRelationships().isEmpty() })
         ui.waitUntil(10_000) { ui.onAllNodesWithTag("relationship_person_$alice").fetchSemanticsNodes().isEmpty() }
     }
 

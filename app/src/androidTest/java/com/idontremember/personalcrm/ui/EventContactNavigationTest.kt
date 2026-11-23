@@ -42,7 +42,7 @@ class EventContactNavigationTest {
 
     @Test
     fun eventListPersonOpensContactAndBackReturnsToList() {
-        composeTestRule.navigateToEventsTab()
+        composeTestRule.navigateToHistory()
         composeTestRule.waitUntilTagExists("event_contact_chip_$contactId")
         composeTestRule.onNodeWithTag("event_contact_chip_$contactId").performClick()
         composeTestRule.waitUntilTagDisplayed("contact_detail_screen")
@@ -52,7 +52,7 @@ class EventContactNavigationTest {
 
     @Test
     fun eventDetailPersonOpensContactAndBackReturnsToEvent() {
-        composeTestRule.navigateToEventsTab()
+        composeTestRule.navigateToHistory()
         composeTestRule.waitUntilTagExists("event_contact_chip_$contactId")
         composeTestRule.onNodeWithText("Met Alice").performClick()
         composeTestRule.waitUntilTagDisplayed("event_detail_screen")
@@ -68,7 +68,7 @@ class EventContactNavigationTest {
             val contact = contactDao.getById(contactId)!!
             contactDao.update(contact.copy(displayName = "Alice New"))
         }
-        composeTestRule.navigateToEventsTab()
+        composeTestRule.navigateToHistory()
         composeTestRule.waitUntilTagExists("event_contact_chip_$contactId")
         composeTestRule.onNodeWithText("Met Alice").assertIsDisplayed()
         composeTestRule.onNodeWithText("@Alice New").assertIsDisplayed()

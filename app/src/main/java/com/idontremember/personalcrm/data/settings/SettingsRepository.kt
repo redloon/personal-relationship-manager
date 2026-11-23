@@ -1,5 +1,7 @@
 package com.idontremember.personalcrm.data.settings
 
+import com.idontremember.personalcrm.data.contacts.PeopleListScope
+import com.idontremember.personalcrm.data.contacts.PeopleSort
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -30,6 +32,13 @@ enum class DefaultEventTime { NOW, LAST_USED }
 class SettingsRepository @Inject constructor(
     private val dataStore: DataStore<Preferences>
 ) {
+
+    fun peopleSort(scope: PeopleListScope): Flow<PeopleSort> = dataStore.data.map { prefs ->
+        enumValueOrDefault(prefs[SettingsKeys.peopleSort(scope)], PeopleSort.RECENT)
+    }
+    suspend fun setPeopleSort(scope: PeopleListScope, value: PeopleSort) {
+        dataStore.edit { it[SettingsKeys.peopleSort(scope)] = value.name }
+    }
 
     val followUpReminderPrompted: Flow<Boolean> = dataStore.data.map { it[SettingsKeys.FOLLOW_UP_REMINDER_PROMPTED] ?: false }
     suspend fun setFollowUpReminderPrompted(prompted: Boolean = true) { dataStore.edit { it[SettingsKeys.FOLLOW_UP_REMINDER_PROMPTED] = prompted } }
@@ -89,6 +98,9 @@ class SettingsRepository @Inject constructor(
  * never inline `stringPreferencesKey("...")` at call sites.
  */
 object SettingsKeys {
+    private val peopleSortKeys = PeopleListScope.entries.associateWith { stringPreferencesKey("people_sort_${it.name.lowercase(java.util.Locale.ROOT)}") }
+    fun peopleSort(scope: PeopleListScope) = peopleSortKeys.getValue(scope)
+
     val FOLLOW_UP_REMINDER_PROMPTED = booleanPreferencesKey("followup_reminder_prompted")
     val FOLLOW_UP_REMINDERS_ENABLED = booleanPreferencesKey("followup_reminders_enabled")
     val REMINDER_HOUR = longPreferencesKey("reminder_hour")

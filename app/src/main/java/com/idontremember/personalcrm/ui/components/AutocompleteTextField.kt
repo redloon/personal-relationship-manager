@@ -1,8 +1,6 @@
 package com.idontremember.personalcrm.ui.components
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -10,17 +8,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -31,8 +21,9 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.window.PopupProperties
 import com.idontremember.personalcrm.R
+import com.idontremember.personalcrm.data.capture.PersonChoice
+import com.idontremember.personalcrm.data.capture.TagChoice
 import com.idontremember.personalcrm.data.capture.InlineToken
 import kotlinx.coroutines.delay
 
@@ -41,10 +32,10 @@ import kotlinx.coroutines.delay
 fun AutocompleteTextField(
     value: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
-    contacts: List<AutocompleteContact>,
-    tags: List<AutocompleteTag>,
-    onContactSelected: (AutocompleteContact, Int, Int) -> Unit,
-    onTagSelected: (AutocompleteTag, Int, Int) -> Unit,
+    contacts: List<PersonChoice>,
+    tags: List<TagChoice>,
+    onContactSelected: (PersonChoice, Int, Int) -> Unit,
+    onTagSelected: (TagChoice, Int, Int) -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String? = null,
     autoFocus: Boolean = false,
@@ -69,14 +60,7 @@ fun AutocompleteTextField(
     LaunchedEffect(triggerKey) { if (triggerKey != dismissedTrigger) dismissedTrigger = null }
     val tokenBackground = MaterialTheme.colorScheme.secondaryContainer
     val tokenColor = MaterialTheme.colorScheme.onSecondaryContainer
-    val density = LocalDensity.current
-    val windowSize = LocalWindowInfo.current.containerSize
-    val safeTop = WindowInsets.systemBars.getTop(density)
-    val safeBottom = windowSize.height - maxOf(WindowInsets.ime.getBottom(density), WindowInsets.systemBars.getBottom(density))
     var anchor by remember { mutableStateOf(Rect.Zero) }
-    val menuHeight = with(density) {
-        maxOf(anchor.top - safeTop, safeBottom - anchor.bottom).coerceIn(0f, 220.dp.toPx()).toDp()
-    }
     Box(modifier.onGloballyPositioned { anchor = it.boundsInWindow() }) {
         OutlinedTextField(
             value = value,
@@ -100,34 +84,23 @@ fun AutocompleteTextField(
             val tagMatches = tags.filter { it.name.contains(trigger.query, true) }.take(5)
             val canCreate = trigger.query.isNotBlank()
             val visible = if (trigger.type == TriggerType.CONTACT) contactMatches.isNotEmpty() || (canCreate && onCreateContact != null) else true
-            if (visible && menuHeight > 0.dp) Popup(
-                popupPositionProvider = remember(safeTop, safeBottom) { MentionMenuPosition(safeTop, safeBottom) },
-                onDismissRequest = { dismissedTrigger = triggerKey },
-                properties = PopupProperties(focusable = false, dismissOnClickOutside = false)
-            ) {
-                Surface(shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.surfaceContainer,
-                    tonalElevation = 3.dp, shadowElevation = 3.dp) {
-                    Column(Modifier.widthIn(min = minOf(112.dp, suggestionMaxWidth), max = suggestionMaxWidth).heightIn(max = menuHeight)
-                        .verticalScroll(rememberScrollState()).padding(vertical = 8.dp)
-                        .exposeTestTags().testTag("mention_suggestions")) {
-                        if (trigger.type == TriggerType.CONTACT) {
-                            contactMatches.forEach { person ->
-                                DropdownMenuItem(text = { Column { Text(person.displayName); person.phoneNumber?.let { Text(it, style = MaterialTheme.typography.bodySmall) } } },
-                                    onClick = { dismissedTrigger = triggerKey; onContactSelected(person, trigger.startIndex, cursor) })
-                            }
-                            if (canCreate && onCreateContact != null) DropdownMenuItem(
-                                text = { Text(stringResource(R.string.pilot_create_contact, trigger.query.trim())) },
-                                modifier = Modifier.testTag("inline_create_person"),
-                                onClick = { dismissedTrigger = triggerKey; onCreateContact(trigger.query.trim(), trigger.startIndex, cursor) })
-                        } else {
-                            tagMatches.forEach { tag -> DropdownMenuItem(text = { Text(stringResource(R.string.usability_tag_label, tag.name)) }, onClick = { dismissedTrigger = triggerKey; onTagSelected(tag, trigger.startIndex, cursor) }) }
-                            if (canCreate && tagMatches.none { it.name.equals(trigger.query.trim(), true) }) DropdownMenuItem(
-                                text = { Text(stringResource(R.string.create_tag_option, trigger.query.trim())) },
-                                onClick = { dismissedTrigger = triggerKey; onTagSelected(AutocompleteTag(-1, trigger.query.trim().lowercase(java.util.Locale.ROOT)), trigger.startIndex, cursor) })
-                        }
-                        DropdownMenuItem(text = { Text(stringResource(R.string.usability_keep_text)) }, modifier = Modifier.testTag("inline_keep_text"), onClick = { dismissedTrigger = triggerKey })
+            if (visible) MentionSuggestions(anchor, suggestionMaxWidth, onDismiss = { dismissedTrigger = triggerKey }) {
+                if (trigger.type == TriggerType.CONTACT) {
+                    contactMatches.forEach { person ->
+                        DropdownMenuItem(text = { Column { Text(person.displayName); person.phoneNumber?.let { Text(it, style = MaterialTheme.typography.bodySmall) } } },
+                            onClick = { dismissedTrigger = triggerKey; onContactSelected(person, trigger.startIndex, cursor) })
                     }
+                    if (canCreate && onCreateContact != null) DropdownMenuItem(
+                        text = { Text(stringResource(R.string.pilot_create_contact, trigger.query.trim())) },
+                        modifier = Modifier.testTag("inline_create_person"),
+                        onClick = { dismissedTrigger = triggerKey; onCreateContact(trigger.query.trim(), trigger.startIndex, cursor) })
+                } else {
+                    tagMatches.forEach { tag -> DropdownMenuItem(text = { Text(stringResource(R.string.usability_tag_label, tag.name)) }, onClick = { dismissedTrigger = triggerKey; onTagSelected(tag, trigger.startIndex, cursor) }) }
+                    if (canCreate && tagMatches.none { it.name.equals(trigger.query.trim(), true) }) DropdownMenuItem(
+                        text = { Text(stringResource(R.string.create_tag_option, trigger.query.trim())) },
+                        onClick = { dismissedTrigger = triggerKey; onTagSelected(TagChoice(-1, trigger.query.trim().lowercase(java.util.Locale.ROOT)), trigger.startIndex, cursor) })
                 }
+                DropdownMenuItem(text = { Text(stringResource(R.string.usability_keep_text)) }, modifier = Modifier.testTag("inline_keep_text"), onClick = { dismissedTrigger = triggerKey })
             }
         }
     }
@@ -135,12 +108,9 @@ fun AutocompleteTextField(
 
 enum class TriggerType { CONTACT, TAG }
 data class TriggerInfo(val type: TriggerType, val startIndex: Int, val query: String)
-data class AutocompleteContact(val id: Long, val displayName: String, val phoneNumber: String? = null)
-data class AutocompleteTag(val id: Long, val name: String)
 
 /** People can contain spaces. Existing short names never terminate a new full-name query. */
-@Suppress("UNUSED_PARAMETER")
-fun detectTrigger(text: String, cursorPos: Int, contactNames: List<String> = emptyList()): TriggerInfo? {
+fun detectTrigger(text: String, cursorPos: Int): TriggerInfo? {
     if (cursorPos <= 0 || cursorPos > text.length) return null
     val before = text.substring(0, cursorPos)
     val start = maxOf(before.lastIndexOf('@'), before.lastIndexOf('#'))
@@ -150,14 +120,4 @@ fun detectTrigger(text: String, cursorPos: Int, contactNames: List<String> = emp
     val type = if (text[start] == '@') TriggerType.CONTACT else TriggerType.TAG
     if (type == TriggerType.TAG && query.any { it.isWhitespace() }) return null
     return TriggerInfo(type, start, query)
-}
-
-/** Keep suggestions outside both the typing field and the keyboard; long menus scroll. */
-internal class MentionMenuPosition(private val safeTop: Int, private val safeBottom: Int) : PopupPositionProvider {
-    override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
-        val below = safeBottom - anchorBounds.bottom
-        val y = if (popupContentSize.height <= below) anchorBounds.bottom else anchorBounds.top - popupContentSize.height
-        val preferredX = if (layoutDirection == LayoutDirection.Ltr) anchorBounds.left else anchorBounds.right - popupContentSize.width
-        return IntOffset(preferredX.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0)), y.coerceAtLeast(safeTop))
-    }
 }

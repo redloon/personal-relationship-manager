@@ -1,0 +1,33 @@
+<resources>
+    <string name="people_sort_title">Sort people</string>
+    <string name="people_sort_menu_label">Sort: %1$s</string>
+    <string name="people_sort_name_asc">Name: A–Z</string>
+    <string name="people_sort_name_desc">Name: Z–A</string>
+    <string name="people_sort_recent">Last interaction: most recent</string>
+    <string name="people_sort_longest_ago">Last interaction: longest ago</string>
+    <string name="people_sort_added_newest">Date added: newest</string>
+    <string name="people_sort_added_oldest">Date added: oldest</string>
+    <string name="people_sort_most">Interactions: most</string>
+    <string name="people_sort_fewest">Interactions: fewest</string>
+    <string name="people_sort_failed">Couldn’t save the sort choice. Try again.</string>
+    <string name="people_added_date">Added %1$s</string>
+    <plurals name="people_interactions">
+        <item quantity="one">%d interaction</item>
+        <item quantity="other">%d interactions</item>
+    </plurals>
+    <string name="people_delete">Delete people…</string>
+    <plurals name="people_delete_title">
+        <item quantity="one">Delete %d person?</item>
+        <item quantity="other">Delete %d people?</item>
+    </plurals>
+    <string name="people_delete_more_names">And %1$d more</string>
+    <string name="people_delete_counts">Facts to delete: %1$d\nFollow-ups to delete: %2$d\nRelationships to remove: %3$d\nEvent notes to keep: %4$d</string>
+    <string name="people_delete_permanent">This is permanent, including their facts and follow-ups in Recently deleted. Event notes and shared tags will be kept.</string>
+    <string name="people_delete_protected">Phone contacts and older profiles we can’t verify are protected. You can hide them instead.</string>
+    <string name="people_delete_failed">Couldn’t delete the selected people. Review the selection and try again.</string>
+    <string name="people_delete_changed">The affected information changed. Review the updated counts before deleting.</string>
+    <plurals name="people_deleted_count">
+        <item quantity="one">Deleted %d person</item>
+        <item quantity="other">Deleted %d people</item>
+    </plurals>
+</resources>

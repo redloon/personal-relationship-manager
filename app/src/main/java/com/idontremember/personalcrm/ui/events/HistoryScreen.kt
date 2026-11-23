@@ -1,5 +1,6 @@
 package com.idontremember.personalcrm.ui.events
 
+import com.idontremember.personalcrm.data.search.RecallKind
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,10 +15,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.idontremember.personalcrm.R
 import com.idontremember.personalcrm.ui.components.*
-import com.idontremember.personalcrm.ui.pilot.BackIcon
-import com.idontremember.personalcrm.ui.pilot.RecallNoteRow
-import com.idontremember.personalcrm.ui.pilot.RecallTypeFilters
-import com.idontremember.personalcrm.ui.pilot.RecallViewModel
+import com.idontremember.personalcrm.ui.recall.BackIcon
+import com.idontremember.personalcrm.ui.recall.RecallNoteRow
+import com.idontremember.personalcrm.ui.recall.RecallTypeFilters
+import com.idontremember.personalcrm.ui.recall.RecallViewModel
+import com.idontremember.personalcrm.ui.recall.openCapture
 
 /** Complete capture history. Person/tag directories remain search scopes on Home. */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -38,7 +40,7 @@ fun HistoryScreen(
     val kind by vm.kind.collectAsState()
     val failed by vm.error.collectAsState()
     val dates by vm.dateDisplay.collectAsState()
-    val people = entries.orEmpty().filter { it.kind == "person" }.associate { it.id to it.title }
+    val people = entries.orEmpty().filter { it.kind == RecallKind.PERSON }.associate { it.id to it.title }
     Scaffold(
         modifier = Modifier.testTag("events_list_screen"),
         topBar = { TopAppBar(title = { Text(stringResource(R.string.search_history_title)) }, navigationIcon = { BackIcon(onBack) }, actions = { SettingsButton(onSettings) }) },
@@ -54,8 +56,8 @@ fun HistoryScreen(
                 else -> LazyColumn(Modifier.fillMaxSize().testTag("events_list"), contentPadding = PaddingValues(bottom = 96.dp)) {
                     items(rows.orEmpty(), key = { it.key }) { row ->
                         Column {
-                            RecallNoteRow(row, query, dates, onClick = { when (row.kind) { "fact" -> onFact(row.id); "followup" -> onFollowUp(row.id); else -> onEvent(row.id) } })
-                            val linkedPeople = row.personIds.trim(',').split(',').mapNotNull(String::toLongOrNull)
+                            RecallNoteRow(row, query, dates, onClick = { row.target.openCapture(onEvent, onFact, onFollowUp) })
+                            val linkedPeople = row.personIds
                             if (linkedPeople.isNotEmpty()) FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 linkedPeople.forEach { id ->
                                     people[id]?.let { name -> ContactChip(name, Modifier.testTag("event_contact_chip_$id"), onClick = { onContact(id) }) }

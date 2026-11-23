@@ -75,7 +75,7 @@ class ContactsSyncManager @Inject constructor(
                 added++
             } else {
                 // Existing — update basic fields if changed, preserve local data
-                val needsUpdate = existing.displayName != sysContact.displayName ||
+                val needsUpdate = existing.deletionAllowed || existing.displayName != sysContact.displayName ||
                     existing.phoneNumber != sysContact.phoneNumber ||
                     existing.email != sysContact.email ||
                     existing.androidContactId != sysContact.androidContactId || existing.photoUri != sysContact.photoUri || existing.lookupKey != sysContact.lookupKey

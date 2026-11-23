@@ -1,5 +1,6 @@
 package com.idontremember.personalcrm.data.db
 
+import com.idontremember.personalcrm.data.search.RecallKind
 import com.idontremember.personalcrm.data.backup.BackupJson
 import com.idontremember.personalcrm.data.backup.DataExporter
 import com.idontremember.personalcrm.data.capture.InlineToken
@@ -40,8 +41,8 @@ class ContactVisibilityTest {
         val event = events.createEvent("@Maya likes tea", listOf(person), listOf("tea"),
             inlineTokens = listOf(InlineToken(0, 5, TokenTarget.Person(person))))
         val tag = db.tagDao().getByName("tea")!!.id
-        db.pilotDao().addTag(ContactTag(person, tag))
-        db.pilotDao().addRelationship(Relationship(minOf(person, other), maxOf(person, other), "Friend"))
+        db.profileLinksDao().addTag(ContactTag(person, tag))
+        db.profileLinksDao().addRelationship(Relationship(minOf(person, other), maxOf(person, other), "Friend"))
         val before = BackupJson.decode(exporter.exportToJson())
         val profile = contacts.getContactById(person)!!
         assertEquals(setOf(person), contacts.setPeopleHidden(setOf(person), true))
@@ -49,14 +50,14 @@ class ContactVisibilityTest {
         assertFalse(contacts.getAllContacts().first().any { it.id == person })
         assertTrue(contacts.getHiddenContacts().first().any { it.id == person })
         assertTrue(contacts.searchContacts("Maya").first().isEmpty())
-        assertTrue(db.pilotDao().recentContacts().first().isEmpty())
-        assertTrue(db.pilotDao().contactsForTag(tag).first().isEmpty())
-        assertTrue(db.pilotDao().peopleForTag(tag).first().isEmpty())
+        assertTrue(db.profileLinksDao().recentContacts().first().isEmpty())
+        assertTrue(db.profileLinksDao().contactsForTag(tag).first().isEmpty())
+        assertTrue(db.profileLinksDao().peopleForTag(tag).first().isEmpty())
         assertEquals("Maya", followUps.items.first().single().name)
-        val entries = db.recallDao().entries().first()
-        assertFalse(entries.any { it.kind == "person" && it.id == person })
-        assertTrue(entries.any { it.kind == "fact" && it.contactId == person })
-        assertTrue(entries.any { it.kind == "followup" && it.contactId == person })
+        val entries = db.recallDao().rows().first().map { it.toEntry() }
+        assertFalse(entries.any { it.kind == RecallKind.PERSON && it.id == person })
+        assertTrue(entries.any { it.kind == RecallKind.FACT && it.contactId == person })
+        assertTrue(entries.any { it.kind == RecallKind.FOLLOW_UP && it.contactId == person })
         assertEquals("Maya", events.getEventWithMeta(event)!!.contacts.single().displayName)
         assertEquals("Maya", events.observeEventsWithMeta().first().single().contacts.single().displayName)
         assertEquals(setOf(person), contacts.setPeopleHidden(setOf(person), false))
@@ -64,8 +65,8 @@ class ContactVisibilityTest {
         assertEquals(before, after)
         assertEquals(followUpBefore, db.followUpDao().getById(followUp))
         assertEquals(profile, contacts.getContactById(person))
-        assertTrue(db.pilotDao().recentContacts().first().any { it.id == person })
-        assertEquals(listOf(person), db.pilotDao().peopleForTag(tag).first().map { it.id })
+        assertTrue(db.profileLinksDao().recentContacts().first().any { it.id == person })
+        assertEquals(listOf(person), db.profileLinksDao().peopleForTag(tag).first().map { it.id })
     }
 
     @Test fun largeBulkChangesAreIdempotentAndDoNotChangeTimestamps(): Unit = runBlocking {
