@@ -6,4 +6,10 @@ source "$TASK_ROOT/scripts/android-sdk-env.sh"
 source "$TASK_ROOT/.mise/lib/java-env.sh"
 command -v flock >/dev/null || { echo 'Install flock (util-linux) to coordinate Gradle builds.' >&2; exit 1; }
 mkdir -p "$TASK_ROOT/.gradle"
+# Release commands retain descriptor 9 through verification and export. Reuse
+# only a real inherited descriptor for this checkout's lock, never a flag alone.
+if [[ "${CRM_BUILD_LOCK_FD:-}" == 9 && /proc/$$/fd/9 -ef "$TASK_ROOT/.gradle/agent-build.lock" ]]; then
+    flock --nonblock 9
+    exec python3 "$TASK_ROOT/.mise/lib/run-gradle.py" "$@"
+fi
 exec flock --close --timeout "${BUILD_LOCK_TIMEOUT:-300}" "$TASK_ROOT/.gradle/agent-build.lock" python3 "$TASK_ROOT/.mise/lib/run-gradle.py" "$@"

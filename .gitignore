@@ -24,3 +24,6 @@ __pycache__/
 
 # Kotlin compiler session artifacts
 .kotlin/
+
+# Local release signing credentials (keys live outside this checkout)
+/app/release-signing.properties

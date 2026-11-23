@@ -6,21 +6,32 @@ import com.idontremember.personalcrm.data.recovery.RecoveryRepository
 import com.idontremember.personalcrm.data.recovery.TrashKind
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import javax.inject.Inject
 
 @HiltAndroidTest
 class FollowUpRepositoryTest {
     @get:Rule val hilt = HiltAndroidRule(this)
+
     @Inject lateinit var db: AppDatabase
+
     @Inject lateinit var repository: FollowUpRepository
+
     @Inject lateinit var recovery: RecoveryRepository
-    @Before fun setup() { hilt.inject(); db.clearAllTables() }
+
+    @Before fun setup() {
+        hilt.inject()
+        db.clearAllTables()
+    }
 
     @Test fun hundredsOfPeopleCreateNoObligations() = runBlocking {
         repeat(400) { db.contactDao().insert(Contact(displayName = "Person $it")) }
@@ -64,11 +75,19 @@ class FollowUpRepositoryTest {
     @Test fun invalidFollowUpDoesNotCreateData() = runBlocking {
         val person = db.contactDao().insert(Contact(displayName = "Morgan"))
         for (date in listOf("invalid", "2026-02-30")) {
-            try { repository.save(null, person, "Trip", date); fail("Invalid date accepted") }
-            catch (_: java.time.format.DateTimeParseException) { }
+            try {
+                repository.save(null, person, "Trip", date)
+                fail("Invalid date accepted")
+            } catch (
+                _: java.time.format.DateTimeParseException
+            ) { }
         }
-        try { repository.save(null, person, "  ", null); fail("Empty follow-up accepted") }
-        catch (_: IllegalArgumentException) { }
+        try {
+            repository.save(null, person, "  ", null)
+            fail("Empty follow-up accepted")
+        } catch (
+            _: IllegalArgumentException
+        ) { }
         assertTrue(db.followUpDao().getAllOnce().isEmpty())
     }
 }

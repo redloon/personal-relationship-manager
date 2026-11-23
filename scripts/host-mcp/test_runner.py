@@ -37,6 +37,27 @@ class InstallTests(unittest.TestCase):
         ])
         note.assert_called_once()
 
+    def test_version_downgrade_resets_only_verified_disposable_packages(self):
+        for app_only in [False,True]:
+            with self.subTest(app_only=app_only):
+                calls=[]
+                first=True
+                def device(*args):
+                    nonlocal first
+                    calls.append(args)
+                    if args[0]=='install' and first:
+                        first=False
+                        raise runner.CommandError(['adb'],1,'INSTALL_FAILED_VERSION_DOWNGRADE')
+                    if args[:4]==('shell','pm','list','packages'):
+                        return 'package:'+args[4]+'\n'
+                    return 'Success'
+                verify=Mock(side_effect=lambda:calls.append(('verify',)))
+                runner.install_apks(device,Path('/job'),verify,Mock(),app_only=app_only)
+                self.assertLess(calls.index(('verify',)),calls.index(('uninstall',runner.PACKAGE)))
+                self.assertEqual({c[1] for c in calls if c[0]=='uninstall'},{runner.PACKAGE,runner.PACKAGE+'.test'})
+                test_installs=[c for c in calls if c[0]=='install' and c[-1].endswith('test.apk')]
+                self.assertEqual(len(test_installs),0 if app_only else 1)
+
     def test_other_install_errors_never_uninstall(self):
         device = Mock(side_effect=runner.CommandError(['adb'], 1, 'INSTALL_FAILED_INSUFFICIENT_STORAGE'))
         verify = Mock()
@@ -78,6 +99,42 @@ class RunnerTests(unittest.TestCase):
                 child.communicate(timeout=5)
         self.assertFalse(self.instance.health()['busy'])
         self.assertEqual(runner.Runner(self.config).get_status(jid)['status'], 'interrupted')
+
+    def test_timeout_defaults_and_bounds(self):
+        with patch.object(self.instance, '_submit') as submit:
+            self.instance.start_test('a'*64, 'b'*64)
+            self.assertEqual(submit.call_args.kwargs['timeout_seconds'], 900)
+            self.instance.start_test('a'*64, 'b'*64, runner.PACKAGE+'.Example#works')
+            self.assertEqual(submit.call_args.kwargs['timeout_seconds'], 180)
+            self.instance.start_test('a'*64, 'b'*64, timeout_seconds=42)
+            self.assertEqual(submit.call_args.kwargs['timeout_seconds'], 42)
+            for invalid in [0, 901, -1, True, 1.5, '900']:
+                with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                    self.instance.start_test('a'*64, 'b'*64, timeout_seconds=invalid)
+
+    def test_status_wait_returns_after_terminal_cleanup_and_is_bounded(self):
+        import time
+        jid = 'f'*32
+        directory = self.root/'jobs'/jid
+        directory.mkdir()
+        self.instance.jobs[jid] = dict(status='running', phase='cleanup')
+        self.instance.save(jid)
+        started = time.monotonic()
+        self.assertEqual(self.instance.get_status(jid)['status'], 'running')
+        self.assertLess(time.monotonic()-started, .2)
+        def finish():
+            self.instance.jobs[jid].update(status='passed', phase='finished')
+            self.instance.save(jid)
+        timer = threading.Timer(.15, finish)
+        timer.start()
+        try:
+            self.assertEqual(self.instance.get_status(jid, wait_seconds=1)['status'], 'passed')
+        finally:
+            timer.join()
+        self.assertLess(time.monotonic()-started, 1)
+        for invalid in [-1, 31, True, 1.5]:
+            with self.assertRaises(ValueError):
+                self.instance.get_status(jid, wait_seconds=invalid)
 
     def test_invalid_submission_releases_lock(self):
         with self.assertRaisesRegex(ValueError, 'Invalid hash'):
@@ -148,7 +205,7 @@ elif a == ['devices']: print('emulator-5580 device')
 elif a[2:] == ['emu','avd','name']: print('android_tests')
 elif a[2:] == ['shell','getprop','sys.boot_completed']: print('1')
 elif a[2:] == ['shell','pm','list','instrumentation']: print('com.idontremember.personalcrm.test/com.idontremember.personalcrm.HiltTestRunner')
-elif 'instrument' in a: print('OK (3 tests)')
+elif 'instrument' in a: print('OK (3 tests)\\nINSTRUMENTATION_CODE: -1')
 else: print('Success')
 '''
         for name in ['platform-tools/adb', 'cmdline-tools/latest/bin/apkanalyzer']:
@@ -173,8 +230,11 @@ else: print('Success')
         with patch.object(runner.subprocess, 'run', side_effect=cleanup):
             self.instance.run(jid, None, lock)
         self.assertEqual(len(observed), 6)  # identity check and cleanup command for each operation
-        self.assertTrue(all(s == dict(status='running', phase='cleanup') for s in observed))
-        self.assertEqual(self.instance.get_status(jid), dict(status='passed', phase='finished', test_count=3))
+        self.assertTrue(all(s['status'] == 'running' and s['phase'] == 'cleanup' for s in observed))
+        self.assertEqual(self.instance.get_status(jid)['status'], 'passed')
+        self.assertEqual(self.instance.get_status(jid)['test_count'], 3)
+        self.assertIn('cleanup', self.instance.get_status(jid)['timings'])
+        self.assertTrue((self.root/'jobs'/jid/'logcat.log').is_file())
         self.assertFalse(self.instance.health()['busy'])
 
 

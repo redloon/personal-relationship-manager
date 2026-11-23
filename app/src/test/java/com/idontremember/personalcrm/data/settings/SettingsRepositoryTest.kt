@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -12,13 +13,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Rule
-import org.junit.Test
-import org.junit.rules.TemporaryFolder
-import java.io.File
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 
 /**
  * JVM unit tests for [SettingsRepository] against a real (file-backed) Preferences
@@ -31,12 +30,12 @@ import java.io.File
  */
 class SettingsRepositoryTest {
 
-    @get:Rule
-    val tempFolder = TemporaryFolder()
+    @TempDir
+    lateinit var tempFolder: File
 
     private val openScopes = mutableListOf<CoroutineScope>()
 
-    @After
+    @AfterEach
     fun tearDown() {
         openScopes.forEach { it.cancel() }
         openScopes.clear()
@@ -62,7 +61,7 @@ class SettingsRepositoryTest {
         throw AssertionError("Could not open DataStore for $file", lastError)
     }
 
-    private fun newFile(name: String): File = File(tempFolder.root, name)
+    private fun newFile(name: String): File = File(tempFolder, name)
 
     @Test
     fun reminderOptInIsExplicitAndDecliningDoesNotKeepPrompting() = runBlocking {
@@ -127,7 +126,7 @@ class SettingsRepositoryTest {
         scope1.cancel()
         runBlocking { scope1.coroutineContext.job.join() }
         // Note: unregistration of the old instance can lag; openDataStore retries.
-        assertTrue("preferences file should exist after writes", file.exists() && file.length() > 0)
+        assertTrue(file.exists() && file.length() > 0, "preferences file should exist after writes")
 
         // "Process 2": fresh DataStore over the same file must see the same values.
         val repository = SettingsRepository(newStore(file))

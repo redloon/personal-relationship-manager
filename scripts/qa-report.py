@@ -45,7 +45,8 @@ def load_artifacts(manifest):
             raise ValueError('Duplicate artifact or mismatched owner')
         seen.add(identifier)
         for field in ['sha256', 'app_sha256', 'test_sha256']:
-            digest(item[field])
+            if field != 'test_sha256' or item[field] is not None:
+                digest(item[field])
         suffix = {'image/png': '.png', 'video/mp4': '.mp4'}.get(item['mime_type'])
         if suffix is None:
             raise ValueError('Unsupported artifact MIME type')
@@ -125,9 +126,11 @@ def main():
         lines = ['# Android QA review', '', f'Session/job: `{owner}`', '',
                  'Interactive evidence is not a regression-suite pass. Captures show only the states recorded; '
                  'check the accompanying test report for regression coverage.', '']
-        hashes = sorted({(item['app_sha256'], item['test_sha256']) for item, _ in artifacts})
+        hashes = sorted({(item['app_sha256'], item['test_sha256']) for item, _ in artifacts},
+                        key=lambda context: (context[0], context[1] or ''))
         for app, test in hashes:
-            lines += [f'App APK SHA-256: `{app}`', '', f'Test APK SHA-256: `{test}`', '']
+            lines += [f'App APK SHA-256: `{app}`', '',
+                      f'Test APK SHA-256: `{test}`' if test is not None else 'App-only capture; no instrumentation APK.', '']
         if args.evidence:
             lines += evidence_lines(json.loads(args.evidence.read_text()))
         else:

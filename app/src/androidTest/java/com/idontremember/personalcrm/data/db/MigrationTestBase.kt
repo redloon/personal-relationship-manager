@@ -67,7 +67,12 @@ abstract class MigrationTestBase {
     /** Asserts the rows inserted by [seedSampleData] survived a migration untouched. */
     protected fun SupportSQLiteDatabase.assertSampleDataPreserved() {
         for (table in listOf(
-            "contacts", "contact_facts", "events", "event_contacts", "tags", "event_tags"
+            "contacts",
+            "contact_facts",
+            "events",
+            "event_contacts",
+            "tags",
+            "event_tags"
         )) {
             assertEquals("row count for `$table`", 1L, rowCount(table))
         }
@@ -79,8 +84,7 @@ abstract class MigrationTestBase {
         assertEquals("friend", textValue("tags", "name"))
     }
 
-    protected fun SupportSQLiteDatabase.rowCount(table: String): Long =
-        longValue(table, null) ?: 0L
+    protected fun SupportSQLiteDatabase.rowCount(table: String): Long = longValue(table, null) ?: 0L
 
     /** True when [column] exists on [table] (`PRAGMA table_info`). */
     protected fun SupportSQLiteDatabase.columnExists(table: String, column: String): Boolean {
@@ -115,7 +119,13 @@ abstract class MigrationTestBase {
      * null when the table is empty and no aggregate is requested.
      */
     protected fun SupportSQLiteDatabase.longValue(table: String, column: String?): Long? {
-        val sql = if (column == null) "SELECT count(*) FROM `$table`" else "SELECT `$column` FROM `$table` LIMIT 1"
+        val sql = if (column ==
+            null
+        ) {
+            "SELECT count(*) FROM `$table`"
+        } else {
+            "SELECT `$column` FROM `$table` LIMIT 1"
+        }
         return query(sql).use { cursor ->
             if (cursor.moveToFirst()) cursor.getLong(0) else null
         }

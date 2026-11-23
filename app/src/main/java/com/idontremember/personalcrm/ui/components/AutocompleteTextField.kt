@@ -1,16 +1,26 @@
 package com.idontremember.personalcrm.ui.components
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -19,12 +29,12 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.idontremember.personalcrm.R
+import com.idontremember.personalcrm.data.capture.InlineToken
 import com.idontremember.personalcrm.data.capture.PersonChoice
 import com.idontremember.personalcrm.data.capture.TagChoice
-import com.idontremember.personalcrm.data.capture.InlineToken
 import kotlinx.coroutines.delay
 
 /** Literal prose stays literal. Only an explicit choice inserts an associated token. */
@@ -48,12 +58,19 @@ fun AutocompleteTextField(
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     LaunchedEffect(autoFocus) {
-        if (autoFocus) { delay(150); focusRequester.requestFocus(); keyboardController?.show() }
+        if (autoFocus) {
+            delay(150)
+            focusRequester.requestFocus()
+            keyboardController?.show()
+        }
     }
     val cursor = value.selection.start
     val trigger = detectTrigger(value.text, cursor)?.takeIf { candidate ->
         (if (candidate.type == TriggerType.CONTACT) enableContacts else enableTags) &&
-            inlineTokens.none { candidate.startIndex >= it.start && candidate.startIndex < it.endExclusive }
+            inlineTokens.none {
+                candidate.startIndex >= it.start &&
+                    candidate.startIndex < it.endExclusive
+            }
     }
     var dismissedTrigger by remember { mutableStateOf<Pair<Int, TriggerType>?>(null) }
     val triggerKey = trigger?.let { it.startIndex to it.type }
@@ -65,42 +82,133 @@ fun AutocompleteTextField(
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxSize().focusRequester(focusRequester).testTag("note_text_field"),
+            modifier = Modifier.fillMaxSize().focusRequester(
+                focusRequester
+            ).testTag("note_text_field"),
             placeholder = { Text(placeholder ?: stringResource(R.string.note_placeholder)) },
             minLines = 1,
             visualTransformation = VisualTransformation { source ->
                 val annotated = buildAnnotatedString {
                     append(source)
                     inlineTokens.forEach { token ->
-                        if (token.start >= 0 && token.endExclusive <= source.length && token.start < token.endExclusive)
-                            addStyle(SpanStyle(background = tokenBackground, color = tokenColor, fontWeight = FontWeight.SemiBold), token.start, token.endExclusive)
+                        if (token.start >= 0 && token.endExclusive <= source.length &&
+                            token.start < token.endExclusive
+                        ) {
+                            addStyle(
+                                SpanStyle(
+                                    background = tokenBackground,
+                                    color = tokenColor,
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                token.start,
+                                token.endExclusive
+                            )
+                        }
                     }
                 }
                 TransformedText(annotated, OffsetMapping.Identity)
             }
         )
         if (trigger != null && triggerKey != dismissedTrigger) {
-            val contactMatches = contacts.filter { it.displayName.contains(trigger.query.trim(), true) }.take(5)
+            val contactMatches = contacts.filter {
+                it.displayName.contains(trigger.query.trim(), true)
+            }.take(5)
             val tagMatches = tags.filter { it.name.contains(trigger.query, true) }.take(5)
             val canCreate = trigger.query.isNotBlank()
-            val visible = if (trigger.type == TriggerType.CONTACT) contactMatches.isNotEmpty() || (canCreate && onCreateContact != null) else true
-            if (visible) MentionSuggestions(anchor, suggestionMaxWidth, onDismiss = { dismissedTrigger = triggerKey }) {
-                if (trigger.type == TriggerType.CONTACT) {
-                    contactMatches.forEach { person ->
-                        DropdownMenuItem(text = { Column { Text(person.displayName); person.phoneNumber?.let { Text(it, style = MaterialTheme.typography.bodySmall) } } },
-                            onClick = { dismissedTrigger = triggerKey; onContactSelected(person, trigger.startIndex, cursor) })
+            val visible = if (trigger.type ==
+                TriggerType.CONTACT
+            ) {
+                contactMatches.isNotEmpty() ||
+                    (canCreate && onCreateContact != null)
+            } else {
+                true
+            }
+            if (visible) {
+                MentionSuggestions(anchor, suggestionMaxWidth, onDismiss = {
+                    dismissedTrigger =
+                        triggerKey
+                }) {
+                    if (trigger.type == TriggerType.CONTACT) {
+                        contactMatches.forEach { person ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(person.displayName)
+                                        person.phoneNumber?.let {
+                                            Text(it, style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    }
+                                },
+                                onClick = {
+                                    dismissedTrigger = triggerKey
+                                    onContactSelected(person, trigger.startIndex, cursor)
+                                }
+                            )
+                        }
+                        if (canCreate && onCreateContact != null) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        stringResource(
+                                            R.string.pilot_create_contact,
+                                            trigger.query.trim()
+                                        )
+                                    )
+                                },
+                                modifier = Modifier.testTag("inline_create_person"),
+                                onClick = {
+                                    dismissedTrigger = triggerKey
+                                    onCreateContact(
+                                        trigger.query.trim(),
+                                        trigger.startIndex,
+                                        cursor
+                                    )
+                                }
+                            )
+                        }
+                    } else {
+                        tagMatches.forEach { tag ->
+                            DropdownMenuItem(text = {
+                                Text(stringResource(R.string.usability_tag_label, tag.name))
+                            }, onClick = {
+                                dismissedTrigger =
+                                    triggerKey
+                                onTagSelected(tag, trigger.startIndex, cursor)
+                            })
+                        }
+                        if (canCreate &&
+                            tagMatches.none { it.name.equals(trigger.query.trim(), true) }
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        stringResource(
+                                            R.string.create_tag_option,
+                                            trigger.query.trim()
+                                        )
+                                    )
+                                },
+                                onClick = {
+                                    dismissedTrigger = triggerKey
+                                    onTagSelected(
+                                        TagChoice(
+                                            -1,
+                                            trigger.query.trim().lowercase(java.util.Locale.ROOT)
+                                        ),
+                                        trigger.startIndex,
+                                        cursor
+                                    )
+                                }
+                            )
+                        }
                     }
-                    if (canCreate && onCreateContact != null) DropdownMenuItem(
-                        text = { Text(stringResource(R.string.pilot_create_contact, trigger.query.trim())) },
-                        modifier = Modifier.testTag("inline_create_person"),
-                        onClick = { dismissedTrigger = triggerKey; onCreateContact(trigger.query.trim(), trigger.startIndex, cursor) })
-                } else {
-                    tagMatches.forEach { tag -> DropdownMenuItem(text = { Text(stringResource(R.string.usability_tag_label, tag.name)) }, onClick = { dismissedTrigger = triggerKey; onTagSelected(tag, trigger.startIndex, cursor) }) }
-                    if (canCreate && tagMatches.none { it.name.equals(trigger.query.trim(), true) }) DropdownMenuItem(
-                        text = { Text(stringResource(R.string.create_tag_option, trigger.query.trim())) },
-                        onClick = { dismissedTrigger = triggerKey; onTagSelected(TagChoice(-1, trigger.query.trim().lowercase(java.util.Locale.ROOT)), trigger.startIndex, cursor) })
+                    DropdownMenuItem(text = {
+                        Text(stringResource(R.string.usability_keep_text))
+                    }, modifier = Modifier.testTag("inline_keep_text"), onClick = {
+                        dismissedTrigger =
+                            triggerKey
+                    })
                 }
-                DropdownMenuItem(text = { Text(stringResource(R.string.usability_keep_text)) }, modifier = Modifier.testTag("inline_keep_text"), onClick = { dismissedTrigger = triggerKey })
             }
         }
     }

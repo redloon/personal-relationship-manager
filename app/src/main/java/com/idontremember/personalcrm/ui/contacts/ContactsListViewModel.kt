@@ -3,19 +3,39 @@ package com.idontremember.personalcrm.ui.contacts
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.idontremember.personalcrm.data.contacts.*
+import com.idontremember.personalcrm.data.contacts.ContactDirectorySearch
+import com.idontremember.personalcrm.data.contacts.ContactsSyncManager
+import com.idontremember.personalcrm.data.contacts.InteractionRepository
+import com.idontremember.personalcrm.data.contacts.PeopleBulkAction
+import com.idontremember.personalcrm.data.contacts.PeopleDeletionPreview
+import com.idontremember.personalcrm.data.contacts.PeopleListItem
+import com.idontremember.personalcrm.data.contacts.PeopleListScope
+import com.idontremember.personalcrm.data.contacts.PeopleSort
+import com.idontremember.personalcrm.data.contacts.deletePeople
+import com.idontremember.personalcrm.data.contacts.previewPeopleDeletion
 import com.idontremember.personalcrm.data.db.entity.canDelete
 import com.idontremember.personalcrm.data.repository.ContactRepository
 import com.idontremember.personalcrm.data.settings.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
 
 sealed interface PeopleFeedback {
     data class Deleted(val count: Int) : PeopleFeedback
@@ -35,8 +55,13 @@ class ContactsListViewModel @Inject constructor(
 ) : ViewModel() {
     val searchQuery = savedState.getStateFlow("people_query", "")
     private val scope = savedState.getStateFlow("people_scope", PeopleListScope.ALL.name)
-    private val _selection = MutableStateFlow(PeopleSelection(
-        savedState["selecting_people"] ?: false, savedState.get<LongArray>("selected_people")?.toSet().orEmpty()))
+    private val _selection =
+        MutableStateFlow(
+            PeopleSelection(
+                savedState["selecting_people"] ?: false,
+                savedState.get<LongArray>("selected_people")?.toSet().orEmpty()
+            )
+        )
     val selection: StateFlow<PeopleSelection> = _selection
     private val _bulkBusy = MutableStateFlow(false)
     val bulkBusy: StateFlow<Boolean> = _bulkBusy
@@ -51,17 +76,33 @@ class ContactsListViewModel @Inject constructor(
     val deletion: StateFlow<PeopleDeletionPreview?> = _deletion
     data class VisibilityChange(val ids: Set<Long>, val hidden: Boolean)
 
-    fun configure(value: PeopleListScope) { savedState["people_scope"] = value.name }
+    fun configure(value: PeopleListScope) {
+        savedState["people_scope"] = value.name
+    }
     private fun setSelection(value: PeopleSelection) {
         _selection.value = value
         savedState["selecting_people"] = value.active
         savedState["selected_people"] = value.ids.toLongArray()
     }
-    fun startSelection() { if (!_bulkBusy.value) setSelection(PeopleSelection(active = true)) }
-    fun clearSelection() { if (!_bulkBusy.value) setSelection(PeopleSelection()) }
-    fun togglePerson(id: Long) { if (!_bulkBusy.value) setSelection(_selection.value.toggle(id)) }
+    fun startSelection() {
+        if (!_bulkBusy.value) setSelection(PeopleSelection(active = true))
+    }
+    fun clearSelection() {
+        if (!_bulkBusy.value) setSelection(PeopleSelection())
+    }
+    fun togglePerson(id: Long) {
+        if (!_bulkBusy.value) setSelection(_selection.value.toggle(id))
+    }
     fun selectAllResults() {
-        if (!_bulkBusy.value) setSelection(_selection.value.selectAll(contacts.value.orEmpty().map { it.id }.toSet()))
+        if (!_bulkBusy.value) {
+            setSelection(
+                _selection.value.selectAll(
+                    contacts.value.orEmpty().map {
+                        it.id
+                    }.toSet()
+                )
+            )
+        }
     }
     fun runAction(action: PeopleBulkAction) {
         when (action) {
@@ -70,7 +111,9 @@ class ContactsListViewModel @Inject constructor(
             PeopleBulkAction.DELETE -> requestDeletion()
         }
     }
-    fun retryVisibilityChange() { retryChange?.let { changeVisibility(it.ids, it.hidden) } }
+    fun retryVisibilityChange() {
+        retryChange?.let { changeVisibility(it.ids, it.hidden) }
+    }
     fun changeVisibility(ids: Set<Long>, hidden: Boolean) {
         if (ids.isEmpty() || _bulkBusy.value) return
         _bulkBusy.value = true
@@ -82,9 +125,17 @@ class ContactsListViewModel @Inject constructor(
                 setSelection(PeopleSelection())
                 retryChange = null
                 if (changed.isNotEmpty()) changes.send(VisibilityChange(changed, hidden))
-            } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { _bulkFailed.value = true }
-            finally { _bulkBusy.value = false }
+            } catch (
+                e: CancellationException
+            ) {
+                throw e
+            } catch (
+                _: Exception
+            ) {
+                _bulkFailed.value = true
+            } finally {
+                _bulkBusy.value = false
+            }
         }
     }
 
@@ -107,18 +158,33 @@ class ContactsListViewModel @Inject constructor(
     fun changeSort(value: PeopleSort) {
         val page = PeopleListScope.valueOf(scope.value)
         viewModelScope.launch {
-            try { settings.setPeopleSort(page, value) }
-            catch (e: CancellationException) { throw e }
-            catch (_: Exception) { messages.send(PeopleFeedback.SortFailed) }
+            try {
+                settings.setPeopleSort(page, value)
+            } catch (
+                e: CancellationException
+            ) {
+                throw e
+            } catch (_: Exception) {
+                messages.send(PeopleFeedback.SortFailed)
+            }
         }
     }
     private val _loadError = MutableStateFlow<String?>(null)
     val loadError: StateFlow<String?> = _loadError
     private val refreshTrigger = MutableStateFlow(0)
     val contacts: StateFlow<List<PeopleListItem>?> = refreshTrigger.flatMapLatest {
-        combine(availablePeople, searchQuery, sort, interactions.snapshots) { people, query, order, snapshot ->
+        combine(availablePeople, searchQuery, sort, interactions.snapshots) {
+                people,
+                query,
+                order,
+                snapshot
+            ->
             withContext(Dispatchers.Default) {
-                order.apply(ContactDirectorySearch.find(people, query).map { PeopleListItem(it, snapshot.forPerson(it.id), snapshot.asOf) })
+                order.apply(
+                    ContactDirectorySearch.find(people, query).map {
+                        PeopleListItem(it, snapshot.forPerson(it.id), snapshot.asOf)
+                    }
+                )
             }
         }.onEach { _loadError.value = null }.catch { e ->
             if (e is CancellationException) throw e
@@ -126,22 +192,41 @@ class ContactsListViewModel @Inject constructor(
             emit(emptyList())
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-    fun onSearchQueryChanged(query: String) { savedState["people_query"] = query }
-    fun retryLoad() { _loadError.value = null; refreshTrigger.value++ }
+    fun onSearchQueryChanged(query: String) {
+        savedState["people_query"] = query
+    }
+    fun retryLoad() {
+        _loadError.value = null
+        refreshTrigger.value++
+    }
 
     private fun requestDeletion() {
         val ids = selection.value.ids
         if (ids.isEmpty() || _bulkBusy.value) return
         _bulkBusy.value = true
         viewModelScope.launch {
-            try { _deletion.value = contactRepository.previewPeopleDeletion(ids) }
-            catch (e: CancellationException) { throw e }
-            catch (_: IllegalArgumentException) { messages.send(PeopleFeedback.Protected) }
-            catch (_: Exception) { messages.send(PeopleFeedback.DeleteFailed) }
-            finally { _bulkBusy.value = false }
+            try {
+                _deletion.value = contactRepository.previewPeopleDeletion(ids)
+            } catch (
+                e: CancellationException
+            ) {
+                throw e
+            } catch (
+                _: IllegalArgumentException
+            ) {
+                messages.send(PeopleFeedback.Protected)
+            } catch (
+                _: Exception
+            ) {
+                messages.send(PeopleFeedback.DeleteFailed)
+            } finally {
+                _bulkBusy.value = false
+            }
         }
     }
-    fun cancelDeletion() { if (!_bulkBusy.value) _deletion.value = null }
+    fun cancelDeletion() {
+        if (!_bulkBusy.value) _deletion.value = null
+    }
     fun confirmDeletion() {
         val preview = _deletion.value ?: return
         if (_bulkBusy.value) return
@@ -156,10 +241,23 @@ class ContactsListViewModel @Inject constructor(
                     _deletion.value = contactRepository.previewPeopleDeletion(preview.ids)
                     messages.send(PeopleFeedback.PreviewChanged)
                 }
-            } catch (e: CancellationException) { throw e }
-            catch (_: IllegalArgumentException) { _deletion.value = null; messages.send(PeopleFeedback.Protected) }
-            catch (_: Exception) { _deletion.value = null; messages.send(PeopleFeedback.DeleteFailed) }
-            finally { _bulkBusy.value = false }
+            } catch (
+                e: CancellationException
+            ) {
+                throw e
+            } catch (
+                _: IllegalArgumentException
+            ) {
+                _deletion.value = null
+                messages.send(PeopleFeedback.Protected)
+            } catch (
+                _: Exception
+            ) {
+                _deletion.value = null
+                messages.send(PeopleFeedback.DeleteFailed)
+            } finally {
+                _bulkBusy.value = false
+            }
         }
     }
 
@@ -168,12 +266,20 @@ class ContactsListViewModel @Inject constructor(
     fun syncContacts() {
         viewModelScope.launch {
             _syncState.value = SyncState.Syncing
-            try { _syncState.value = SyncState.Success(contactRepository.syncContacts()) }
-            catch (e: CancellationException) { throw e }
-            catch (e: Exception) { _syncState.value = SyncState.Error(e.message) }
+            try {
+                _syncState.value = SyncState.Success(contactRepository.syncContacts())
+            } catch (
+                e: CancellationException
+            ) {
+                throw e
+            } catch (e: Exception) {
+                _syncState.value = SyncState.Error(e.message)
+            }
         }
     }
-    fun clearSyncState() { _syncState.value = SyncState.Idle }
+    fun clearSyncState() {
+        _syncState.value = SyncState.Idle
+    }
     sealed class SyncState {
         data object Idle : SyncState()
         data object Syncing : SyncState()

@@ -21,8 +21,8 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,11 +47,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import com.idontremember.personalcrm.ui.components.exposeTestTags
 import com.idontremember.personalcrm.R
 import com.idontremember.personalcrm.data.settings.DateDisplay
 import com.idontremember.personalcrm.data.settings.DefaultEventTime
 import com.idontremember.personalcrm.data.settings.ThemeMode
+import com.idontremember.personalcrm.ui.components.exposeTestTags
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -65,6 +65,7 @@ import java.util.Locale
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
     onHiddenPeople: () -> Unit = {},
     onAppOnlyPeople: () -> Unit = {}
@@ -124,7 +125,7 @@ fun SettingsScreen(
     }
 
     Scaffold(
-        modifier = Modifier.testTag("settings_screen"),
+        modifier = modifier.testTag("settings_screen"),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
@@ -136,7 +137,10 @@ fun SettingsScreen(
                             .size(48.dp)
                             .testTag("settings_back_button")
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.cd_back)
+                        )
                     }
                 }
             )
@@ -148,9 +152,20 @@ fun SettingsScreen(
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
         ) {
-            SettingsSection(title = stringResource(R.string.recall_people), testTag = "settings_section_people") {
-                SettingsActionRow(title = stringResource(R.string.people_app_only_title), onClick = onAppOnlyPeople, testTag = "settings_app_only_people")
-                SettingsActionRow(title = stringResource(R.string.people_hidden_title), onClick = onHiddenPeople, testTag = "settings_hidden_people")
+            SettingsSection(
+                title = stringResource(R.string.recall_people),
+                testTag = "settings_section_people"
+            ) {
+                SettingsActionRow(
+                    title = stringResource(R.string.people_app_only_title),
+                    onClick = onAppOnlyPeople,
+                    testTag = "settings_app_only_people"
+                )
+                SettingsActionRow(
+                    title = stringResource(R.string.people_hidden_title),
+                    onClick = onHiddenPeople,
+                    testTag = "settings_hidden_people"
+                )
             }
             SettingsSection(
                 title = stringResource(R.string.settings_section_appearance),
@@ -248,7 +263,9 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_import_json),
                     subtitle = stringResource(R.string.settings_import_json_desc),
                     onClick = { importLauncher.launch(arrayOf("application/json", "text/plain")) },
-                    enabled = restoreState != RestoreState.RESTORING && restoreState != RestoreState.LOADING,
+                    enabled =
+                    restoreState != RestoreState.RESTORING &&
+                        restoreState != RestoreState.LOADING,
                     testTag = "import_json_button"
                 )
             }
@@ -262,13 +279,33 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = viewModel::cancelRestore,
             title = { Text(stringResource(R.string.settings_restore_confirm_title)) },
-            text = { Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text(stringResource(R.string.reliability_restore_replaces), modifier = Modifier.padding(bottom = 12.dp))
-                Text(stringResource(R.string.settings_restore_confirm_body,
-                    preview.contacts.size, preview.facts.size, preview.events.size, preview.tags.size))
-                Text(stringResource(R.string.reliability_restore_followups, preview.followUps.size))
-                Text(stringResource(R.string.reliability_restore_explanation), modifier = Modifier.padding(top = 12.dp))
-            } },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        stringResource(R.string.reliability_restore_replaces),
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                    Text(
+                        stringResource(
+                            R.string.settings_restore_confirm_body,
+                            preview.contacts.size,
+                            preview.facts.size,
+                            preview.events.size,
+                            preview.tags.size
+                        )
+                    )
+                    Text(
+                        stringResource(
+                            R.string.reliability_restore_followups,
+                            preview.followUps.size
+                        )
+                    )
+                    Text(
+                        stringResource(R.string.reliability_restore_explanation),
+                        modifier = Modifier.padding(top = 12.dp)
+                    )
+                }
+            },
             confirmButton = {
                 TextButton(onClick = {
                     val ts = SimpleDateFormat("yyyy-MM-dd-HHmmss", Locale.US).format(Date())
@@ -278,7 +315,9 @@ fun SettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = viewModel::cancelRestore) { Text(stringResource(R.string.action_cancel)) }
+                TextButton(onClick = viewModel::cancelRestore) {
+                    Text(stringResource(R.string.action_cancel))
+                }
             },
             modifier = Modifier.exposeTestTags().testTag("restore_confirmation_dialog")
         )
@@ -399,11 +438,11 @@ fun SettingsSwitchRow(
 @Composable
 fun SettingsActionRow(
     title: String,
-    subtitle: String? = null,
     onClick: () -> Unit,
-    enabled: Boolean = true,
     testTag: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    enabled: Boolean = true
 ) {
     Column(
         modifier = modifier
@@ -416,8 +455,11 @@ fun SettingsActionRow(
         Text(
             text = title,
             style = MaterialTheme.typography.bodyLarge,
-            color = if (enabled) MaterialTheme.colorScheme.onSurface
-                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            color = if (enabled) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            }
         )
         if (subtitle != null) {
             Text(

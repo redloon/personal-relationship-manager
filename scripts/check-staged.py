@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Validate the index; run broader checks only on a coherent working snapshot."""
+import argparse
 import ast
 import json
 import os
@@ -21,7 +22,7 @@ def git(*args, cwd=None):
 
 
 def android_input(path):
-    return path.startswith(('app/', 'gradle/')) or path in ROOT_BUILD_FILES
+    return path.startswith(('app/', 'gradle/')) or path in ROOT_BUILD_FILES or path == '.editorconfig'
 
 
 def tooling_input(path):
@@ -101,6 +102,9 @@ def report(errors):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--syntax-only', action='store_true', help='Only staged syntax and whitespace; no builds')
+    args = parser.parse_args()
     try:
         root = Path(os.fsdecode(git('rev-parse', '--show-toplevel')).strip())
         os.chdir(root)
@@ -112,6 +116,9 @@ def main():
         errors = syntax_errors(paths, entries)
         if errors:
             return report(errors)
+        if args.syntax_only:
+            print('Staged syntax and whitespace checks passed.')
+            return 0
         has_android = any(android_input(path) for path in paths)
         has_tooling = any(tooling_input(path) for path in paths)
         tasks = []

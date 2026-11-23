@@ -50,6 +50,16 @@ class StagedChecksTest(unittest.TestCase):
         return subprocess.run(['python3', str(CHECKER)], cwd=self.root, env=self.env,
                               capture_output=True, text=True)
 
+    def test_cheap_checks_do_not_run_broad_validation_or_require_coherence(self):
+        self.task('check', 'touch full-ran')
+        self.write('app/src/main/Test.kt', 'class Test\n')
+        self.stage('app/src/main/Test.kt')
+        self.write('app/src/main/Test.kt', 'class Unstaged\n')
+        result = subprocess.run(['python3', str(CHECKER), '--syntax-only'], cwd=self.root,
+                                env=self.env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.root / 'full-ran').exists())
+
     def test_uses_index_contents_instead_of_fixed_worktree(self):
         self.write('bad.py', 'def broken(:\n')
         self.stage('bad.py')

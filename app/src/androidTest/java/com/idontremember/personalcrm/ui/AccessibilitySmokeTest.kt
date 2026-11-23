@@ -6,18 +6,18 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
-import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.performSemanticsAction
-import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.idontremember.personalcrm.data.db.dao.ContactDao
@@ -27,6 +27,7 @@ import com.idontremember.personalcrm.data.db.entity.ContactFact
 import com.idontremember.personalcrm.data.repository.EventRepository
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -34,7 +35,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import javax.inject.Inject
 
 /**
  * P2 accessibility smoke tests:
@@ -132,7 +132,6 @@ class AccessibilitySmokeTest {
     @Test
     fun maxFontScale_keyContentVisibleAndTouchTargetsAdequate() {
         setFontScale(1.3f)
-        composeTestRule.activityRule.scenario.recreate()
 
         composeTestRule.navigateToContactsTab()
         composeTestRule.onNodeWithTag("search_field").assertIsDisplayed()
@@ -151,15 +150,23 @@ class AccessibilitySmokeTest {
     fun captureChoicesStayWholeAndSaveReachableAtLargeTextSizes() {
         for (scale in listOf(1.0f, 1.3f, 2.0f)) {
             setFontScale(scale)
-            composeTestRule.activity.getSharedPreferences("capture_draft", android.content.Context.MODE_PRIVATE)
+            composeTestRule.activity.getSharedPreferences(
+                "capture_draft",
+                android.content.Context.MODE_PRIVATE
+            )
                 .edit().clear().commit()
-            composeTestRule.activityRule.scenario.recreate()
             composeTestRule.waitUntilTagDisplayed("add_event_fab")
-            org.junit.Assert.assertEquals(scale, composeTestRule.activity.resources.configuration.fontScale, 0.01f)
+            org.junit.Assert.assertEquals(
+                scale,
+                composeTestRule.activity.resources.configuration.fontScale,
+                0.01f
+            )
             composeTestRule.onNodeWithTag("add_event_fab").performClick()
             composeTestRule.waitUntilTagDisplayed("add_event_sheet")
             composeTestRule.onNodeWithTag("note_text_field").performTextInput("Large text capture")
-            composeTestRule.onNodeWithTag("capture_follow_up_button").performScrollTo().assertIsDisplayed()
+            composeTestRule.onNodeWithTag(
+                "capture_follow_up_button"
+            ).performScrollTo().assertIsDisplayed()
             composeTestRule.mainClock.advanceTimeBy(500)
             composeTestRule.waitForIdle()
             val layouts = mutableListOf<TextLayoutResult>()
@@ -168,10 +175,14 @@ class AccessibilitySmokeTest {
             val layout = layouts.single()
             // The paragraph retains its larger measurement constraint even when Text
             // sizes to its glyphs. Compare drawn line bounds, allowing pixel rounding.
-            assertTrue("Follow-up must fit completely on one line at font scale $scale",
+            assertTrue(
+                "Follow-up must fit completely on one line at font scale $scale",
                 layout.lineCount == 1 && layout.getLineEnd(0) == layout.layoutInput.text.length &&
-                    !layout.isLineEllipsized(0) && layout.getLineRight(0) <= layout.size.width + 1 &&
-                    layout.getLineBottom(0) <= layout.size.height + 1)
+                    !layout.isLineEllipsized(
+                        0
+                    ) && layout.getLineRight(0) <= layout.size.width + 1 &&
+                    layout.getLineBottom(0) <= layout.size.height + 1
+            )
             composeTestRule.onNodeWithTag("save_event_button").assertIsDisplayed()
             assertTouchTargetAtLeast48dp("save_event_button")
             composeTestRule.onNodeWithContentDescription("Close").assertIsDisplayed().performClick()
@@ -184,7 +195,6 @@ class AccessibilitySmokeTest {
         seedContact()
         for (scale in listOf(1.3f, 2.0f)) {
             setFontScale(scale)
-            composeTestRule.activityRule.scenario.recreate()
             composeTestRule.navigateToContactsTab()
             composeTestRule.waitUntilTagDisplayed("people_menu")
             composeTestRule.onNodeWithTag("people_menu").performClick()
@@ -246,11 +256,22 @@ class AccessibilitySmokeTest {
         )
     }
 
-    /** Changes the system font scale and waits for the settings command to exit. */
+    /** Wait for Android's configuration recreation instead of racing a second recreate(). */
     private fun setFontScale(scale: Float) {
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         val fd = automation.executeShellCommand("settings put system font_scale $scale")
         ParcelFileDescriptor.AutoCloseInputStream(fd).use { it.readBytes() }
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            runCatching {
+                var applied = false
+                composeTestRule.activityRule.scenario.onActivity { activity ->
+                    applied = kotlin.math.abs(activity.resources.configuration.fontScale - scale) <
+                        0.01f && !activity.isChangingConfigurations && !activity.isDestroyed
+                }
+                applied
+            }.getOrDefault(false)
+        }
+        composeTestRule.waitForIdle()
     }
 
     private companion object {

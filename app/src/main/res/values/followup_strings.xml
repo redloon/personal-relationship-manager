@@ -4,7 +4,6 @@
     <string name="followup_edit">Edit follow-up</string>
     <string name="followup_hint">Something you want to follow up on</string>
     <string name="followup_person">Choose a person</string>
-    <string name="followup_search">Find a person</string>
     <string name="followup_date">Choose a date</string>
     <string name="followup_no_date">No date</string>
     <string name="followup_save">Save</string>

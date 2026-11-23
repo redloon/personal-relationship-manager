@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+#MISE description="Read-only check of hooks, SDK/JDK versions and protocol dependencies"
+set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/task-env.sh"
+source "$TASK_ROOT/scripts/android-sdk-env.sh"
+source "$TASK_ROOT/.mise/lib/java-env.sh"
+TOOLING_PYTHON="$TASK_ROOT/ignored/tooling-venv/bin/python"
+[[ -x "$TOOLING_PYTHON" ]] || { echo 'Run bash .mise/tasks/tooling-setup first.' >&2; exit 1; }
+exec "$TOOLING_PYTHON" "$TASK_ROOT/scripts/check-environment.py"

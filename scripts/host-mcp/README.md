@@ -25,12 +25,22 @@ bash scripts/host-mcp/install.sh --refresh-only
 # Add --sandbox NAME to also reload its gateway connection.
 ```
 
-Refresh stops idle installed runners, including host Codex connections. Reconnect MCP or restart/resume Codex afterward. Confirm health `version=3` and `source_sha256` matches `~/.local/share/android-tests-mcp/runner.sha256`.
+Refresh stops idle installed runners, including host Codex connections. It waits ten seconds after SIGTERM, then uses SIGKILL only for a still-matching idle runner blocked on gateway-owned stdin. Owner, exact installed command/config paths and process start time are rechecked before either signal. The refresh lock and persisted-job checks still refuse active work. Reconnect MCP or restart/resume Codex afterward. Confirm health `version=6` and `source_sha256` matches `~/.local/share/android-tests-mcp/runner.sha256`.
+
+## Test deadlines and evidence (runner v5)
+
+`start_test(app_sha256, test_sha256, filter=null, timeout_seconds=null)` defaults to 180 seconds with a class/method filter and 900 seconds without a filter. Explicit instrumentation deadlines must be integers from 1 to 900. The whole test job has a 1,200-second execution deadline, followed by bounded cleanup (at most 120 seconds). Use one unfiltered invocation for the complete suite; keep filters for iteration.
+
+`get_status(job_id, wait_seconds=0)` polls immediately by default. Set an integer wait of up to 30 seconds to wait for terminal cleanup. Status persists `timings` for starting, emulator, install, tests, cleanup and total; raw instrumentation reports individual class/method identities, outcomes and observed durations in `tests`. Timings measure host receipt of progress, with roughly 50 ms resolution. A completion summary alone is insufficient: the parser also requires a successful terminal instrumentation code and rejects mixed failure/abort/crash output.
+
+Commands stream to `read_logs` while running, preserving partial output on cancellation/timeouts. Consume chunks using integer byte offsets through terminal cleanup. Full diagnostic logcat is retained separately in `logcat.log`; read it with `read_logs(job_id, offset=0, log="logcat")` when diagnosing failures. Normal progress reads default to `log="output"`.
+
+Staging holds the checkout build lock through both APK copies, fingerprints sources before/after, and includes `provenance.source_sha256` plus the Git revision alongside APK hashes. Jobs retain matching manifest provenance. The content fingerprint covers dirty/untracked build inputs; the Git revision alone does not identify the tested snapshot. Staging still requires exclusive inbox ownership until the active job has finished cleanup.
 
 ## Agent workflow
 
 1. Discover the `android-tests` tools and call `health()`. Check `sdk_available`, `avd=android_tests`, the configured inbox, and `busy=false`. Health confirms the connection/configuration, not emulator readiness.
-2. Run `mise run test-stage` on the host or inside the sandbox; use its printed hashes in `start_test`, optionally filtering to `com.idontremember.personalcrm.AppLaunchTest`.
+2. Run `mise run test-stage` inside the sandbox; use its printed hashes in `start_test`, optionally filtering to `com.idontremember.personalcrm.AppLaunchTest`.
 3. Poll status and read logs through MCP. Run without a filter for the full suite. Report job ID, test count and outcome.
 
 Do not restage while another agent/job uses the shared inbox. Host and sandbox must share `ignored/mcp-inbox`; private-clone setups need an explicitly shared inbox configured on the host.
@@ -38,8 +48,7 @@ Do not restage while another agent/job uses the shared inbox. Host and sandbox m
 If mise is unavailable, use the equivalent commands:
 
 ```bash
-bash scripts/gradle.sh assembleDebug assembleDebugAndroidTest --no-daemon --console=plain
-python3 scripts/stage-mcp-apks.py
+bash .mise/tasks/test-stage
 ```
 
 ## Agent tool contract
@@ -49,14 +58,17 @@ MCP registration: `android-tests`. Installed code/config: `~/.local/share/androi
 | Tool | Input and result |
 | --- | --- |
 | `health` | No arguments; reports version, PID, loaded source hash, job storage/inbox, missing SDK tools, configured AVD/serial, and whether any connection has a job active. Does not prove emulator readiness. |
-| `start_test` | `app_sha256`, `test_sha256`, optional `filter` (fully qualified class or class#method). Returns `job_id`. Omit filter for full suite. |
-| `get_status` | `job_id`; returns phase and status: running, passed, failed, cancelled, or interrupted; failures include command/error text; passes include `test_count`. Jobs can be polled after reconnecting. |
+| `start_recovery_test` | `app_sha256`, optional `case` (`saved_records`, `edited_records`, `deleted_records`) and `timeout_seconds` (1–900). No test APK. Omit case for all three; returns `job_id`. |
+| `start_test` | `app_sha256`, `test_sha256`, optional `filter` (fully qualified class or class#method) and `timeout_seconds`. Returns `job_id`. Omit filter for full suite. |
+| `get_status` | `job_id`, optional `wait_seconds` (0–30); returns phase and status: running, passed, failed, cancelled, or interrupted; failures include command/error text; passes include `test_count`. Jobs can be polled after reconnecting. |
 | `read_logs` | `job_id`, integer byte `offset` (initially 0); returns text and integer next_offset, at most 32 KiB. Pass that integer directly to the next call. Read until offset stops advancing, then check again after completion. |
-| `cancel` | `job_id`; requests cancellation. Cleanup may take up to 45 seconds; a busy response means wait before submitting again. |
+| `cancel` | `job_id`; requests cancellation. Cleanup may take up to 120 seconds; a busy response means wait before submitting again. |
 
-Phases: starting → emulator → install → tests → cleanup → finished. Instrumentation is limited to 180 seconds; whole job to 15 minutes plus bounded cleanup. Successful completion requires a nonzero test count and an instrumentation OK marker. Record job ID, count and outcome in validation reports. Logs currently flush after each command completes, not continuously. Terminal status is published after cleanup. A shared file lock prevents host and sandbox connections from running tests simultaneously; cancel through the connection that submitted the job.
+Phases: starting → emulator → install → tests → cleanup → finished. See the v5 deadlines and evidence contract above. Terminal status is published after cleanup. A shared file lock prevents host and sandbox connections from running tests simultaneously; cancel through the connection that submitted the job.
 
-Host and sandbox debug keys may differ. On `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, the runner rechecks emulator identity, logs a warning, removes only this app and its test package from the dedicated emulator, and retries once. Test app data is disposable and cleared each run anyway. Other install errors fail with the command and Android error. Physical-phone installs never perform this reset: keep using the same signing key/environment for the phone or back up its data before intentionally uninstalling.
+Debug/release APKs can use different certificates or version codes. On
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE` or `INSTALL_FAILED_VERSION_DOWNGRADE`, the runner rechecks emulator identity, logs a warning, removes only this app and its test package from the dedicated emulator, and retries once. This also permits returning to a lower-code debug build after a
+signed release smoke test. Test app data is disposable and cleared each run anyway. Other install errors fail with the command and Android error. Physical-phone installs never perform this reset: keep using the same signing key/environment for the phone or back up its data before intentionally uninstalling.
 
 ## Troubleshooting and boundaries
 
@@ -92,7 +104,7 @@ Runner v3 verified through the installed stdio MCP server: an earlier sandbox-si
 
 Runner v4 adds a Python/ADB backend; Swift and agent-android are not runtime
 requirements. APKs are still built in the sandbox. Refresh the installed snapshot
-while idle, reconnect tools, and confirm health version 4 and its full-module
+while idle, reconnect tools, and confirm health version 6 and its full-module
 source fingerprint. The older v3 evidence above describes historical test runs.
 
 1. Run `check`, call health, and stage the APK pair while the runner is idle.
@@ -194,3 +206,40 @@ Focused job `b9bd859464d442af9f9fa475b4df2cd9` passed four tests; full job
 `3223034f07c44987b2733693ee3dd02b` passed **94 tests**. Terminal cleanup and all
 log chunks were consumed. Keep these instrumented results distinct from the
 interactive demo and the SDK-free stdio protocol test.
+
+## Process recovery (runner v6)
+
+After SDK-free tooling checks pass, refresh the installed trusted snapshot as
+above and confirm health v6, its full-module hash/PID, dedicated AVD and idle state.
+`recovery.py` is part of both the installed snapshot and source fingerprint.
+
+`start_recovery_test(app_sha256, case=null, timeout_seconds=null)` uses only the
+normal app APK, with debug or release signing. Stage a debug app with
+`bash .mise/tasks/test-stage-app`, or stage the immutable signed bundle's existing
+APK with `bash .mise/tasks/test-stage-app ignored/releases/vVERSION/personal-crm-VERSION.apk`.
+The latter verifies the original manifest/checksum and retains its release provenance.
+Do not restage during any active job or cleanup.
+
+The runner clears disposable app data **once before arranging** fictional records.
+It uses public UI controls in the English-language AVD to commit a note, person,
+tag, fact and voluntary follow-up. The same persistent production database is used
+throughout the job. Recovery grants only READ_CONTACTS; WRITE_CONTACTS remains
+exclusive to the debug instrumentation harness. Each selected case confirms its operations, force-stops only
+the verified app, checks that its PID disappeared, relaunches and requires a new
+PID. Recall verifies the original record IDs, unique result rows, text and linked
+person/tag; edited records also check completion. Deleted records must remain
+absent from active recall and recoverable in Recently deleted; restoring verifies
+identity, associations and completion again. No debug-only entry point, run-as,
+instrumentation APK or database replacement is used.
+
+Cases share their committed fixture when all three run. The default execution
+budget is 900 seconds after installation, bounded by the existing 1,200-second job
+deadline and subsequent cleanup. Explicit timeouts are integers from 1–900. Status
+contains individual case outcomes, PIDs, original record IDs, durations and a
+nonzero `test_count` on success. Use the normal status/log/artifact tools, read all
+chunks and poll through cleanup. Successful cases retain screenshots; failures
+use the existing best-effort failure capture. Report exact APK/source hashes, job
+ID, count, timings and terminal cleanup result. Health/builds alone are not passes.
+
+Lost drafts are best effort and do not fail acceptance. Device reboot, sudden
+power loss and additional Android versions remain deferred.

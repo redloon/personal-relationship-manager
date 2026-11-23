@@ -9,7 +9,6 @@ import tempfile
 import unittest
 
 
-@unittest.skipUnless(importlib.util.find_spec('mcp'), 'Install host-mcp requirements for stdio protocol test')
 class ProtocolTests(unittest.TestCase):
     def test_interactive_session_batch_images_recording_and_cleanup(self):
         import anyio
@@ -19,7 +18,7 @@ class ProtocolTests(unittest.TestCase):
             root = Path(temporary)
             sdk = root/'sdk'
             script = '''#!/usr/bin/env python3
-import sys
+import sys,time
 args=sys.argv[1:]
 a=args[2:] if args[:1]==['-s'] else args
 if args[:2]==['manifest','application-id']:
@@ -35,6 +34,17 @@ elif a[:1]==['shell'] and 'screenrecord --time-limit' in a[-1]: print('123 456')
 elif a[:1]==['shell'] and '# stop-recording' in a[-1]: print('stopped')
 elif a[:1]==['shell'] and a[-1].startswith('wc -c < '): print(24)
 elif a[:2]==['exec-out','cat']: sys.stdout.buffer.write(b'\\x00\\x00\\x00\\x18ftypmp42'+b'0'*12)
+elif 'instrument' in a:
+ assert '-r' in a
+ print('INSTRUMENTATION_STATUS: class=example.Test',flush=True)
+ print('INSTRUMENTATION_STATUS: test=works',flush=True)
+ print('INSTRUMENTATION_STATUS_CODE: 1',flush=True)
+ time.sleep(.15)
+ print('INSTRUMENTATION_STATUS: class=example.Test')
+ print('INSTRUMENTATION_STATUS: test=works')
+ print('INSTRUMENTATION_STATUS_CODE: 0')
+ print('OK (1 test)')
+ print('INSTRUMENTATION_CODE: -1')
 else: print('Success')
 '''
             for name in ['platform-tools/adb','cmdline-tools/latest/bin/apkanalyzer']:
@@ -55,7 +65,7 @@ else: print('Success')
                     async with ClientSession(read,write) as client:
                         await client.initialize()
                         names={t.name for t in (await client.list_tools()).tools}
-                        self.assertTrue({'inspect','execute_steps','start_recording','get_artifact'} <= names)
+                        self.assertTrue({'inspect','execute_steps','start_recording','get_artifact','start_recovery_test'} <= names)
                         async def call(name,args=None):
                             result=await client.call_tool(name,args or {})
                             self.assertFalse(result.isError, str(result.content))
@@ -93,6 +103,19 @@ else: print('Success')
                         self.assertFalse(health['busy'])
                         artifacts,_=await call('list_artifacts',dict(job_id=sid))
                         self.assertEqual(len(artifacts['artifacts']),4)
+                        for filter_value, expected_timeout in [(None, 900), ('com.idontremember.personalcrm.Example#works', 180)]:
+                            started,_=await call('start_test',dict(app_sha256=digest,test_sha256=digest,filter=filter_value))
+                            status,_=await call('get_status',dict(job_id=started['job_id'],wait_seconds=5))
+                            self.assertEqual(status['status'],'passed')
+                            self.assertEqual(status['test_count'],1)
+                            self.assertEqual(status['timeout_seconds'],expected_timeout)
+                            self.assertEqual(status['tests'][0]['class_name'],'example.Test')
+                            self.assertEqual(status['tests'][0]['test_name'],'works')
+                            self.assertEqual(status['tests'][0]['outcome'],'passed')
+                            self.assertGreater(status['tests'][0]['duration_seconds'],.05)
+                            self.assertTrue({'starting','emulator','install','tests','cleanup','total'} <= set(status['timings']))
+                            diagnostic,_=await call('read_logs',dict(job_id=started['job_id'],log='logcat',offset=0))
+                            self.assertEqual(diagnostic['text'],'Success\n')
             anyio.run(run)
 
 

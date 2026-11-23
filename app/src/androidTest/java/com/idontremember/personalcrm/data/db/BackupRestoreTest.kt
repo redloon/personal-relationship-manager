@@ -2,34 +2,49 @@ package com.idontremember.personalcrm.data.db
 
 import com.idontremember.personalcrm.data.backup.BackupJson
 import com.idontremember.personalcrm.data.backup.DataExporter
-import com.idontremember.personalcrm.data.db.entity.*
-import com.idontremember.personalcrm.data.repository.EventRepository
-import com.idontremember.personalcrm.data.repository.ContactRepository
+import com.idontremember.personalcrm.data.db.entity.Contact
+import com.idontremember.personalcrm.data.db.entity.ContactFact
+import com.idontremember.personalcrm.data.db.entity.ContactTag
+import com.idontremember.personalcrm.data.db.entity.Event
+import com.idontremember.personalcrm.data.db.entity.EventContact
+import com.idontremember.personalcrm.data.db.entity.EventTag
+import com.idontremember.personalcrm.data.db.entity.FollowUp
+import com.idontremember.personalcrm.data.db.entity.Relationship
+import com.idontremember.personalcrm.data.db.entity.Tag
 import com.idontremember.personalcrm.data.recovery.RecoveryRepository
 import com.idontremember.personalcrm.data.recovery.TrashKind
+import com.idontremember.personalcrm.data.repository.ContactRepository
+import com.idontremember.personalcrm.data.repository.EventRepository
 import com.idontremember.personalcrm.data.settings.SettingsRepository
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertFalse
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
-import kotlinx.coroutines.runBlocking
+import javax.inject.Inject
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import javax.inject.Inject
 
 @HiltAndroidTest
 class BackupRestoreTest {
     @get:Rule val hiltRule = HiltAndroidRule(this)
+
     @Inject lateinit var database: AppDatabase
+
     @Inject lateinit var exporter: DataExporter
+
     @Inject lateinit var recovery: RecoveryRepository
+
     @Inject lateinit var contacts: ContactRepository
+
     @Inject lateinit var settings: SettingsRepository
+
     @Inject lateinit var eventRepository: EventRepository
+
     @Inject lateinit var tagRepository: com.idontremember.personalcrm.data.repository.TagRepository
 
     @Before fun setup() {
@@ -54,31 +69,68 @@ class BackupRestoreTest {
         exporter.restore(snapshot)
 
         assertEquals("李 Alice", database.contactDao().getById(contactId)?.displayName)
-        assertEquals("Likes 🍕", database.contactFactDao().getByContactIdOnce(contactId).single().text)
+        assertEquals(
+            "Likes 🍕",
+            database.contactFactDao().getByContactIdOnce(contactId).single().text
+        )
         assertEquals("Coffee 🎉", database.eventDao().getById(eventId)?.note)
         assertEquals(listOf(contactId), database.eventDao().getContactIdsForEvent(eventId))
         assertEquals(listOf(tagId), database.eventDao().getTagIdsForEvent(eventId))
-        assertEquals(listOf(ContactTag(contactId, tagId)), database.profileLinksDao().allContactTags())
-        assertEquals(listOf(Relationship(contactId, otherId, "Friend")), database.profileLinksDao().allRelationships())
-        assertEquals(listOf(contactId), database.profileLinksDao().contactsForTag(tagId).first().map { it.id })
+        assertEquals(
+            listOf(ContactTag(contactId, tagId)),
+            database.profileLinksDao().allContactTags()
+        )
+        assertEquals(
+            listOf(Relationship(contactId, otherId, "Friend")),
+            database.profileLinksDao().allRelationships()
+        )
+        assertEquals(
+            listOf(contactId),
+            database.profileLinksDao().contactsForTag(tagId).first().map {
+                it.id
+            }
+        )
         database.tagDao().delete(Tag(id = tagId, name = "coffee"))
         assertEquals("Coffee 🎉", database.eventDao().getById(eventId)?.note)
         assertTrue(database.profileLinksDao().allContactTags().isEmpty())
 
         // A rejected backup must not delete the restored records.
-        val invalid = snapshot.copy(eventContacts = listOf(com.idontremember.personalcrm.data.backup.EventContactRecord(eventId, 9999)))
-        try { exporter.restore(invalid); throw AssertionError("Expected failure") }
-        catch (_: IllegalArgumentException) { }
+        val invalid = snapshot.copy(
+            eventContacts = listOf(
+                com.idontremember.personalcrm.data.backup.EventContactRecord(eventId, 9999)
+            )
+        )
+        try {
+            exporter.restore(invalid)
+            throw AssertionError("Expected failure")
+        } catch (
+            _: IllegalArgumentException
+        ) { }
         assertTrue(database.contactDao().getById(contactId) != null)
     }
 
     @Test fun portableRestoreDetachesDeviceIdentityAndKeepsTrash() = runBlocking {
-        val person = database.contactDao().insert(Contact(displayName = "Alice", androidContactId = 42,
-            photoUri = "content://old-device/photo", lookupKey = "old-device-key"))
+        val person = database.contactDao().insert(
+            Contact(
+                displayName = "Alice",
+                androidContactId = 42,
+                photoUri = "content://old-device/photo",
+                lookupKey = "old-device-key"
+            )
+        )
         val now = System.currentTimeMillis()
-        val fact = database.contactFactDao().insert(ContactFact(contactId = person, text = "Climbing", deletedAt = now))
+        val fact = database.contactFactDao().insert(
+            ContactFact(contactId = person, text = "Climbing", deletedAt = now)
+        )
         val event = database.eventDao().insert(Event(note = "Coffee", deletedAt = now))
-        val follow = database.followUpDao().insert(FollowUp(contactId = person, text = "Ask about trip", dueDate = "2026-11-03", notifiedAt = now))
+        val follow = database.followUpDao().insert(
+            FollowUp(
+                contactId = person,
+                text = "Ask about trip",
+                dueDate = "2026-11-03",
+                notifiedAt = now
+            )
+        )
         settings.setFollowUpRemindersEnabled(true)
         val snapshot = BackupJson.decode(exporter.exportToJson())
         assertEquals(now, snapshot.facts.single().deletedAt)
@@ -108,7 +160,9 @@ class BackupRestoreTest {
         recovery.restore(TrashKind.FACT, fact)
         assertEquals(fact, database.contactFactDao().getByContactIdOnce(person).single().id)
         recovery.delete(TrashKind.FACT, fact)
-        recovery.purgeExpired(System.currentTimeMillis() + RecoveryRepository.RETENTION_MILLIS + 1_000)
+        recovery.purgeExpired(
+            System.currentTimeMillis() + RecoveryRepository.RETENTION_MILLIS + 1_000
+        )
         assertTrue(database.contactFactDao().getAllOnce().isEmpty())
     }
 
@@ -123,22 +177,47 @@ class BackupRestoreTest {
         assertEquals(listOf(person), database.eventDao().getContactIdsForEvent(event))
     }
 
-    @Test fun explicitTokensSurviveBackupRenameAndTagRemovalWithoutChangingProse(): Unit = runBlocking {
+    @Test
+    fun explicitTokensSurviveBackupRenameAndTagRemovalWithoutChangingProse(): Unit = runBlocking {
         val person = contacts.createLocalContact("Maya Chen")
         val note = "@Maya Chen likes #tea"
         val tokens = listOf(
-            com.idontremember.personalcrm.data.capture.InlineToken(0, 10, com.idontremember.personalcrm.data.capture.TokenTarget.Person(person)),
-            com.idontremember.personalcrm.data.capture.InlineToken(17, 21, com.idontremember.personalcrm.data.capture.TokenTarget.Tag("tea")))
-        val event = eventRepository.createEvent(note, listOf(person), listOf("tea"), inlineTokens = tokens)
+            com.idontremember.personalcrm.data.capture.InlineToken(
+                0,
+                10,
+                com.idontremember.personalcrm.data.capture.TokenTarget.Person(person)
+            ),
+            com.idontremember.personalcrm.data.capture.InlineToken(
+                17,
+                21,
+                com.idontremember.personalcrm.data.capture.TokenTarget.Tag("tea")
+            )
+        )
+        val event = eventRepository.createEvent(
+            note,
+            listOf(person),
+            listOf("tea"),
+            inlineTokens = tokens
+        )
         contacts.renameLocalContact(person, "Maya Li")
         val snapshot = BackupJson.decode(exporter.exportToJson())
         exporter.restore(snapshot)
         assertEquals(note, database.eventDao().getById(event)!!.note)
-        assertEquals(tokens, com.idontremember.personalcrm.data.capture.InlineTokens.decode(database.eventDao().getById(event)!!.inlineTokens))
+        assertEquals(
+            tokens,
+            com.idontremember.personalcrm.data.capture.InlineTokens.decode(
+                database.eventDao().getById(event)!!.inlineTokens
+            )
+        )
         assertEquals("Maya Li", database.contactDao().getById(person)!!.displayName)
         tagRepository.deleteTag(database.tagDao().getByName("tea")!!)
         assertEquals(note, database.eventDao().getById(event)!!.note)
-        assertEquals(tokens.take(1), com.idontremember.personalcrm.data.capture.InlineTokens.decode(database.eventDao().getById(event)!!.inlineTokens))
+        assertEquals(
+            tokens.take(1),
+            com.idontremember.personalcrm.data.capture.InlineTokens.decode(
+                database.eventDao().getById(event)!!.inlineTokens
+            )
+        )
         BackupJson.decode(exporter.exportToJson())
     }
 
@@ -151,7 +230,12 @@ class BackupRestoreTest {
         database.eventDao().insertEventTag(EventTag(event, tag))
         database.profileLinksDao().addTag(ContactTag(a, tag))
         database.profileLinksDao().addTag(ContactTag(b, tag))
-        assertEquals(listOf(a, b), database.profileLinksDao().contactsForTag(tag).first().map { it.id })
+        assertEquals(
+            listOf(a, b),
+            database.profileLinksDao().contactsForTag(tag).first().map {
+                it.id
+            }
+        )
         val link = Relationship(a, b, "Friend")
         database.profileLinksDao().addRelationship(link)
         assertEquals(listOf(link), database.profileLinksDao().relationshipsFor(a).first())
@@ -164,7 +248,8 @@ class BackupRestoreTest {
     }
 
     @Test fun failedEventLinkDoesNotLeaveOrphanEvent() = runBlocking {
-        try { eventRepository.createEvent("Will fail", listOf(9999), emptyList())
+        try {
+            eventRepository.createEvent("Will fail", listOf(9999), emptyList())
             throw AssertionError("Expected foreign key failure")
         } catch (_: Exception) { }
         assertTrue(database.eventDao().getAllOnce().isEmpty())

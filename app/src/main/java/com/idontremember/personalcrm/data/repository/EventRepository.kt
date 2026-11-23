@@ -1,8 +1,8 @@
 package com.idontremember.personalcrm.data.repository
 
+import androidx.room.withTransaction
 import com.idontremember.personalcrm.data.capture.InlineToken
 import com.idontremember.personalcrm.data.capture.InlineTokens
-import androidx.room.withTransaction
 import com.idontremember.personalcrm.data.db.AppDatabase
 import com.idontremember.personalcrm.data.db.dao.ContactDao
 import com.idontremember.personalcrm.data.db.dao.EventDao
@@ -12,16 +12,12 @@ import com.idontremember.personalcrm.data.db.entity.Event
 import com.idontremember.personalcrm.data.db.entity.EventContact
 import com.idontremember.personalcrm.data.db.entity.EventTag
 import com.idontremember.personalcrm.data.db.entity.Tag
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 
-data class EventWithMeta(
-    val event: Event,
-    val contacts: List<Contact>,
-    val tags: List<Tag>
-)
+data class EventWithMeta(val event: Event, val contacts: List<Contact>, val tags: List<Tag>)
 
 @Singleton
 class EventRepository @Inject constructor(
@@ -32,15 +28,23 @@ class EventRepository @Inject constructor(
 ) {
 
     fun observeEventsWithMeta(): Flow<List<EventWithMeta>> = combine(
-        eventDao.getAll(), contactDao.getAllIncludingHidden(), tagDao.getAll(), eventDao.observeEventContacts(), eventDao.observeEventTags()
+        eventDao.getAll(),
+        contactDao.getAllIncludingHidden(),
+        tagDao.getAll(),
+        eventDao.observeEventContacts(),
+        eventDao.observeEventTags()
     ) { events, people, tags, personLinks, tagLinks ->
         val peopleById = people.associateBy { it.id }
         val tagsById = tags.associateBy { it.id }
         val peopleByEvent = personLinks.groupBy { it.eventId }
         val tagsByEvent = tagLinks.groupBy { it.eventId }
-        events.map { event -> EventWithMeta(event,
-            peopleByEvent[event.id].orEmpty().mapNotNull { peopleById[it.contactId] },
-            tagsByEvent[event.id].orEmpty().mapNotNull { tagsById[it.tagId] }) }
+        events.map { event ->
+            EventWithMeta(
+                event,
+                peopleByEvent[event.id].orEmpty().mapNotNull { peopleById[it.contactId] },
+                tagsByEvent[event.id].orEmpty().mapNotNull { tagsById[it.tagId] }
+            )
+        }
     }
 
     fun getAllEvents(): Flow<List<Event>> = eventDao.getAll()
@@ -53,11 +57,9 @@ class EventRepository @Inject constructor(
 
     fun getEventByIdFlow(id: Long): Flow<Event?> = eventDao.getByIdFlow(id)
 
-    fun getEventsForContact(contactId: Long): Flow<List<Event>> =
-        eventDao.getByContactId(contactId)
+    fun getEventsForContact(contactId: Long): Flow<List<Event>> = eventDao.getByContactId(contactId)
 
-    fun getEventsForTag(tagId: Long): Flow<List<Event>> =
-        eventDao.getByTagId(tagId)
+    fun getEventsForTag(tagId: Long): Flow<List<Event>> = eventDao.getByTagId(tagId)
 
     /**
      * Create an event with linked contacts and tags.
@@ -74,7 +76,12 @@ class EventRepository @Inject constructor(
         inlineTokens: List<InlineToken> = emptyList()
     ): Long = database.withTransaction {
         InlineTokens.validate(note, inlineTokens, contactIds.toSet(), tagNames.toSet())
-        val event = Event(note = note, eventDate = eventDate, inlineTokens = InlineTokens.encode(inlineTokens))
+        val event =
+            Event(
+                note = note,
+                eventDate = eventDate,
+                inlineTokens = InlineTokens.encode(inlineTokens)
+            )
         val eventId = eventDao.insert(event)
 
         // Link contacts
@@ -102,9 +109,16 @@ class EventRepository @Inject constructor(
         eventDate: Long,
         inlineTokens: List<InlineToken> = emptyList()
     ) = database.withTransaction {
-        val existing = eventDao.getById(eventId) ?: return@withTransaction
+        val existing = checkNotNull(eventDao.getById(eventId)) { "Note unavailable" }
         InlineTokens.validate(note, inlineTokens, contactIds.toSet(), tagNames.toSet())
-        eventDao.update(existing.copy(note = note, eventDate = eventDate, updatedAt = System.currentTimeMillis(), inlineTokens = InlineTokens.encode(inlineTokens)))
+        eventDao.update(
+            existing.copy(
+                note = note,
+                eventDate = eventDate,
+                updatedAt = System.currentTimeMillis(),
+                inlineTokens = InlineTokens.encode(inlineTokens)
+            )
+        )
 
         // Replace links
         eventDao.deleteEventContacts(eventId)
@@ -120,7 +134,8 @@ class EventRepository @Inject constructor(
         }
     }
 
-    suspend fun deleteEvent(event: Event) = eventDao.update(event.copy(deletedAt = System.currentTimeMillis()))
+    suspend fun deleteEvent(event: Event) =
+        eventDao.update(event.copy(deletedAt = System.currentTimeMillis()))
 
     suspend fun getEventWithMeta(eventId: Long): EventWithMeta? {
         val event = eventDao.getById(eventId) ?: return null

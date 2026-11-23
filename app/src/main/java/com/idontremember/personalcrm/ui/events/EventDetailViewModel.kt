@@ -14,6 +14,7 @@ import com.idontremember.personalcrm.data.repository.EventRepository
 import com.idontremember.personalcrm.data.settings.DateDisplay
 import com.idontremember.personalcrm.data.settings.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,7 +23,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 @HiltViewModel
 class EventDetailViewModel @Inject constructor(
@@ -33,7 +33,11 @@ class EventDetailViewModel @Inject constructor(
     private val recovery: RecoveryRepository,
     settingsRepository: SettingsRepository
 ) : ViewModel() {
-    val dateDisplay = settingsRepository.dateDisplay.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DateDisplay.ABSOLUTE)
+    val dateDisplay = settingsRepository.dateDisplay.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        DateDisplay.ABSOLUTE
+    )
     private var eventId: Long = 0
     private var loadJob: Job? = null
     private val _event = MutableStateFlow<Event?>(null)
@@ -59,7 +63,17 @@ class EventDetailViewModel @Inject constructor(
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             try {
-                combine(eventDao.getByIdFlow(eventId), contactDao.getAllIncludingHidden(), tagDao.getAll()) { _, _, _ -> eventRepository.getEventWithMeta(eventId) }
+                combine(
+                    eventDao.getByIdFlow(eventId),
+                    contactDao.getAllIncludingHidden(),
+                    tagDao.getAll()
+                ) {
+                        _,
+                        _,
+                        _
+                    ->
+                    eventRepository.getEventWithMeta(eventId)
+                }
                     .collect { meta ->
                         if (!_saved.value) {
                             _event.value = meta?.event
@@ -68,8 +82,14 @@ class EventDetailViewModel @Inject constructor(
                         }
                         _eventLoaded.value = true
                     }
-            } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { _event.value = null; _eventLoaded.value = true }
+            } catch (
+                e: CancellationException
+            ) {
+                throw e
+            } catch (_: Exception) {
+                _event.value = null
+                _eventLoaded.value = true
+            }
         }
     }
 
@@ -78,9 +98,18 @@ class EventDetailViewModel @Inject constructor(
         viewModelScope.launch {
             _mutationFailed.value = false
             _saved.value = true
-            try { _event.value?.let { eventRepository.deleteEvent(it) } }
-            catch (e: CancellationException) { throw e }
-            catch (_: Exception) { _saved.value = false; _mutationFailed.value = true }
+            try {
+                _event.value?.let { eventRepository.deleteEvent(it) }
+            } catch (
+                e: CancellationException
+            ) {
+                throw e
+            } catch (
+                _: Exception
+            ) {
+                _saved.value = false
+                _mutationFailed.value = true
+            }
         }
     }
 
@@ -91,8 +120,13 @@ class EventDetailViewModel @Inject constructor(
                 recovery.restore(TrashKind.EVENT, eventId)
                 _saved.value = false
                 retryLoad()
-            } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { _mutationFailed.value = true }
+            } catch (
+                e: CancellationException
+            ) {
+                throw e
+            } catch (_: Exception) {
+                _mutationFailed.value = true
+            }
         }
     }
 }

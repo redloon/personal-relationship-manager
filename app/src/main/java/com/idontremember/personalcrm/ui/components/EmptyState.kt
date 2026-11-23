@@ -20,11 +20,7 @@ import androidx.compose.ui.unit.dp
  *   to README's Test Tags list (the default is `empty_state`).
  */
 @Composable
-fun EmptyState(
-    message: String,
-    modifier: Modifier = Modifier,
-    testTag: String = "empty_state"
-) {
+fun EmptyState(message: String, modifier: Modifier = Modifier, testTag: String = "empty_state") {
     Box(
         modifier = modifier
             .testTag(testTag)

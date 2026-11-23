@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Run Android check and complete tooling validation"
+set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/task-env.sh"
+"$TASK_ROOT/.mise/tasks/check" "$@"
+"$TASK_ROOT/.mise/tasks/tooling-test"

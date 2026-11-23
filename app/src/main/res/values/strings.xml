@@ -4,23 +4,17 @@
     <string name="tile_description">Quickly add a note about someone</string>
 
     <!-- Screen titles -->
-    <string name="title_contacts">People</string>
-    <string name="title_events">Notes</string>
     <string name="title_contact">Person</string>
     <string name="title_event">Note</string>
     <string name="title_settings">Settings</string>
-    <string name="title_add_event">New note</string>
 
     <!-- Section headers -->
     <string name="section_facts">Facts</string>
-    <string name="section_events">Notes</string>
     <string name="section_people">People</string>
     <string name="section_tags">Tags</string>
 
     <!-- Actions -->
-    <string name="action_add">Add</string>
     <string name="action_save">Save</string>
-    <string name="action_save_event">Save note</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_ok">OK</string>
     <string name="action_delete">Delete</string>
@@ -41,14 +35,10 @@
     <string name="cd_remove_tag">Remove tag</string>
 
     <!-- Search -->
-    <string name="search_contacts_hint">Search people...</string>
-    <string name="search_events_hint">Search notes...</string>
 
     <!-- Empty states -->
     <string name="empty_contacts">No people yet. Tap Add person to remember someone. You can also import Android contacts.</string>
     <string name="empty_contacts_search">No people match your search.</string>
-    <string name="empty_events">No notes yet. Tap Add a note to remember something.</string>
-    <string name="empty_events_search">No notes match your search.</string>
     <string name="empty_facts">No facts yet. Tap + to add details about this person.</string>
     <string name="empty_contact_events">No notes about this person yet.</string>
     <string name="empty_event_links">No people or tags linked to this note yet.</string>
@@ -58,15 +48,15 @@
     <string name="error_contact_not_found">This person no longer exists.</string>
     <string name="error_event_not_found">This note no longer exists.</string>
     <string name="error_sync_failed">Sync failed</string>
-    <string name="sync_result">Synced: %1$d added, %2$d updated</string>
+    <plurals name="sync_result">
+        <item quantity="one">Synced: %1$d added, %2$d updated</item>
+        <item quantity="other">Synced: %1$d added, %2$d updated</item>
+    </plurals>
     <string name="sync_error">Error: %1$s</string>
 
     <!-- Dialogs and fields -->
-    <string name="dialog_add_fact_title">Add Fact</string>
-    <string name="fact_placeholder">e.g. gluten-free, birder, loves hiking</string>
     <string name="dialog_delete_event_title">Delete note</string>
     <string name="dialog_delete_event_message">Are you sure you want to delete this note?</string>
-    <string name="field_note">Note</string>
     <string name="note_placeholder">What happened? Use @ to mention people, # for tags</string>
     <string name="create_tag_option">+ Create \"%1$s\"</string>
     <string name="select_time_title">Select Time</string>
@@ -95,12 +85,9 @@
     <string name="settings_import_json_desc">Replace saved data from a backup</string>
     <string name="settings_restore_confirm_title">Restore backup?</string>
     <string name="settings_restore_confirm_body">People: %1$d\nNotes: %3$d\nFacts: %2$d\nTags: %4$d</string>
-    <string name="settings_restore_action">Restore</string>
     <string name="settings_restore_success">Data restored</string>
     <string name="settings_restore_error">Restore failed. Current data was kept.</string>
-    <string name="event_search_person">Search people</string>
     <string name="event_save_error">Could not save. Your note is still here.</string>
-    <string name="event_edit_error">Could not save changes. Try again.</string>
 
     <!-- Date/time formatting: SimpleDateFormat patterns are localizable so
          translators can reorder day/month and swap the clock convention. -->
@@ -145,17 +132,9 @@
         <item quantity="one">In %1$d year</item>
         <item quantity="other">In %1$d years</item>
     </plurals>
-    <string name="pilot_home">Home</string>
     <string name="pilot_open_contact">Open Android contact</string>
     <string name="pilot_discard">Discard</string>
-    <string name="pilot_select_one">Select exactly one person using @</string>
-    <string name="pilot_people">People</string>
-    <string name="pilot_settings">Settings</string>
-    <string name="pilot_search">Search people</string>
-    <string name="pilot_all_contacts">All people</string>
-    <string name="pilot_events">Notes</string>
     <string name="pilot_tags">Tags</string>
-    <string name="pilot_back">Back</string>
     <string name="pilot_new_tag">New tag</string>
     <string name="pilot_add">Add</string>
     <string name="pilot_delete">Delete</string>
@@ -167,23 +146,14 @@
     <string name="pilot_done">Done</string>
     <string name="pilot_add_relationship">Add relationship</string>
     <string name="pilot_label">Label</string>
-    <string name="pilot_quick_capture">Quick capture</string>
     <string name="pilot_create_contact">Create person: %1$s</string>
     <string name="pilot_delete_tag">Delete %1$s?</string>
     <string name="pilot_relation_display">%1$s: %2$s</string>
     <string name="pilot_unknown">Unknown</string>
-    <string name="pilot_recent">Recently encountered</string>
-    <string name="pilot_search_results">Search results</string>
     <string name="pilot_recorded">Recorded %1$s</string>
     <string name="pilot_contact_unavailable">Person unavailable</string>
-    <string name="pilot_import_failed">Could not import Android contact</string>
-    <string name="pilot_contacts_unavailable">Contacts app unavailable</string>
     <string name="pilot_unavailable_contact">Unavailable person</string>
     <string name="pilot_fact">Fact</string>
-    <string name="pilot_event">Note</string>
-    <string name="pilot_fact_selected">✓ Fact</string>
-    <string name="pilot_event_selected">✓ Note</string>
-    <string name="pilot_save_fact">Save fact</string>
     <string name="people_hidden_title">Hidden people</string>
     <string name="people_hidden_explanation">Hidden from lists and pickers. Unhide anytime.</string>
     <string name="people_hidden_search">Search hidden people</string>
@@ -195,7 +165,10 @@
     <string name="people_select_all">Select all results</string>
     <string name="people_clear_selection">Clear selection</string>
     <string name="people_close_selection">Close selection</string>
-    <string name="people_selected_count">%1$d selected</string>
+    <plurals name="people_selected_count">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
     <string name="people_hide">Hide</string>
     <string name="people_unhide">Unhide</string>
     <string name="people_hidden_count">Hidden: %1$d</string>

@@ -12,7 +12,11 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.room.withTransaction
-import androidx.work.*
+import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.WorkerParameters
 import com.idontremember.personalcrm.R
 import com.idontremember.personalcrm.data.db.AppDatabase
 import com.idontremember.personalcrm.data.settings.SettingsRepository
@@ -21,12 +25,12 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import java.time.LocalDateTime
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.time.LocalDateTime
-import java.util.concurrent.TimeUnit
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -35,37 +39,96 @@ interface ReminderDependencies {
     fun settings(): SettingsRepository
 }
 
-object ReminderDeliveryLock { val mutex = Mutex() }
+object ReminderDeliveryLock {
+    val mutex = Mutex()
+}
 
-class FollowUpWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+class FollowUpWorker(context: Context, params: WorkerParameters) :
+    CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = ReminderDeliveryLock.mutex.withLock {
-        try { deliver() }
-        catch (error: CancellationException) { throw error }
-        catch (_: SecurityException) { Result.success() }
-        catch (_: Exception) { Result.retry() }
+        try {
+            deliver()
+        } catch (
+            error: CancellationException
+        ) {
+            throw error
+        } catch (
+            _: SecurityException
+        ) {
+            Result.success()
+        } catch (_: Exception) {
+            Result.retry()
+        }
     }
 
     private suspend fun deliver(): Result {
-        val deps = EntryPointAccessors.fromApplication(applicationContext, ReminderDependencies::class.java)
+        val deps = EntryPointAccessors.fromApplication(
+            applicationContext,
+            ReminderDependencies::class.java
+        )
         val settings = deps.settings()
         val now = LocalDateTime.now()
         val today = now.toLocalDate().toString()
         if (!settings.followUpRemindersEnabled.first() ||
-            !ReminderPolicy.canDeliver(now, settings.reminderHour.first(), settings.lastReminderDay.first())) return Result.success()
+            !ReminderPolicy.canDeliver(
+                now,
+                settings.reminderHour.first(),
+                settings.lastReminderDay.first()
+            )
+        ) {
+            return Result.success()
+        }
         val manager = applicationContext.getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel(CHANNEL,
-            applicationContext.getString(R.string.followup_channel), NotificationManager.IMPORTANCE_LOW))
+        if (Build.VERSION.SDK_INT >=
+            26
+        ) {
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL,
+                    applicationContext.getString(R.string.followup_channel),
+                    NotificationManager.IMPORTANCE_LOW
+                )
+            )
+        }
         suspend fun allowed(): Boolean {
             if (!settings.followUpRemindersEnabled.first()) return false
-            if (!ReminderPolicy.canDeliver(LocalDateTime.now(), settings.reminderHour.first(), null)) return false
-            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(applicationContext,
-                    Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false
-            if (!NotificationManagerCompat.from(applicationContext).areNotificationsEnabled()) return false
-            return Build.VERSION.SDK_INT < 26 || manager.getNotificationChannel(CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE
+            if (!ReminderPolicy.canDeliver(
+                    LocalDateTime.now(),
+                    settings.reminderHour.first(),
+                    null
+                )
+            ) {
+                return false
+            }
+            if (Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(
+                    applicationContext,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                return false
+            }
+            if (!NotificationManagerCompat.from(
+                    applicationContext
+                ).areNotificationsEnabled()
+            ) {
+                return false
+            }
+            return Build.VERSION.SDK_INT < 26 ||
+                manager.getNotificationChannel(CHANNEL)?.importance !=
+                NotificationManager.IMPORTANCE_NONE
         }
-        val intent = Intent(applicationContext, MainActivity::class.java).putExtra(OPEN_FOLLOW_UPS, true)
+        val intent = Intent(
+            applicationContext,
+            MainActivity::class.java
+        ).putExtra(OPEN_FOLLOW_UPS, true)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        val pending = PendingIntent.getActivity(applicationContext, 803, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val pending = PendingIntent.getActivity(
+            applicationContext,
+            803,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL)
             .setSmallIcon(R.drawable.ic_add_event)
             .setContentTitle(applicationContext.getString(R.string.followup_notification_title))
@@ -82,29 +145,39 @@ class FollowUpWorker(context: Context, params: WorkerParameters) : CoroutineWork
             allowed = ::allowed,
             reserve = {
                 previousDay = settings.lastReminderDay.first()
-                if (!ReminderPolicy.canDeliver(now, settings.reminderHour.first(), previousDay)) false
-                else database.withTransaction {
-                    val due = database.followUpDao().getAllOnce().filter {
-                        it.deletedAt == null && it.completedAt == null && it.notifiedAt == null &&
-                            ReminderPolicy.isDue(it.dueDate, now.toLocalDate())
-                    }
-                    if (due.isEmpty()) false else {
-                        claimedAt = System.currentTimeMillis()
-                        val claim = database.openHelper.writableDatabase.compileStatement(
-                            "UPDATE follow_ups SET notified_at = ? WHERE id = ? AND notified_at IS NULL AND completed_at IS NULL AND deleted_at IS NULL AND due_date = ?")
-                        claim.use { statement ->
-                            due.forEach { item ->
-                                statement.bindLong(1, claimedAt)
-                                statement.bindLong(2, item.id)
-                                statement.bindString(3, item.dueDate!!)
-                                if (statement.executeUpdateDelete() == 1) claimedIds += item.id
-                            }
+                if (!ReminderPolicy.canDeliver(now, settings.reminderHour.first(), previousDay)) {
+                    false
+                } else {
+                    database.withTransaction {
+                        val due = database.followUpDao().getAllOnce().filter {
+                            it.deletedAt == null &&
+                                it.completedAt == null &&
+                                it.notifiedAt == null &&
+                                ReminderPolicy.isDue(it.dueDate, now.toLocalDate())
                         }
-                        if (claimedIds.isEmpty()) false else {
-                            // DataStore and Room are separate stores: compensate both on known failure.
-                            dayReservationAttempted = true
-                            settings.setLastReminderDay(today)
-                            true
+                        if (due.isEmpty()) {
+                            false
+                        } else {
+                            claimedAt = System.currentTimeMillis()
+                            val claim = database.openHelper.writableDatabase.compileStatement(
+                                "UPDATE follow_ups SET notified_at = ? WHERE id = ? AND notified_at IS NULL AND completed_at IS NULL AND deleted_at IS NULL AND due_date = ?"
+                            )
+                            claim.use { statement ->
+                                due.forEach { item ->
+                                    statement.bindLong(1, claimedAt)
+                                    statement.bindLong(2, item.id)
+                                    statement.bindString(3, item.dueDate!!)
+                                    if (statement.executeUpdateDelete() == 1) claimedIds += item.id
+                                }
+                            }
+                            if (claimedIds.isEmpty()) {
+                                false
+                            } else {
+                                // DataStore and Room are separate stores: compensate both on known failure.
+                                dayReservationAttempted = true
+                                settings.setLastReminderDay(today)
+                                true
+                            }
                         }
                     }
                 }
@@ -113,7 +186,8 @@ class FollowUpWorker(context: Context, params: WorkerParameters) : CoroutineWork
             release = {
                 database.withTransaction {
                     val release = database.openHelper.writableDatabase.compileStatement(
-                        "UPDATE follow_ups SET notified_at = NULL WHERE id = ? AND notified_at = ?")
+                        "UPDATE follow_ups SET notified_at = NULL WHERE id = ? AND notified_at = ?"
+                    )
                     release.use { statement ->
                         claimedIds.forEach { id ->
                             statement.bindLong(1, id)
@@ -122,7 +196,11 @@ class FollowUpWorker(context: Context, params: WorkerParameters) : CoroutineWork
                         }
                     }
                 }
-                if (dayReservationAttempted && settings.lastReminderDay.first() == today) settings.setLastReminderDay(previousDay)
+                if (dayReservationAttempted &&
+                    settings.lastReminderDay.first() == today
+                ) {
+                    settings.setLastReminderDay(previousDay)
+                }
                 dayReservationAttempted = false
                 claimedIds.clear()
             }
@@ -133,8 +211,11 @@ class FollowUpWorker(context: Context, params: WorkerParameters) : CoroutineWork
         const val OPEN_FOLLOW_UPS = "open_follow_ups"
         const val CHANNEL = "explicit_followups"
         fun ensureScheduled(context: Context) {
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork("explicit-followups", ExistingPeriodicWorkPolicy.KEEP,
-                PeriodicWorkRequestBuilder<FollowUpWorker>(1, TimeUnit.HOURS).build())
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                "explicit-followups",
+                ExistingPeriodicWorkPolicy.KEEP,
+                PeriodicWorkRequestBuilder<FollowUpWorker>(1, TimeUnit.HOURS).build()
+            )
         }
     }
 }

@@ -29,7 +29,8 @@ object TestRepositoryModule {
         eventDao: EventDao,
         contactsSyncManager: ContactsSyncManager,
         database: com.idontremember.personalcrm.data.db.AppDatabase
-    ): ContactRepository = ContactRepository(contactDao, contactFactDao, eventDao, contactsSyncManager, database)
+    ): ContactRepository =
+        ContactRepository(contactDao, contactFactDao, eventDao, contactsSyncManager, database)
 
     @Provides
     @Singleton

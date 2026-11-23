@@ -1,7 +1,8 @@
 package com.idontremember.personalcrm.data.capture
 
-import org.junit.Assert.*
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 
 class CaptureLinksTest {
     private val note = "Met @Maya"
@@ -39,7 +40,11 @@ class CaptureLinksTest {
     }
 
     @Test fun choosingADifferentFactPersonDropsOnlyFormerPersonTokens() {
-        val tagged = linked.copy(tagNames = setOf("tea"), tokens = linked.tokens + InlineToken(10, 14, TokenTarget.Tag("tea")))
+        val tagged = linked.copy(
+            tagNames = setOf("tea"),
+            tokens =
+            linked.tokens + InlineToken(10, 14, TokenTarget.Tag("tea"))
+        )
         val changed = tagged.withFactMode(true).selectPerson(8)
         assertEquals(setOf(8L), changed.contactIds)
         assertEquals(listOf(InlineToken(10, 14, TokenTarget.Tag("tea"))), changed.tokens)

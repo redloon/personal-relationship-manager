@@ -1,15 +1,7 @@
 package com.idontremember.personalcrm.ui
 
-import android.content.Intent
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import com.idontremember.personalcrm.ui.components.exposeTestTags
-import com.idontremember.personalcrm.data.followups.FollowUpWorker
-import com.idontremember.personalcrm.ui.followups.FollowUpsOverlay
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
-import com.idontremember.personalcrm.data.recovery.RecoveryRepository
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -21,15 +13,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import com.idontremember.personalcrm.data.followups.FollowUpWorker
+import com.idontremember.personalcrm.data.recovery.RecoveryRepository
 import com.idontremember.personalcrm.data.settings.SettingsRepository
 import com.idontremember.personalcrm.data.settings.ThemeMode
+import com.idontremember.personalcrm.ui.components.exposeTestTags
+import com.idontremember.personalcrm.ui.followups.FollowUpsOverlay
 import com.idontremember.personalcrm.ui.navigation.AppNavigation
 import com.idontremember.personalcrm.ui.theme.PersonalCRMTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {

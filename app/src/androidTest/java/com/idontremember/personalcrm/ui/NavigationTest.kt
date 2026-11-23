@@ -1,12 +1,12 @@
 package com.idontremember.personalcrm.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.test.assertTextContains
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import org.junit.Before
@@ -82,6 +82,7 @@ class NavigationTest {
         composeTestRule.navigateToContactsTab()
         composeTestRule.onNodeWithTag("contacts_list_screen").assertIsDisplayed()
     }
+
     @Test
     fun reselectingHomeReturnsFromHistoryAndKeepsSearch() {
         composeTestRule.waitUntilTagDisplayed("dashboard_search")
@@ -90,7 +91,8 @@ class NavigationTest {
         composeTestRule.waitUntilTagDisplayed("events_list_screen")
         composeTestRule.onNodeWithTag("nav_tab_home").performClick()
         composeTestRule.waitUntilTagDisplayed("dashboard_search")
-        composeTestRule.onNodeWithTag("dashboard_search").assertTextContains("climbing", substring = true)
+        composeTestRule.onNodeWithTag(
+            "dashboard_search"
+        ).assertTextContains("climbing", substring = true)
     }
-
 }

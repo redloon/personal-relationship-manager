@@ -1,15 +1,17 @@
 package com.idontremember.personalcrm.ui.addevent
 
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.idontremember.personalcrm.data.capture.CaptureDraft
 import com.idontremember.personalcrm.data.capture.CaptureDraftStore
 import com.idontremember.personalcrm.data.capture.CaptureLinks
 import com.idontremember.personalcrm.data.capture.InlineToken
 import com.idontremember.personalcrm.data.capture.InlineTokens
+import com.idontremember.personalcrm.data.capture.PersonChoice
+import com.idontremember.personalcrm.data.capture.TagChoice
 import com.idontremember.personalcrm.data.capture.TokenTarget
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.idontremember.personalcrm.data.db.dao.ContactFactDao
 import com.idontremember.personalcrm.data.db.entity.Contact
 import com.idontremember.personalcrm.data.db.entity.Tag
@@ -18,21 +20,19 @@ import com.idontremember.personalcrm.data.repository.EventRepository
 import com.idontremember.personalcrm.data.repository.TagRepository
 import com.idontremember.personalcrm.data.settings.DefaultEventTime
 import com.idontremember.personalcrm.data.settings.SettingsRepository
-import com.idontremember.personalcrm.data.capture.PersonChoice
-import com.idontremember.personalcrm.data.capture.TagChoice
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 @HiltViewModel
 class AddEventViewModel @Inject constructor(
@@ -97,10 +97,19 @@ class AddEventViewModel @Inject constructor(
     private fun reconcilePeople(ids: Set<Long>) {
         val before = currentLinks()
         val after = before.reconcilePeople(ids)
-        if (after != before) { applyLinks(after); persistDraft() }
+        if (after != before) {
+            applyLinks(after)
+            persistDraft()
+        }
     }
 
-    fun initialize(eventId: Long? = null, factId: Long? = null, contactId: Long? = null, sharedText: String? = null, initialIsFact: Boolean = false) {
+    fun initialize(
+        eventId: Long? = null,
+        factId: Long? = null,
+        contactId: Long? = null,
+        sharedText: String? = null,
+        initialIsFact: Boolean = false
+    ) {
         loadJob?.cancel()
         existingEventId = eventId
         existingFactId = factId
@@ -118,15 +127,33 @@ class AddEventViewModel @Inject constructor(
         pendingIsFact = initialIsFact
         loadJob = viewModelScope.launch {
             try {
-                val existingEvent = eventId?.let { eventRepository.getEventWithMeta(it) ?: error("Note unavailable") }
+                val existingEvent = eventId?.let {
+                    eventRepository.getEventWithMeta(it)
+                        ?: error("Note unavailable")
+                }
                 val existingFact = factId?.let { factDao.getById(it) ?: error("Fact unavailable") }
                 val stored = drafts.loadCapture(draftKey)
                 if (stored != null) {
                     readDraft(stored)
                     _resumingDraft.value = true
-                    if (pendingSharedText != null || (eventId == null && factId == null &&
-                        ((contactId != null && _selectedContactIds.value != setOf(contactId)) ||
-                        ((contactId != null || initialIsFact) && _isFact.value != initialIsFact)))) _sharedDraftConflict.value = true
+                    if (pendingSharedText != null ||
+                        (
+                            eventId == null && factId == null &&
+                                (
+                                    (
+                                        contactId != null &&
+                                            _selectedContactIds.value != setOf(contactId)
+                                        ) ||
+                                        (
+                                            (contactId != null || initialIsFact) &&
+                                                _isFact.value != initialIsFact
+                                            )
+                                    )
+                            )
+                    ) {
+                        _sharedDraftConflict.value =
+                            true
+                    }
                 } else if (eventId != null) {
                     val meta = requireNotNull(existingEvent)
                     _noteText.value = meta.event.note.asTextField()
@@ -150,8 +177,13 @@ class AddEventViewModel @Inject constructor(
                 reconcilePeople(allPeople.first().map { it.id }.toSet())
                 acceptingChanges = true
                 _ready.value = true
-            } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { _saveFailed.value = true }
+            } catch (
+                e: CancellationException
+            ) {
+                throw e
+            } catch (_: Exception) {
+                _saveFailed.value = true
+            }
         }
     }
 
@@ -182,7 +214,11 @@ class AddEventViewModel @Inject constructor(
         _isFact.value = false
         _eventDate.value = when (settingsRepository.defaultEventTime.first()) {
             DefaultEventTime.NOW -> System.currentTimeMillis()
-            DefaultEventTime.LAST_USED -> settingsRepository.lastUsedEventTimestamp.first().takeIf { it > 0 } ?: System.currentTimeMillis()
+            DefaultEventTime.LAST_USED -> settingsRepository.lastUsedEventTimestamp.first().takeIf {
+                it >
+                    0
+            }
+                ?: System.currentTimeMillis()
         }
     }
 
@@ -198,7 +234,12 @@ class AddEventViewModel @Inject constructor(
         _saveFailed.value = false
         persistDraft()
     }
-    private fun currentLinks() = CaptureLinks(_isFact.value, _selectedContactIds.value, _selectedTagNames.value, _inlineTokens.value)
+    private fun currentLinks() = CaptureLinks(
+        _isFact.value,
+        _selectedContactIds.value,
+        _selectedTagNames.value,
+        _inlineTokens.value
+    )
     private fun applyLinks(links: CaptureLinks) {
         _isFact.value = links.isFact
         _selectedContactIds.value = links.contactIds
@@ -206,7 +247,15 @@ class AddEventViewModel @Inject constructor(
         _inlineTokens.value = links.tokens
     }
     fun onNoteChanged(value: TextFieldValue) = change {
-        applyLinks(currentLinks().edit(_noteText.value.text, value.text, _noteText.value.selection.start, _noteText.value.selection.end, value.selection.start))
+        applyLinks(
+            currentLinks().edit(
+                _noteText.value.text,
+                value.text,
+                _noteText.value.selection.start,
+                _noteText.value.selection.end,
+                value.selection.start
+            )
+        )
         _noteText.value = value
     }
     private fun insertToken(label: String, target: TokenTarget, start: Int, end: Int) {
@@ -229,16 +278,29 @@ class AddEventViewModel @Inject constructor(
     fun removeTag(name: String) = change { applyLinks(currentLinks().removeTag(name)) }
     fun onDateChanged(date: Long) = change { _eventDate.value = date }
     fun setFact(value: Boolean) = change {
-        if (existingEventId == null && existingFactId == null) applyLinks(currentLinks().withFactMode(value))
+        if (existingEventId == null &&
+            existingFactId == null
+        ) {
+            applyLinks(currentLinks().withFactMode(value))
+        }
     }
 
     private fun persistDraft() {
-        drafts.saveCapture(draftKey, CaptureDraft(_noteText.value.text, currentLinks(), _eventDate.value))
+        drafts.saveCapture(
+            draftKey,
+            CaptureDraft(_noteText.value.text, currentLinks(), _eventDate.value)
+        )
     }
 
     fun save() {
         val note = _noteText.value.text
-        if (note.isBlank() || !acceptingChanges || !_ready.value || _sharedDraftConflict.value || _saving.value || _saved.value || (_isFact.value && _selectedContactIds.value.size != 1)) return
+        if (note.isBlank() || !acceptingChanges || !_ready.value || _sharedDraftConflict.value ||
+            _saving.value ||
+            _saved.value ||
+            (_isFact.value && _selectedContactIds.value.size != 1)
+        ) {
+            return
+        }
         _saving.value = true
         _saveFailed.value = false
         viewModelScope.launch {
@@ -246,29 +308,68 @@ class AddEventViewModel @Inject constructor(
                 when {
                     existingFactId != null -> {
                         val fact = factDao.getById(existingFactId!!) ?: error("Fact unavailable")
-                        factDao.update(fact.copy(text = note, contactId = _selectedContactIds.value.single()))
+                        factDao.update(
+                            fact.copy(text = note, contactId = _selectedContactIds.value.single())
+                        )
                     }
                     existingEventId != null -> {
                         check(eventRepository.getEventById(existingEventId!!) != null)
-                        eventRepository.updateEvent(existingEventId!!, note, _selectedContactIds.value.toList(), _selectedTagNames.value.toList(), _eventDate.value, _inlineTokens.value)
+                        eventRepository.updateEvent(
+                            existingEventId!!,
+                            note,
+                            _selectedContactIds.value.toList(),
+                            _selectedTagNames.value.toList(),
+                            _eventDate.value,
+                            _inlineTokens.value
+                        )
                     }
-                    _isFact.value -> contactRepository.addFact(_selectedContactIds.value.single(), note)
-                    else -> eventRepository.createEvent(note, _selectedContactIds.value.toList(), _selectedTagNames.value.toList(), _eventDate.value, _inlineTokens.value)
+                    _isFact.value -> contactRepository.addFact(
+                        _selectedContactIds.value.single(),
+                        note
+                    )
+                    else -> eventRepository.createEvent(
+                        note,
+                        _selectedContactIds.value.toList(),
+                        _selectedTagNames.value.toList(),
+                        _eventDate.value,
+                        _inlineTokens.value
+                    )
                 }
                 acceptingChanges = false
                 drafts.remove(draftKey)
                 _saved.value = true
-                try { if (!_isFact.value) settingsRepository.setLastUsedEventTimestamp(_eventDate.value) }
-                catch (_: Exception) { /* Save has already committed. */ }
-            } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { _saveFailed.value = true }
-            finally { _saving.value = false }
+                try {
+                    if (!_isFact.value) {
+                        settingsRepository.setLastUsedEventTimestamp(
+                            _eventDate.value
+                        )
+                    }
+                } catch (
+                    _: Exception
+                ) { /* Save has already committed. */ }
+            } catch (
+                e: CancellationException
+            ) {
+                throw e
+            } catch (
+                _: Exception
+            ) {
+                _saveFailed.value = true
+            } finally {
+                _saving.value = false
+            }
         }
     }
 
     fun getAutocompleteTags() = tags.value.map { TagChoice(it.id, it.name) }
-    fun close() { acceptingChanges = false; loadJob?.cancel() }
-    fun discard() { close(); reset() }
+    fun close() {
+        acceptingChanges = false
+        loadJob?.cancel()
+    }
+    fun discard() {
+        close()
+        reset()
+    }
     fun reset(clearDraft: Boolean = true) {
         if (clearDraft) drafts.remove(draftKey)
         _inlineTokens.value = emptyList()

@@ -11,11 +11,13 @@ import signal
 import time
 import fcntl
 
-RUNTIME_FILES = ['runner.py', 'sessions.py', 'interaction.py', 'captures.py', 'requirements.txt']
+RUNTIME_FILES = ['runner.py', 'sessions.py', 'interaction.py', 'captures.py', 'instrumentation.py', 'recovery.py', 'requirements.txt']
 
 SOURCE = Path(__file__).resolve().parent
 ROOT = SOURCE.parent.parent
 DEST = Path.home() / '.local/share/android-tests-mcp'
+STOP_GRACE_SECONDS = 10
+STOP_KILL_SECONDS = 2
 
 
 def run(*args, **kwargs):
@@ -49,19 +51,19 @@ def process_identity(pid):
         return None
 
 
-def terminate_runner(pid, identity):
+def terminate_runner(pid, identity, signum=signal.SIGTERM):
     try:
         if callable(getattr(os, 'pidfd_open', None)) and callable(getattr(signal, 'pidfd_send_signal', None)):
             fd = os.pidfd_open(pid)
             try:
                 if process_identity(pid) == identity:
-                    signal.pidfd_send_signal(fd, signal.SIGTERM)
+                    signal.pidfd_send_signal(fd, signum)
             finally:
                 os.close(fd)
         elif process_identity(pid) == identity:
             # Some Python builds omit pidfd. Recheck command, owner and start
             # time immediately before signalling rather than trusting a PID.
-            os.kill(pid, signal.SIGTERM)
+            os.kill(pid, signum)
     except ProcessLookupError:
         pass
 
@@ -79,13 +81,27 @@ def stop_runners(config):
         for status in Path(config['state']).glob('*/status.json'):
             if json.loads(status.read_text()).get('status') == 'running':
                 raise RuntimeError(f'Finish/cancel the active job before refresh: {status}')
-    for pid, identity in matches.items():
-        terminate_runner(pid, identity)
-    end = time.monotonic()+10
-    while any(process_identity(pid) == identity for pid, identity in matches.items()):
-        if time.monotonic() > end:
-            raise RuntimeError('Runner did not exit after SIGTERM; refresh stopped')
-        time.sleep(.1)
+    # An idle MCP server can remain blocked on its gateway-owned stdin after
+    # SIGTERM. The refresh lock and persisted-job check above exclude live work;
+    # recheck the exact process identity before escalating, including via pidfd.
+    for signum, timeout in [(signal.SIGTERM, STOP_GRACE_SECONDS), (signal.SIGKILL, STOP_KILL_SECONDS)]:
+        if signum == signal.SIGKILL and matches:
+            print('Stopping idle runner(s) still blocked after SIGTERM: ' +
+                  ', '.join(str(pid) for pid in matches), flush=True)
+        for pid, identity in matches.items():
+            terminate_runner(pid, identity, signum)
+        end = time.monotonic()+timeout
+        while matches:
+            matches = {pid: identity for pid, identity in matches.items()
+                       if process_identity(pid) == identity}
+            if not matches:
+                return
+            if time.monotonic() >= end:
+                break
+            time.sleep(.1)
+    if matches:
+        raise RuntimeError('Installed runner(s) did not exit after SIGKILL: ' +
+                           ', '.join(str(pid) for pid in matches) + '; refresh stopped')
 
 
 def check_emulator(sdk, expected):
@@ -157,7 +173,7 @@ def main():
     if args.refresh_only:
         if args.sandbox:
             run('sbx', 'mcp', 'load', 'android-tests', '--sandbox', args.sandbox)
-        print('Runner refreshed. Reconnect host Codex MCP (or restart/resume Codex); confirm health version=4 and the new source hash before testing.')
+        print('Runner refreshed. Reconnect host Codex MCP (or restart/resume Codex); confirm health version=6 and the new source hash before testing.')
         return
     print('Review SDK licenses if prompted.', flush=True)
     run(sdk/'cmdline-tools/latest/bin/sdkmanager', '--licenses')

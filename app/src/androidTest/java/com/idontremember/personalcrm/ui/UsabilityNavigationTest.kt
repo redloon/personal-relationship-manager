@@ -1,22 +1,39 @@
 package com.idontremember.personalcrm.ui
 
-import androidx.compose.ui.test.*
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import com.idontremember.personalcrm.data.db.AppDatabase
-import com.idontremember.personalcrm.data.db.entity.*
+import com.idontremember.personalcrm.data.db.entity.Contact
+import com.idontremember.personalcrm.data.db.entity.ContactFact
+import com.idontremember.personalcrm.data.db.entity.Event
+import com.idontremember.personalcrm.data.db.entity.EventContact
+import com.idontremember.personalcrm.data.db.entity.EventTag
+import com.idontremember.personalcrm.data.db.entity.Tag
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import javax.inject.Inject
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import javax.inject.Inject
 
 /** End-to-end contracts between search, routes and read-only destinations. */
 @HiltAndroidTest
 class UsabilityNavigationTest {
-    @get:Rule(order = 0) val hilt = HiltAndroidRule(this)
-    @get:Rule(order = 1) val ui = createAndroidComposeRule<MainActivity>()
+    @get:Rule(order = 0)
+    val hilt = HiltAndroidRule(this)
+
+    @get:Rule(order = 1)
+    val ui = createAndroidComposeRule<MainActivity>()
+
     @Inject lateinit var db: AppDatabase
 
     @Before fun setup() {
@@ -52,7 +69,9 @@ class UsabilityNavigationTest {
     @Test fun historyFactOpensReaderBeforeExplicitEditing() {
         val factId = runBlocking {
             val person = db.contactDao().insert(Contact(displayName = "History Person"))
-            db.contactFactDao().insert(ContactFact(contactId = person, text = "Collects antique maps"))
+            db.contactFactDao().insert(
+                ContactFact(contactId = person, text = "Collects antique maps")
+            )
         }
         ui.navigateToHistory()
         ui.waitUntilTagDisplayed("recall_fact_$factId", 10_000)
@@ -61,13 +80,20 @@ class UsabilityNavigationTest {
         ui.onNodeWithTag("add_event_sheet").assertDoesNotExist()
         ui.onNodeWithTag("fact_reader_edit").performClick()
         ui.waitUntilTagDisplayed("add_event_sheet", 10_000)
-        ui.onNodeWithTag("note_text_field").assertTextContains("Collects antique maps", substring = true)
+        ui.onNodeWithTag(
+            "note_text_field"
+        ).assertTextContains("Collects antique maps", substring = true)
     }
 
     @Test fun peopleDirectoryKeepsItsQueryAcrossNavigation() {
         runBlocking {
             val person = db.contactDao().insert(Contact(displayName = "Maya Context"))
-            val event = db.eventDao().insert(Event(note = "We talked for ages. ".repeat(30) + "Priya is recovering well."))
+            val event = db.eventDao().insert(
+                Event(
+                    note =
+                    "We talked for ages. ".repeat(30) + "Priya is recovering well."
+                )
+            )
             db.eventDao().insertEventContact(EventContact(event, person))
         }
         ui.navigateToContactsTab()
@@ -76,7 +102,14 @@ class UsabilityNavigationTest {
         ui.onNodeWithTag("contact_list_item").assertTextContains("Maya", substring = true)
         ui.onNodeWithTag("contact_list_item").performClick()
         ui.waitUntilTagDisplayed("person_search", 10_000)
-        ui.onNodeWithTag("person_search").assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("")))
+        ui.onNodeWithTag(
+            "person_search"
+        ).assert(
+            SemanticsMatcher.expectValue(
+                androidx.compose.ui.semantics.SemanticsProperties.EditableText,
+                androidx.compose.ui.text.AnnotatedString("")
+            )
+        )
         ui.runOnUiThread { ui.activity.onBackPressedDispatcher.onBackPressed() }
         ui.waitUntilTagDisplayed("search_field", 10_000)
         ui.onNodeWithTag("search_field").assertTextContains("Maya", substring = true)

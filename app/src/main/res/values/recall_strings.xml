@@ -2,14 +2,11 @@
     <string name="recall_home">Home</string>
     <string name="recall_people">People</string>
     <string name="recall_search">Search anything</string>
-    <string name="recall_people_search">Search names or remembered details</string>
     <string name="recall_person_search">Search this person’s notes</string>
     <string name="recall_recent">Recently remembered</string>
-    <string name="recall_notes">Notes</string>
     <string name="recall_add_note">Add a note</string>
     <string name="recall_add_person">Add person</string>
     <string name="recall_person_name">Name</string>
-    <string name="recall_history">All notes</string>
     <string name="recall_start">Remember something about someone</string>
     <string name="recall_start_detail">Add a note or a fact. You can find it here later, even if you forget the name.</string>
     <string name="recall_no_results">Nothing matches yet. Try another detail or a shorter search.</string>
@@ -20,9 +17,6 @@
     <string name="recall_fact">Fact</string>
     <string name="recall_event">Note</string>
     <string name="recall_followup">Follow-up</string>
-    <string name="recall_import">Import Android contacts</string>
-    <string name="recall_import_hint">Optional. You can also add someone with just a name.</string>
-    <string name="recall_create_failed">Couldn’t add this person. Try again.</string>
     <string name="recall_management_search">Find a person</string>
     <string name="recall_tag_search">Find a tag</string>
     <string name="recall_link_android">Link Android contact</string>
@@ -31,11 +25,8 @@
     <string name="recall_link_failed">Couldn’t link this contact. Try again.</string>
     <string name="recall_fact_deleted">Fact moved to Recently deleted</string>
     <string name="recall_undo">Undo</string>
-    <string name="recall_retry">Try again</string>
-    <string name="recall_profile_context_empty">Add something you’d like to remember about this person.</string>
     <string name="recall_more_facts">See all facts</string>
     <string name="recall_less_facts">Show fewer facts</string>
-    <string name="recall_rename">Edit name</string>
     <string name="recall_load_failed">Couldn’t load your notes. Try again.</string>
     <string name="recall_action_failed">Couldn’t save that change. Try again.</string>
 </resources>

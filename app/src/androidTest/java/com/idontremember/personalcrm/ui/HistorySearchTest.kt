@@ -5,17 +5,17 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import com.idontremember.personalcrm.data.repository.EventRepository
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import javax.inject.Inject
 
 /**
  * UI tests for the Events search feature (filter events by note text).
@@ -74,7 +74,9 @@ class HistorySearchTest {
     @Test
     fun eventsTab_showsSeededEvents() {
         navigateToEvents()
-        composeTestRule.onNodeWithText("Coffee with Alice about the new project").assertIsDisplayed()
+        composeTestRule.onNodeWithText(
+            "Coffee with Alice about the new project"
+        ).assertIsDisplayed()
         composeTestRule.onNodeWithText("Phone call with Bob re: contract").assertIsDisplayed()
     }
 
@@ -88,7 +90,9 @@ class HistorySearchTest {
             composeTestRule.onAllNodesWithText("Phone call with Bob re: contract")
                 .fetchSemanticsNodes().isEmpty()
         }
-        composeTestRule.onNodeWithText("Coffee with Alice about the new project").assertIsDisplayed()
+        composeTestRule.onNodeWithText(
+            "Coffee with Alice about the new project"
+        ).assertIsDisplayed()
     }
 
     @Test
@@ -115,7 +119,9 @@ class HistorySearchTest {
         composeTestRule.waitUntilTagDisplayed("events_empty_state")
         composeTestRule.onNodeWithTag("clear_events_search_button").performClick()
         composeTestRule.waitUntilTagDisplayed("events_list")
-        composeTestRule.onNodeWithText("Coffee with Alice about the new project").assertIsDisplayed()
+        composeTestRule.onNodeWithText(
+            "Coffee with Alice about the new project"
+        ).assertIsDisplayed()
         composeTestRule.onNodeWithText("Phone call with Bob re: contract").assertIsDisplayed()
         composeTestRule.onNodeWithTag("clear_events_search_button").assertDoesNotExist()
     }

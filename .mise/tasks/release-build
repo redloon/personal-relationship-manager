@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+#MISE description="Verify and export an immutable signed local release bundle"
+set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/task-env.sh"
+source "$TASK_ROOT/scripts/android-sdk-env.sh"
+source "$TASK_ROOT/.mise/lib/java-env.sh"
+mkdir -p "$TASK_ROOT/.gradle"
+exec 9>"$TASK_ROOT/.gradle/agent-build.lock"
+flock --timeout "${BUILD_LOCK_TIMEOUT:-300}" 9
+export CRM_BUILD_LOCK_FD=9
+exec python3 "$TASK_ROOT/scripts/releases.py" build "$@"

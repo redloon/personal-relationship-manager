@@ -9,11 +9,22 @@ Executable tasks in `.mise/tasks/` are the source of truth. Use `mise run TASK`,
 | `build` | `bash .mise/tasks/build` | Build the debug app APK |
 | `unit` | `bash .mise/tasks/unit` | Run JVM tests without an emulator |
 | `gradle` | `bash .mise/tasks/gradle TASK [OPTIONS]` | Run Gradle with project SDK discovery |
+| `verify` | `bash .mise/tasks/verify` | Android `check` plus complete tooling validation |
+| `staged-check` | `bash .mise/tasks/staged-check` | Cheap staged syntax and whitespace checks |
+| `environment-check` | `bash .mise/tasks/environment-check` | Read-only hooks, tool versions, SDK and protocol diagnostics |
+| `tooling-setup` | `bash .mise/tasks/tooling-setup` | Provision pinned Python 3.12.15 and protocol dependencies with uv |
 | `check` | `bash .mise/tasks/check` | JVM tests, app and test APKs, lint, and static checks |
+| `release-version` | `bash .mise/tasks/release-version patch\|minor\|major` | Atomically bump SemVer and Android code |
+| `release-build` | `bash .mise/tasks/release-build` | Verify and export a signed local bundle; see [releases](releases.md) |
+| `test-stage-app` | `bash .mise/tasks/test-stage-app [BUNDLE_APK]` | Stage an app only for runner v6 recovery |
 | `test-stage` | `bash .mise/tasks/test-stage` | Build and hash APKs for Android MCP |
 | `hooks-install` | `bash .mise/tasks/hooks-install` | Install the project Git hooks |
 | `qa-report` | `bash .mise/tasks/qa-report MANIFEST [--evidence JSON]` | Generate a verified screenshot/video review pack |
 | `tooling-test` | `bash .mise/tasks/tooling-test` | Test task, hook, and development-tool behavior |
+
+Run `tooling-setup` once (requires [uv](https://docs.astral.sh/uv/)); it installs the hash-locked protocol dependencies in `ignored/tooling-venv`. `tooling-test` requires this environment and includes every script suite and the real stdio MCP protocol test; missing protocol dependencies fail the gate. `environment-check` diagnoses drift without modifying configuration.
+
+Run `staged-check` before expensive validation. It parses index contents and checks whitespace without Gradle or rewriting files. Hooks also run read-only formatting via the full Android gate on coherent staged inputs.
 
 Run a focused JVM test during implementation:
 
@@ -21,7 +32,16 @@ Run a focused JVM test during implementation:
 bash .mise/tasks/unit --tests '*CaptureContextTest'
 ```
 
-`check` combines JVM tests, both APK builds, and lint in one Gradle invocation, then performs static checks. Any failed step fails the check. Gradle tasks serialize per checkout and reject source changes during execution, including exported Room schemas. If compilation generates a changed schema, review it and rerun against the stable inputs. The lock does not stop editors; workers must still coordinate. This check does not run instrumented tests or prove that a screen works on Android.
+All 18 JVM test classes use JUnit 5; Android/Compose tests retain JUnit 4. JVM classes and methods shuffle sequentially with JUnit's built-in orderers. Every test invocation prints its seed, which is a Gradle test input (including with configuration caching). Replay with:
+
+```bash
+bash .mise/tasks/unit -PtestSeed=101 --tests '*CaptureDraftCodecTest'
+# TEST_SEED=101 is equivalent. Add -PtestOrderLog to print executed identities.
+```
+
+A repeated explicit seed may reuse an up-to-date/cached result; use the test task’s `--rerun` option when proving ordering. Fresh invocations generate a new seed. `.editorconfig` defines formatting; pinned tool versions live in `gradle/libs.versions.toml`. The ktlint baseline is empty; reviewed Android exceptions live in `app/lint-baseline.xml`; new findings block `check`. See [the baseline review](testing-baselines.md). Do not regenerate baselines to hide new violations or run a formatter from a hook.
+
+`check` combines JVM tests, both APK builds, Android/Slack Compose lint, and ktlint in one Gradle invocation, then performs static checks. Any failed step fails the check. Gradle tasks serialize per checkout and reject source changes during execution, including exported Room schemas. If compilation generates a changed schema, review it and rerun against the stable inputs. The lock does not stop editors; workers must still coordinate. Scheduled Hilt compilation finishes before lint reads generated Java test sources, preventing source-directory replacement during analysis. This check does not run instrumented tests or prove that a screen works on Android.
 
 Legacy build/test scripts such as `scripts/gradle.sh` and `scripts/pre-launch-check.sh` forward to the canonical tasks. Do not maintain a second implementation there. The `hooks-install` task uses `scripts/install-hooks.sh` as its installer helper. Legacy `test` / `test-class` helpers run a local host emulator and reject Docker execution; sandbox development uses Android MCP exclusively.
 
@@ -84,8 +104,7 @@ regression gate; exploratory evidence is additional validation.
 
 The integration owner holds one session through terminal cleanup before staging
 or running tests. Tooling checks include SDK-free host-runner tests. The real
-stdio protocol test also runs when the host-mcp Python requirements are installed;
-otherwise unittest reports its explicit skip. No host SDK/emulator is needed for
+stdio protocol test is mandatory in `tooling-test`, using the pinned sandbox environment. No host SDK/emulator is needed for
 that fake-SDK protocol test.
 
 When reading a report written by a host agent through the shared filesystem,

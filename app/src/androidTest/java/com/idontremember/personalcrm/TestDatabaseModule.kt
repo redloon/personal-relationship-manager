@@ -2,13 +2,13 @@ package com.idontremember.personalcrm
 
 import android.content.Context
 import androidx.room.Room
+import com.idontremember.personalcrm.data.contacts.ContactsSyncManager
 import com.idontremember.personalcrm.data.db.AppDatabase
-import com.idontremember.personalcrm.data.db.dao.ProfileLinksDao
 import com.idontremember.personalcrm.data.db.dao.ContactDao
 import com.idontremember.personalcrm.data.db.dao.ContactFactDao
 import com.idontremember.personalcrm.data.db.dao.EventDao
+import com.idontremember.personalcrm.data.db.dao.ProfileLinksDao
 import com.idontremember.personalcrm.data.db.dao.TagDao
-import com.idontremember.personalcrm.data.contacts.ContactsSyncManager
 import com.idontremember.personalcrm.data.repository.ContactRepository
 import com.idontremember.personalcrm.data.repository.EventRepository
 import com.idontremember.personalcrm.data.repository.TagRepository
@@ -28,12 +28,11 @@ object TestDatabaseModule {
 
     @Provides
     @Singleton
-    fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
-        return Room.inMemoryDatabaseBuilder(
+    fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
+        Room.inMemoryDatabaseBuilder(
             context,
             AppDatabase::class.java
         ).allowMainThreadQueries().build()
-    }
 
     @Provides
     fun provideProfileLinksDao(db: AppDatabase): ProfileLinksDao = db.profileLinksDao()

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+#MISE description="Bump SemVer and Android version code atomically"
+set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/task-env.sh"
+mkdir -p "$TASK_ROOT/.gradle"
+exec 9>"$TASK_ROOT/.gradle/agent-build.lock"
+flock --timeout "${BUILD_LOCK_TIMEOUT:-300}" 9
+export CRM_BUILD_LOCK_FD=9
+exec python3 "$TASK_ROOT/scripts/releases.py" version "$@"

@@ -19,11 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.idontremember.personalcrm.R
 
 @Composable
-fun TagChip(
-    name: String,
-    modifier: Modifier = Modifier,
-    onRemove: (() -> Unit)? = null
-) {
+fun TagChip(name: String, modifier: Modifier = Modifier, onRemove: (() -> Unit)? = null) {
     if (onRemove != null) {
         InputChip(
             selected = true,

@@ -21,7 +21,6 @@
     <string name="capture_loading">Opening note…</string>
     <string name="capture_unavailable">This note could not be opened. Close and try again.</string>
     <string name="capture_date">Date</string>
-    <string name="capture_time">Time</string>
     <string name="capture_empty_people">Add someone by name. No phone number needed.</string>
     <string name="capture_shortcut_long">Add a note about someone</string>
     <string name="capture_deleted_note">Note moved to Recently deleted</string>

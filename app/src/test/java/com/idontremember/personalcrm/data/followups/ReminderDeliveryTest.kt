@@ -2,8 +2,11 @@ package com.idontremember.personalcrm.data.followups
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
-import org.junit.Assert.*
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.fail
+import org.junit.jupiter.api.Test
 
 class ReminderDeliveryTest {
     @Test fun failedPostRestoresClaimsAndPreviousDay() = runBlocking {
@@ -22,7 +25,13 @@ class ReminderDeliveryTest {
     }
 
     @Test fun permissionRevokedAfterClaimRestoresClaimsWithoutLosingConcurrentEdit() = runBlocking {
-        val state = State().apply { afterClaim = { text = "Edited while scheduling"; enabled = false } }
+        val state = State().apply {
+            afterClaim =
+                {
+                    text = "Edited while scheduling"
+                    enabled = false
+                }
+        }
         assertEquals(DeliveryOutcome.SKIPPED, state.deliver())
         assertNull(state.notifiedAt)
         assertEquals("Edited while scheduling", state.text)
@@ -47,7 +56,10 @@ class ReminderDeliveryTest {
 
     @Test fun cancellationRestoresClaimBeforePropagating() = runBlocking {
         val state = State().apply { postError = CancellationException("Stopped") }
-        try { state.deliver(); fail("Expected cancellation") } catch(_: CancellationException) { }
+        try {
+            state.deliver()
+            fail("Expected cancellation")
+        } catch (_: CancellationException) { }
         assertNull(state.notifiedAt)
         assertEquals("yesterday", state.day)
     }
@@ -72,8 +84,16 @@ class ReminderDeliveryTest {
                 afterClaim?.invoke(this)
                 true
             },
-            post = { postError?.let { throw it }; posts++; reserved = false },
-            release = { notifiedAt = null; day = previousDay; reserved = false }
+            post = {
+                postError?.let { throw it }
+                posts++
+                reserved = false
+            },
+            release = {
+                notifiedAt = null
+                day = previousDay
+                reserved = false
+            }
         )
     }
 }

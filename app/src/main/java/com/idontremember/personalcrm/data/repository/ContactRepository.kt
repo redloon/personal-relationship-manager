@@ -1,25 +1,25 @@
 package com.idontremember.personalcrm.data.repository
 
+import androidx.room.withTransaction
 import com.idontremember.personalcrm.data.capture.ContactNames
 import com.idontremember.personalcrm.data.capture.InlineTokens
 import com.idontremember.personalcrm.data.capture.TokenTarget
-import androidx.room.withTransaction
-import com.idontremember.personalcrm.data.db.AppDatabase
-import com.idontremember.personalcrm.data.db.rewriteEventTokens
 import com.idontremember.personalcrm.data.contacts.ContactsSyncManager
 import com.idontremember.personalcrm.data.contacts.PeopleDeletionPreview
-import com.idontremember.personalcrm.data.contacts.previewPeopleDeletion
 import com.idontremember.personalcrm.data.contacts.deletePeople
+import com.idontremember.personalcrm.data.contacts.previewPeopleDeletion
+import com.idontremember.personalcrm.data.db.AppDatabase
 import com.idontremember.personalcrm.data.db.dao.ContactDao
 import com.idontremember.personalcrm.data.db.dao.ContactFactDao
 import com.idontremember.personalcrm.data.db.dao.EventDao
-import com.idontremember.personalcrm.data.db.entity.canDelete
 import com.idontremember.personalcrm.data.db.entity.Contact
 import com.idontremember.personalcrm.data.db.entity.ContactFact
 import com.idontremember.personalcrm.data.db.entity.Event
-import kotlinx.coroutines.flow.Flow
+import com.idontremember.personalcrm.data.db.entity.canDelete
+import com.idontremember.personalcrm.data.db.rewriteEventTokens
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.flow.Flow
 
 @Singleton
 class ContactRepository @Inject constructor(
@@ -44,16 +44,16 @@ class ContactRepository @Inject constructor(
     fun getContactsIncludingHidden(): Flow<List<Contact>> = contactDao.getAllIncludingHidden()
 
     /** Returns only changed IDs, so Undo cannot affect unrelated profiles. */
-    suspend fun setPeopleHidden(ids: Set<Long>, hidden: Boolean): Set<Long> = database.withTransaction {
-        val changed = linkedSetOf<Long>()
-        for (chunk in ids.toList().chunked(900)) {
-            val changing = contactDao.idsChangingVisibility(chunk, hidden)
-            if (changing.isNotEmpty()) contactDao.setHidden(changing, hidden)
-            changed.addAll(changing)
+    suspend fun setPeopleHidden(ids: Set<Long>, hidden: Boolean): Set<Long> =
+        database.withTransaction {
+            val changed = linkedSetOf<Long>()
+            for (chunk in ids.toList().chunked(900)) {
+                val changing = contactDao.idsChangingVisibility(chunk, hidden)
+                if (changing.isNotEmpty()) contactDao.setHidden(changing, hidden)
+                changed.addAll(changing)
+            }
+            changed
         }
-        changed
-    }
-
 
     suspend fun getContactByAndroidId(id: Long): Contact? = contactDao.getByAndroidContactId(id)
 
@@ -63,12 +63,18 @@ class ContactRepository @Inject constructor(
 
     suspend fun syncContacts(): ContactsSyncManager.SyncResult = contactsSyncManager.syncContacts()
 
-    suspend fun createLocalContact(name: String, allowDuplicate: Boolean = false): Long = database.withTransaction {
-        val trimmed = name.trim()
-        require(trimmed.isNotEmpty()) { "A name is required" }
-        if (!allowDuplicate) contactDao.getAllIncludingHiddenOnce().firstOrNull { !it.isHidden && ContactNames.key(it.displayName) == ContactNames.key(trimmed) }?.let { return@withTransaction it.id }
-        contactDao.insert(Contact(displayName = trimmed, deletionAllowed = true))
-    }
+    suspend fun createLocalContact(name: String, allowDuplicate: Boolean = false): Long =
+        database.withTransaction {
+            val trimmed = name.trim()
+            require(trimmed.isNotEmpty()) { "A name is required" }
+            if (!allowDuplicate) {
+                contactDao.getAllIncludingHiddenOnce().firstOrNull {
+                    !it.isHidden &&
+                        ContactNames.key(it.displayName) == ContactNames.key(trimmed)
+                }?.let { return@withTransaction it.id }
+            }
+            contactDao.insert(Contact(displayName = trimmed, deletionAllowed = true))
+        }
 
     suspend fun renameLocalContact(id: Long, name: String) {
         val trimmed = name.trim()
@@ -76,7 +82,9 @@ class ContactRepository @Inject constructor(
         database.withTransaction {
             val person = contactDao.getById(id) ?: error("Person unavailable")
             require(person.androidContactId == null) { "Edit linked names in Android Contacts" }
-            contactDao.update(person.copy(displayName = trimmed, updatedAt = System.currentTimeMillis()))
+            contactDao.update(
+                person.copy(displayName = trimmed, updatedAt = System.currentTimeMillis())
+            )
         }
     }
 
@@ -87,34 +95,74 @@ class ContactRepository @Inject constructor(
         database.withTransaction {
             val keeper = contactDao.getById(appContactId) ?: error("Person unavailable")
             val imported = contactDao.getByAndroidContactId(androidId)
-            if (imported != null && imported.id != appContactId) consolidate(appContactId, imported.id)
-            contactDao.update(keeper.copy(deletionAllowed = false, displayName = provider.displayName, androidContactId = androidId, lookupKey = provider.lookupKey,
-                phoneNumber = provider.phoneNumber, email = provider.email, photoUri = provider.photoUri,
-                updatedAt = System.currentTimeMillis()))
+            if (imported != null &&
+                imported.id != appContactId
+            ) {
+                consolidate(appContactId, imported.id)
+            }
+            contactDao.update(
+                keeper.copy(
+                    deletionAllowed = false,
+                    displayName = provider.displayName,
+                    androidContactId = androidId,
+                    lookupKey = provider.lookupKey,
+                    phoneNumber = provider.phoneNumber,
+                    email = provider.email,
+                    photoUri = provider.photoUri,
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
         }
     }
 
     private fun consolidate(keep: Long, remove: Long) {
         val sql = database.openHelper.writableDatabase
-        sql.execSQL("UPDATE contact_facts SET contact_id = ? WHERE contact_id = ?", arrayOf(keep, remove))
-        sql.execSQL("UPDATE follow_ups SET contact_id = ? WHERE contact_id = ?", arrayOf(keep, remove))
-        sql.execSQL("INSERT OR IGNORE INTO event_contacts(event_id, contact_id) SELECT event_id, ? FROM event_contacts WHERE contact_id = ?", arrayOf(keep, remove))
-        sql.execSQL("INSERT OR IGNORE INTO contact_tags(contact_id, tag_id) SELECT ?, tag_id FROM contact_tags WHERE contact_id = ?", arrayOf(keep, remove))
+        sql.execSQL(
+            "UPDATE contact_facts SET contact_id = ? WHERE contact_id = ?",
+            arrayOf(keep, remove)
+        )
+        sql.execSQL(
+            "UPDATE follow_ups SET contact_id = ? WHERE contact_id = ?",
+            arrayOf(keep, remove)
+        )
+        sql.execSQL(
+            "INSERT OR IGNORE INTO event_contacts(event_id, contact_id) SELECT event_id, ? FROM event_contacts WHERE contact_id = ?",
+            arrayOf(keep, remove)
+        )
+        sql.execSQL(
+            "INSERT OR IGNORE INTO contact_tags(contact_id, tag_id) SELECT ?, tag_id FROM contact_tags WHERE contact_id = ?",
+            arrayOf(keep, remove)
+        )
         val links = mutableListOf<Triple<Long, Long, String>>()
-        sql.query("SELECT contact_a, contact_b, label FROM relationships WHERE contact_a = ? OR contact_b = ?", arrayOf(remove, remove)).use { c ->
-            while(c.moveToNext()) {
-                val a = if(c.getLong(0) == remove) keep else c.getLong(0)
-                val b = if(c.getLong(1) == remove) keep else c.getLong(1)
-                if(a != b) links += Triple(minOf(a,b), maxOf(a,b), c.getString(2))
+        sql.query(
+            "SELECT contact_a, contact_b, label FROM relationships WHERE contact_a = ? OR contact_b = ?",
+            arrayOf(remove, remove)
+        ).use { c ->
+            while (c.moveToNext()) {
+                val a = if (c.getLong(0) == remove) keep else c.getLong(0)
+                val b = if (c.getLong(1) == remove) keep else c.getLong(1)
+                if (a != b) links += Triple(minOf(a, b), maxOf(a, b), c.getString(2))
             }
         }
-        for((a,b,label) in links) sql.execSQL("INSERT OR IGNORE INTO relationships(contact_a, contact_b, label) VALUES (?, ?, ?)", arrayOf<Any>(a,b,label))
+        for ((a, b, label) in links) {
+            sql.execSQL(
+                "INSERT OR IGNORE INTO relationships(contact_a, contact_b, label) VALUES (?, ?, ?)",
+                arrayOf<Any>(a, b, label)
+            )
+        }
         database.rewriteEventTokens { tokens ->
-            tokens.map { if (it.target == TokenTarget.Person(remove)) it.copy(target = TokenTarget.Person(keep)) else it }
+            tokens.map {
+                if (it.target ==
+                    TokenTarget.Person(remove)
+                ) {
+                    it.copy(target = TokenTarget.Person(keep))
+                } else {
+                    it
+                }
+            }
         }
         sql.execSQL("DELETE FROM contacts WHERE id = ?", arrayOf(remove))
     }
-
 
     suspend fun previewPeopleDeletion(ids: Set<Long>) = database.previewPeopleDeletion(ids)
     suspend fun deletePeople(preview: PeopleDeletionPreview) = database.deletePeople(preview)
@@ -124,29 +172,33 @@ class ContactRepository @Inject constructor(
     fun getFactsForContact(contactId: Long): Flow<List<ContactFact>> =
         contactFactDao.getByContactId(contactId)
 
-    suspend fun addFact(contactId: Long, text: String): Long {
-        return contactFactDao.insert(
-            ContactFact(contactId = contactId, text = text)
-        )
-    }
+    suspend fun addFact(contactId: Long, text: String): Long = contactFactDao.insert(
+        ContactFact(contactId = contactId, text = text)
+    )
 
-    suspend fun deleteFact(fact: ContactFact) = contactFactDao.update(fact.copy(deletedAt = System.currentTimeMillis()))
+    suspend fun deleteFact(fact: ContactFact) =
+        contactFactDao.update(fact.copy(deletedAt = System.currentTimeMillis()))
 
     suspend fun deleteFactById(id: Long) {
         database.withTransaction {
-            database.openHelper.writableDatabase.execSQL("UPDATE contact_facts SET deleted_at = ? WHERE id = ?", arrayOf(System.currentTimeMillis(), id))
+            database.openHelper.writableDatabase.execSQL(
+                "UPDATE contact_facts SET deleted_at = ? WHERE id = ?",
+                arrayOf(System.currentTimeMillis(), id)
+            )
         }
     }
 
     suspend fun updateFact(id: Long, text: String) {
         require(text.isNotBlank())
         database.withTransaction {
-            database.openHelper.writableDatabase.execSQL("UPDATE contact_facts SET text = ? WHERE id = ? AND deleted_at IS NULL", arrayOf<Any>(text, id))
+            database.openHelper.writableDatabase.execSQL(
+                "UPDATE contact_facts SET text = ? WHERE id = ? AND deleted_at IS NULL",
+                arrayOf<Any>(text, id)
+            )
         }
     }
 
     // --- Events for a contact ---
 
-    fun getEventsForContact(contactId: Long): Flow<List<Event>> =
-        eventDao.getByContactId(contactId)
+    fun getEventsForContact(contactId: Long): Flow<List<Event>> = eventDao.getByContactId(contactId)
 }

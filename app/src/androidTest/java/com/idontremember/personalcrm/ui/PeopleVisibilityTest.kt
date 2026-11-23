@@ -1,35 +1,55 @@
 package com.idontremember.personalcrm.ui
 
-import androidx.compose.ui.test.*
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
 import com.idontremember.personalcrm.data.db.AppDatabase
 import com.idontremember.personalcrm.data.db.entity.Contact
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import javax.inject.Inject
 import kotlinx.coroutines.runBlocking
-import org.junit.Assert.*
 import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import javax.inject.Inject
 
 @HiltAndroidTest
 class PeopleVisibilityTest {
-    @get:Rule(order = 0) val hilt = HiltAndroidRule(this)
-    @get:Rule(order = 1) val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule(order = 0)
+    val hilt = HiltAndroidRule(this)
+
+    @get:Rule(order = 1)
+    val compose = createAndroidComposeRule<MainActivity>()
+
     @Inject lateinit var db: AppDatabase
     private var maya = 0L
     private var sam = 0L
 
-    @After fun cleanup() { db.clearAllTables() }
+    @After fun cleanup() {
+        db.clearAllTables()
+    }
 
     @Before fun setup() {
         hilt.inject()
         runBlocking {
             db.clearAllTables()
             maya = db.contactDao().insert(Contact(displayName = "Maya Chen", updatedAt = 20))
-            sam = db.contactDao().insert(Contact(displayName = "Sam Lee", email = "sam@example.com"))
+            sam =
+                db.contactDao().insert(Contact(displayName = "Sam Lee", email = "sam@example.com"))
         }
         compose.navigateToContactsTab()
         compose.waitUntilTagDisplayed("person_row_$maya")
@@ -76,20 +96,24 @@ class PeopleVisibilityTest {
 
     @Test fun failedHideKeepsSelectionAndRetryChangesOnlyVisibility() {
         val sql = db.openHelper.writableDatabase
-        sql.execSQL("CREATE TRIGGER fail_visibility BEFORE UPDATE OF is_hidden ON contacts BEGIN SELECT RAISE(ABORT, 'Test failure'); END")
+        sql.execSQL(
+            "CREATE TRIGGER fail_visibility BEFORE UPDATE OF is_hidden ON contacts BEGIN SELECT RAISE(ABORT, 'Test failure'); END"
+        )
         try {
             compose.onNodeWithTag("person_row_$maya").performTouchInput { longClick() }
             compose.onNodeWithTag("people_visibility_action").performClick()
             compose.waitUntilTagDisplayed("people_visibility_retry")
             compose.onNodeWithTag("people_selection_count").assertTextEquals("1 selected")
             assertFalse(runBlocking { db.contactDao().getById(maya)!!.isHidden })
-        } finally { sql.execSQL("DROP TRIGGER fail_visibility") }
+        } finally {
+            sql.execSQL("DROP TRIGGER fail_visibility")
+        }
         compose.onNodeWithTag("people_visibility_retry").performClick()
         compose.waitUntil(5_000) { runBlocking { db.contactDao().getById(maya)!!.isHidden } }
         assertFalse(runBlocking { db.contactDao().getById(sam)!!.isHidden })
     }
 
-    @Test fun autocompleteExcludesHiddenPeopleAndKeepsAlreadySelectedNames(): Unit {
+    @Test fun autocompleteExcludesHiddenPeopleAndKeepsAlreadySelectedNames() {
         runBlocking { db.contactDao().setHidden(listOf(maya), true) }
         compose.onNodeWithTag("nav_tab_home").performClick()
         compose.onNodeWithTag("add_event_fab").performClick()
@@ -97,7 +121,9 @@ class PeopleVisibilityTest {
         compose.onNodeWithTag("note_text_field").performTextInput("Met @Maya")
         compose.onNodeWithText("Maya Chen").assertDoesNotExist()
         compose.onNodeWithTag("note_text_field").performTextReplacement("Met @Sam")
-        compose.waitUntil(5_000) { compose.onAllNodesWithText("Sam Lee").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("Sam Lee").fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithText("Sam Lee").performClick()
         runBlocking { db.contactDao().setHidden(listOf(sam), true) }
         compose.onNodeWithText("@Sam Lee").assertIsDisplayed()
@@ -121,8 +147,10 @@ class PeopleVisibilityTest {
             assertTrue("The regression must run with the keyboard open", ime > 0)
             keyboardTop = decor.height - ime
         }
-        assertTrue("Undo must be above the keyboard: ${undo.boundsInWindow}, keyboard top $keyboardTop",
-            undo.boundsInWindow.bottom <= keyboardTop + 1)
+        assertTrue(
+            "Undo must be above the keyboard: ${undo.boundsInWindow}, keyboard top $keyboardTop",
+            undo.boundsInWindow.bottom <= keyboardTop + 1
+        )
     }
 
     @Test fun undoAndPickersRespectVisibility() {

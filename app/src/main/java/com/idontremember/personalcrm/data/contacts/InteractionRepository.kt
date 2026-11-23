@@ -1,16 +1,23 @@
 package com.idontremember.personalcrm.data.contacts
 
 import com.idontremember.personalcrm.data.db.AppDatabase
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.*
 import java.time.Clock
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.merge
 
 /** Cold ticks stop with their screen's subscription; the clock is injectable for boundary tests. */
 fun minuteTicks(clock: Clock) = flow {
-    while (true) { emit(clock.millis()); delay(60_000) }
+    while (true) {
+        emit(clock.millis())
+        delay(60_000)
+    }
 }
 
 @Singleton

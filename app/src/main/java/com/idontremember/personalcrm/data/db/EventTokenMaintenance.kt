@@ -14,6 +14,10 @@ internal fun AppDatabase.rewriteEventTokens(transform: (List<InlineToken>) -> Li
             if (after != before) updates += cursor.getLong(0) to InlineTokens.encode(after)
         }
     }
-    for ((id, tokens) in updates) openHelper.writableDatabase.execSQL(
-        "UPDATE events SET inline_tokens = ? WHERE id = ?", arrayOf<Any>(tokens, id))
+    for ((id, tokens) in updates) {
+        openHelper.writableDatabase.execSQL(
+            "UPDATE events SET inline_tokens = ? WHERE id = ?",
+            arrayOf<Any>(tokens, id)
+        )
+    }
 }

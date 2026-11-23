@@ -32,23 +32,23 @@ object RandomContactGenerator {
     )
 
     private val SPECIAL_NAMES = listOf(
-        "José García-López",    // accented chars + hyphen
-        "François Müller",      // French + German
-        "André O'Connor",       // apostrophe
+        "José García-López", // accented chars + hyphen
+        "François Müller", // French + German
+        "André O'Connor", // apostrophe
         "Björk Guðmundsdóttir", // Icelandic
-        "中田 花子",              // CJK characters
-        "田中 太郎",              // CJK characters
-        "김민수",                 // Korean
-        "محمد بن سلمان",          // Arabic
-        "Николай Петров",        // Cyrillic
-        "Em 😀 Johnson",        // emoji in name
+        "中田 花子", // CJK characters
+        "田中 太郎", // CJK characters
+        "김민수", // Korean
+        "محمد بن سلمان", // Arabic
+        "Николай Петров", // Cyrillic
+        "Em 😀 Johnson", // emoji in name
         "Mary-Jane O'Brien-Smith", // multiple hyphens + apostrophe
-        "A".repeat(200),        // very long name
-        "John Smith",           // will create duplicates
-        "John Smith Jr.",       // duplicate-ish
-        "John Smith III",       // duplicate-ish
+        "A".repeat(200), // very long name
+        "John Smith", // will create duplicates
+        "John Smith Jr.", // duplicate-ish
+        "John Smith III", // duplicate-ish
         "Jane Doe",
-        "Jane Doe Jr.",
+        "Jane Doe Jr."
     )
 
     private val PHONE_PREFIXES = listOf(
@@ -141,13 +141,17 @@ object RandomContactGenerator {
             val androidId = androidIdCounter++
 
             // Vary data quality
-            val hasPhone = random.nextFloat() > 0.15f  // 85% have phone
-            val hasEmail = random.nextFloat() > 0.25f  // 75% have email
-            val hasPhoto = random.nextFloat() > 0.7f   // 30% have photo
+            val hasPhone = random.nextFloat() > 0.15f // 85% have phone
+            val hasEmail = random.nextFloat() > 0.25f // 75% have email
+            val hasPhoto = random.nextFloat() > 0.7f // 30% have photo
 
             val phone = if (hasPhone) generatePhone(random) else null
             val email = if (hasEmail) generateEmail(name, random) else null
-            val photoUri = if (hasPhoto) "content://com.android.contacts/contacts/$androidId/photo" else null
+            val photoUri = if (hasPhoto) {
+                "content://com.android.contacts/contacts/$androidId/photo"
+            } else {
+                null
+            }
 
             contacts.add(
                 Contact(
@@ -200,9 +204,18 @@ object RandomContactGenerator {
                 // Insert display name
                 ops.add(
                     ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
-                        .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, rawContactIndex)
-                        .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
-                        .withValue(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, contact.displayName)
+                        .withValueBackReference(
+                            ContactsContract.Data.RAW_CONTACT_ID,
+                            rawContactIndex
+                        )
+                        .withValue(
+                            ContactsContract.Data.MIMETYPE,
+                            ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE
+                        )
+                        .withValue(
+                            ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME,
+                            contact.displayName
+                        )
                         .build()
                 )
 
@@ -210,10 +223,22 @@ object RandomContactGenerator {
                 if (contact.phoneNumber != null) {
                     ops.add(
                         ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
-                            .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, rawContactIndex)
-                            .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
-                            .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, contact.phoneNumber)
-                            .withValue(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE)
+                            .withValueBackReference(
+                                ContactsContract.Data.RAW_CONTACT_ID,
+                                rawContactIndex
+                            )
+                            .withValue(
+                                ContactsContract.Data.MIMETYPE,
+                                ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE
+                            )
+                            .withValue(
+                                ContactsContract.CommonDataKinds.Phone.NUMBER,
+                                contact.phoneNumber
+                            )
+                            .withValue(
+                                ContactsContract.CommonDataKinds.Phone.TYPE,
+                                ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE
+                            )
                             .build()
                     )
                 }
@@ -222,10 +247,22 @@ object RandomContactGenerator {
                 if (contact.email != null) {
                     ops.add(
                         ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
-                            .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, rawContactIndex)
-                            .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE)
-                            .withValue(ContactsContract.CommonDataKinds.Email.ADDRESS, contact.email)
-                            .withValue(ContactsContract.CommonDataKinds.Email.TYPE, ContactsContract.CommonDataKinds.Email.TYPE_HOME)
+                            .withValueBackReference(
+                                ContactsContract.Data.RAW_CONTACT_ID,
+                                rawContactIndex
+                            )
+                            .withValue(
+                                ContactsContract.Data.MIMETYPE,
+                                ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE
+                            )
+                            .withValue(
+                                ContactsContract.CommonDataKinds.Email.ADDRESS,
+                                contact.email
+                            )
+                            .withValue(
+                                ContactsContract.CommonDataKinds.Email.TYPE,
+                                ContactsContract.CommonDataKinds.Email.TYPE_HOME
+                            )
                             .build()
                     )
                 }

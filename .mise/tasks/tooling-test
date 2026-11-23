@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-#MISE description="Run deterministic development workflow regression tests"
+#MISE description="Run complete tooling validation, including the stdio MCP protocol"
 set -euo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/task-env.sh"
-python3 -m unittest discover -s "$TASK_ROOT/tests/tooling" -p "test_*.py" "$@"
-python3 -m unittest discover -s "$TASK_ROOT/scripts/host-mcp" -p 'test_*.py'
+TOOLING_PYTHON="$TASK_ROOT/ignored/tooling-venv/bin/python"
+[[ -x "$TOOLING_PYTHON" ]] || { echo 'Run bash .mise/tasks/tooling-setup first.' >&2; exit 1; }
+"$TOOLING_PYTHON" -c 'import mcp, anyio' || { echo 'Run bash .mise/tasks/tooling-setup to repair protocol dependencies.' >&2; exit 1; }
+"$TOOLING_PYTHON" -m unittest discover -s "$TASK_ROOT/tests/tooling" -p 'test_*.py' "$@"
+"$TOOLING_PYTHON" -m unittest discover -s "$TASK_ROOT/scripts" -p 'test_*.py'
+"$TOOLING_PYTHON" -m unittest discover -s "$TASK_ROOT/scripts/host-mcp" -p 'test_*.py'

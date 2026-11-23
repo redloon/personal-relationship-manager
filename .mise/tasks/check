@@ -2,7 +2,7 @@
 #MISE description="Run JVM tests, compile both APKs, lint, and source guards"
 set -euo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/task-env.sh"
-"$TASK_ROOT/.mise/tasks/gradle" testDebugUnitTest assembleDebug assembleDebugAndroidTest lintDebug "$@"
+"$TASK_ROOT/.mise/tasks/gradle" testDebugUnitTest assembleDebug assembleDebugAndroidTest lintDebug ktlintCheck "$@"
 ERRORS=0
 # 4. Static analysis: check for known anti-patterns
 echo "▶ Scanning for known issues..."

@@ -12,9 +12,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface EventDao {
-    @Query("SELECT * FROM event_contacts") fun observeEventContacts(): Flow<List<EventContact>>
-    @Query("SELECT * FROM event_tags") fun observeEventTags(): Flow<List<EventTag>>
+    @Query("SELECT * FROM event_contacts")
+    fun observeEventContacts(): Flow<List<EventContact>>
 
+    @Query("SELECT * FROM event_tags")
+    fun observeEventTags(): Flow<List<EventTag>>
 
     @Insert
     suspend fun insert(event: Event): Long
@@ -34,28 +36,34 @@ interface EventDao {
     @Query("SELECT * FROM events WHERE deleted_at IS NULL ORDER BY event_date DESC")
     fun getAll(): Flow<List<Event>>
 
-    @Query("SELECT * FROM events WHERE deleted_at IS NULL AND note LIKE '%' || :query || '%' ORDER BY event_date DESC")
+    @Query(
+        "SELECT * FROM events WHERE deleted_at IS NULL AND note LIKE '%' || :query || '%' ORDER BY event_date DESC"
+    )
     fun searchByNote(query: String): Flow<List<Event>>
 
     @Query("SELECT * FROM events WHERE deleted_at IS NULL ORDER BY event_date DESC LIMIT :limit")
     fun getRecent(limit: Int = 50): Flow<List<Event>>
 
     // Events involving a specific contact
-    @Query("""
+    @Query(
+        """
         SELECT e.* FROM events e
         INNER JOIN event_contacts ec ON e.id = ec.event_id
         WHERE ec.contact_id = :contactId AND e.deleted_at IS NULL
         ORDER BY e.event_date DESC
-    """)
+    """
+    )
     fun getByContactId(contactId: Long): Flow<List<Event>>
 
     // Events with a specific tag
-    @Query("""
+    @Query(
+        """
         SELECT e.* FROM events e
         INNER JOIN event_tags et ON e.id = et.event_id
         WHERE et.tag_id = :tagId AND e.deleted_at IS NULL
         ORDER BY e.event_date DESC
-    """)
+    """
+    )
     fun getByTagId(tagId: Long): Flow<List<Event>>
 
     // Junction table operations
@@ -80,10 +88,12 @@ interface EventDao {
     suspend fun getTagIdsForEvent(eventId: Long): List<Long>
 
     // Get events with contact and tag info for list display
-    @Query("""
+    @Query(
+        """
         SELECT e.* FROM events e WHERE e.deleted_at IS NULL
         ORDER BY e.event_date DESC
-    """)
+    """
+    )
     fun getAllEventsWithMeta(): Flow<List<Event>>
 
     @Query("SELECT * FROM events ORDER BY event_date DESC")

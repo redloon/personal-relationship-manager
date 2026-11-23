@@ -32,23 +32,23 @@
  */
 package com.idontremember.personalcrm.data.db
 
-import com.idontremember.personalcrm.data.db.entity.FollowUp
-import com.idontremember.personalcrm.data.db.dao.FollowUpDao
-import com.idontremember.personalcrm.data.db.dao.RecallDao
 import androidx.room.Database
 import androidx.room.RoomDatabase
-import com.idontremember.personalcrm.data.db.dao.ProfileLinksDao
-import com.idontremember.personalcrm.data.db.entity.ContactTag
-import com.idontremember.personalcrm.data.db.entity.Relationship
 import com.idontremember.personalcrm.data.db.dao.ContactDao
 import com.idontremember.personalcrm.data.db.dao.ContactFactDao
 import com.idontremember.personalcrm.data.db.dao.EventDao
+import com.idontremember.personalcrm.data.db.dao.FollowUpDao
+import com.idontremember.personalcrm.data.db.dao.ProfileLinksDao
+import com.idontremember.personalcrm.data.db.dao.RecallDao
 import com.idontremember.personalcrm.data.db.dao.TagDao
 import com.idontremember.personalcrm.data.db.entity.Contact
 import com.idontremember.personalcrm.data.db.entity.ContactFact
+import com.idontremember.personalcrm.data.db.entity.ContactTag
 import com.idontremember.personalcrm.data.db.entity.Event
 import com.idontremember.personalcrm.data.db.entity.EventContact
 import com.idontremember.personalcrm.data.db.entity.EventTag
+import com.idontremember.personalcrm.data.db.entity.FollowUp
+import com.idontremember.personalcrm.data.db.entity.Relationship
 import com.idontremember.personalcrm.data.db.entity.Tag
 
 @Database(

@@ -9,10 +9,10 @@ import androidx.core.content.ContextCompat
 import com.idontremember.personalcrm.data.db.dao.ContactDao
 import com.idontremember.personalcrm.data.db.entity.Contact
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Singleton
 class ContactsSyncManager @Inject constructor(
@@ -20,17 +20,12 @@ class ContactsSyncManager @Inject constructor(
     private val contactDao: ContactDao
 ) {
 
-    data class SyncResult(
-        val added: Int,
-        val updated: Int,
-        val total: Int
-    )
+    data class SyncResult(val added: Int, val updated: Int, val total: Int)
 
-    fun hasPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            context, Manifest.permission.READ_CONTACTS
-        ) == PackageManager.PERMISSION_GRANTED
-    }
+    fun hasPermission(): Boolean = ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.READ_CONTACTS
+    ) == PackageManager.PERMISSION_GRANTED
 
     /**
      * Sync contacts from Android Contacts Provider.
@@ -46,24 +41,42 @@ class ContactsSyncManager @Inject constructor(
         }
 
         val systemContacts = readSystemContacts()
-        val attachedByLookup = contactDao.getAllIncludingHiddenOnce().filter { it.lookupKey != null }.associateBy { it.lookupKey }
+        val attachedByLookup = contactDao.getAllIncludingHiddenOnce().filter {
+            it.lookupKey != null
+        }.associateBy { it.lookupKey }
         var added = 0
         var updated = 0
 
         for (sysContact in systemContacts) {
-            val attached = attachedByLookup[sysContact.lookupKey] ?: contactDao.getByAndroidContactId(sysContact.androidContactId!!)
+            val attached =
+                attachedByLookup[sysContact.lookupKey]
+                    ?: contactDao.getByAndroidContactId(sysContact.androidContactId!!)
             // A provider ID can be reused for a different person. Preserve the old profile.
-            val resolvedOldId = attached?.lookupKey?.takeIf { it != sysContact.lookupKey }?.let { key ->
-                val uri = ContactsContract.Contacts.getLookupUri(attached.androidContactId ?: 0L, key)
-                ContactsContract.Contacts.lookupContact(context.contentResolver, uri)?.lastPathSegment?.toLongOrNull()
+            val resolvedOldId = attached?.lookupKey?.takeIf {
+                it != sysContact.lookupKey
+            }?.let { key ->
+                val uri = ContactsContract.Contacts.getLookupUri(
+                    attached.androidContactId ?: 0L,
+                    key
+                )
+                ContactsContract.Contacts.lookupContact(
+                    context.contentResolver,
+                    uri
+                )?.lastPathSegment?.toLongOrNull()
             }
             val identityChanged = attached != null && (
                 (attached.lookupKey == null && !legacyAttachmentMatches(attached, sysContact)) ||
-                (attached.lookupKey != null && attached.lookupKey != sysContact.lookupKey && resolvedOldId != sysContact.androidContactId))
+                    (
+                        attached.lookupKey != null && attached.lookupKey != sysContact.lookupKey &&
+                            resolvedOldId != sysContact.androidContactId
+                        )
+                )
             val existing = if (identityChanged) {
                 contactDao.detachAndroidContact(attached!!.id)
                 null
-            } else attached
+            } else {
+                attached
+            }
 
             val occupyingId = contactDao.getByAndroidContactId(sysContact.androidContactId!!)
             if (occupyingId != null && occupyingId.id != existing?.id) {
@@ -75,16 +88,24 @@ class ContactsSyncManager @Inject constructor(
                 added++
             } else {
                 // Existing — update basic fields if changed, preserve local data
-                val needsUpdate = existing.deletionAllowed || existing.displayName != sysContact.displayName ||
-                    existing.phoneNumber != sysContact.phoneNumber ||
-                    existing.email != sysContact.email ||
-                    existing.androidContactId != sysContact.androidContactId || existing.photoUri != sysContact.photoUri || existing.lookupKey != sysContact.lookupKey
+                val needsUpdate =
+                    existing.deletionAllowed || existing.displayName != sysContact.displayName ||
+                        existing.phoneNumber != sysContact.phoneNumber ||
+                        existing.email != sysContact.email ||
+                        existing.androidContactId != sysContact.androidContactId ||
+                        existing.photoUri != sysContact.photoUri ||
+                        existing.lookupKey != sysContact.lookupKey
 
                 if (needsUpdate) {
                     contactDao.updateProviderFields(
-                        existing.id, sysContact.displayName, sysContact.androidContactId,
-                        sysContact.phoneNumber, sysContact.email, sysContact.photoUri,
-                        sysContact.lookupKey, System.currentTimeMillis()
+                        existing.id,
+                        sysContact.displayName,
+                        sysContact.androidContactId,
+                        sysContact.phoneNumber,
+                        sysContact.email,
+                        sysContact.photoUri,
+                        sysContact.lookupKey,
+                        System.currentTimeMillis()
                     )
                     updated++
                 }

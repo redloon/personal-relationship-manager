@@ -32,13 +32,11 @@ object SettingsModule {
 
     @Provides
     @Singleton
-    fun provideSettingsDataStore(@ApplicationContext context: Context): DataStore<Preferences> {
-        return context.settingsDataStore
-    }
+    fun provideSettingsDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
+        context.settingsDataStore
 
     @Provides
     @Singleton
-    fun provideSettingsRepository(dataStore: DataStore<Preferences>): SettingsRepository {
-        return SettingsRepository(dataStore)
-    }
+    fun provideSettingsRepository(dataStore: DataStore<Preferences>): SettingsRepository =
+        SettingsRepository(dataStore)
 }

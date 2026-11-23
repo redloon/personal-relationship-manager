@@ -1,3 +1,8 @@
+import java.security.SecureRandom
+import java.util.Properties
+import org.gradle.api.provider.ValueSource
+import org.gradle.api.provider.ValueSourceParameters
+
 /*
  * Copyright (C) 2022 The Android Open Source Project
  *
@@ -20,6 +25,23 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ktlint)
+}
+
+val appVersion = Properties().apply {
+    load(
+        providers.fileContents(
+            layout.projectDirectory.file("version.properties")
+        ).asText.get().reader()
+    )
+}
+val releaseSigning = providers.gradleProperty("releaseSigning").orNull == "true"
+val signingProperties = Properties()
+if (releaseSigning) {
+    signingProperties.load(
+        providers.fileContents(layout.projectDirectory.file("release-signing.properties"))
+            .asText.get().reader()
+    )
 }
 
 android {
@@ -30,8 +52,8 @@ android {
         applicationId = "com.idontremember.personalcrm"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = appVersion.getProperty("versionCode").toInt()
+        versionName = appVersion.getProperty("versionName")
 
         testInstrumentationRunner = "com.idontremember.personalcrm.HiltTestRunner"
         vectorDrawables {
@@ -39,10 +61,25 @@ android {
         }
     }
 
+    if (releaseSigning) {
+        signingConfigs {
+            create("localRelease") {
+                storeFile = file(signingProperties.getProperty("storeFile"))
+                storePassword = signingProperties.getProperty("storePassword")
+                keyAlias = signingProperties.getProperty("keyAlias")
+                keyPassword = signingProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (releaseSigning) signingConfig = signingConfigs.getByName("localRelease")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 
@@ -63,6 +100,11 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+
+    lint {
+        baseline = file("lint-baseline.xml")
+        warningsAsErrors = true
     }
 
     sourceSets {
@@ -94,11 +136,11 @@ dependencies {
     // resolution) — the mixed runtime crashes MigrationTestHelper with AbstractMethodError.
     // Align every configuration on 1.8.1 (compatible minor bump for the app classpath).
     constraints {
-        implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.8.1")
-        implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
-        implementation("org.jetbrains.kotlinx:kotlinx-serialization-json-okio:1.8.1")
+        implementation(libs.kotlinx.serialization.core)
+        implementation(libs.kotlinx.serialization.json)
+        implementation(libs.kotlinx.serialization.json.okio)
     }
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+    implementation(libs.kotlinx.serialization.json)
 
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)
@@ -125,7 +167,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
-    implementation("androidx.hilt:hilt-navigation-compose:1.3.0")
+    implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
@@ -140,8 +182,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     // Material Icons
-    implementation("androidx.compose.material:material-icons-core")
-    implementation("androidx.compose.material:material-icons-extended")
+    implementation(libs.androidx.compose.material.icons.core)
+    implementation(libs.androidx.compose.material.icons.extended)
     // Coil for image loading (contact photos)
     implementation(libs.coil.compose)
     // Tooling
@@ -151,7 +193,10 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     // Local tests: jUnit, coroutines, Android runner
-    testImplementation(libs.junit)
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
+    lintChecks(libs.slack.compose.lint)
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.kotlinx.coroutines.test)
 
@@ -165,4 +210,58 @@ dependencies {
     implementation(libs.androidx.navigation3.ui)
     implementation(libs.androidx.navigation3.runtime)
     implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+}
+
+ktlint {
+    version.set(libs.versions.ktlint.get())
+    baseline.set(file("ktlint-baseline.xml"))
+    filter {
+        exclude("**/build/**")
+    }
+}
+
+// Hilt rewrites generated Java directories. Lint's Kotlin analysis can inspect
+// test roots too, so finish scheduled Hilt writers before any lint reader starts.
+tasks.matching {
+    it.name.startsWith("lintAnalyze") || it.name.startsWith("lintVitalAnalyze")
+}.configureEach {
+    mustRunAfter(tasks.matching { it.name.startsWith("hiltJavaCompile") })
+}
+
+abstract class InvocationSeed : ValueSource<String, ValueSourceParameters.None> {
+    override fun obtain(): String = SecureRandom().nextLong().toString()
+}
+
+val replaySeed = providers.gradleProperty("testSeed")
+    .orElse(providers.environmentVariable("TEST_SEED"))
+    .orElse(providers.of(InvocationSeed::class) {})
+
+tasks.withType<Test>().configureEach {
+    val invocationSeed = replaySeed
+    useJUnitPlatform()
+    maxParallelForks = 1
+    inputs.property("testSeed", invocationSeed)
+    systemProperty("junit.jupiter.execution.parallel.enabled", "false")
+    systemProperty(
+        "junit.jupiter.testclass.order.default",
+        "org.junit.jupiter.api.ClassOrderer\$Random"
+    )
+    systemProperty(
+        "junit.jupiter.testmethod.order.default",
+        "org.junit.jupiter.api.MethodOrderer\$Random"
+    )
+    doFirst {
+        val seed = invocationSeed.get()
+        require(seed.toLongOrNull() != null) { "testSeed must be a signed 64-bit integer" }
+        systemProperty("junit.jupiter.execution.order.random.seed", seed)
+        logger.lifecycle("JVM shuffle seed: $seed (replay with -PtestSeed=$seed)")
+    }
+    if (providers.gradleProperty("testOrderLog").isPresent) {
+        val testLogger = logger
+        beforeTest(
+            closureOf<org.gradle.api.tasks.testing.TestDescriptor> {
+                testLogger.lifecycle("JVM test: $className#$name")
+            }
+        )
+    }
 }

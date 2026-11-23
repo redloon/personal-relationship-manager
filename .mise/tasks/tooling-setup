@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#MISE description="Create the pinned sandbox Python environment for tooling tests"
+set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/task-env.sh"
+command -v uv >/dev/null || { echo 'Install uv to provision the pinned Python environment.' >&2; exit 1; }
+uv venv --clear --python 3.12.15 "$TASK_ROOT/ignored/tooling-venv"
+uv pip sync --python "$TASK_ROOT/ignored/tooling-venv/bin/python" --require-hashes "$TASK_ROOT/scripts/host-mcp/requirements.lock"

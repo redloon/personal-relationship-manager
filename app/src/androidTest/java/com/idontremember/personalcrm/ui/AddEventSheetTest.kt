@@ -1,37 +1,37 @@
 package com.idontremember.personalcrm.ui
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
-import androidx.compose.ui.test.assert
-import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.test.assertTextContains
-import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTextInput
-import com.idontremember.personalcrm.data.repository.EventRepository
+import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.text.AnnotatedString
 import com.idontremember.personalcrm.data.db.dao.ContactDao
 import com.idontremember.personalcrm.data.db.dao.ContactFactDao
 import com.idontremember.personalcrm.data.db.entity.Contact
+import com.idontremember.personalcrm.data.repository.EventRepository
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import javax.inject.Inject
 
 /**
  * UI tests for the AddEventSheet.
@@ -55,14 +55,20 @@ class AddEventSheetTest {
 
     @Inject
     lateinit var eventRepository: EventRepository
+
     @Inject lateinit var contactDao: ContactDao
+
     @Inject lateinit var factDao: ContactFactDao
+
     @Inject lateinit var database: com.idontremember.personalcrm.data.db.AppDatabase
 
     @Before
     fun setup() {
         hiltRule.inject()
-        composeTestRule.activity.getSharedPreferences("capture_draft", android.content.Context.MODE_PRIVATE).edit().clear().commit()
+        composeTestRule.activity.getSharedPreferences(
+            "capture_draft",
+            android.content.Context.MODE_PRIVATE
+        ).edit().clear().commit()
         runBlocking {
             // Start clean: the test DB singleton is shared across tests in this run
             eventRepository.getAllEvents().first().forEach { eventRepository.deleteEvent(it) }
@@ -98,10 +104,20 @@ class AddEventSheetTest {
         composeTestRule.onNodeWithTag("note_text_field").assertTextContains("A draft to remember")
         composeTestRule.onNodeWithTag("capture_discard").performClick()
         composeTestRule.waitUntilTagDisplayed("add_event_fab")
-        org.junit.Assert.assertFalse("Discard must clear the persisted draft", composeTestRule.activity.getSharedPreferences("capture_draft", android.content.Context.MODE_PRIVATE).contains("draft"))
+        org.junit.Assert.assertFalse(
+            "Discard must clear the persisted draft",
+            composeTestRule.activity.getSharedPreferences(
+                "capture_draft",
+                android.content.Context.MODE_PRIVATE
+            ).contains("draft")
+        )
         composeTestRule.onNodeWithTag("add_event_fab").performClick()
         composeTestRule.waitUntilTagDisplayed("add_event_sheet")
-        composeTestRule.onNodeWithTag("note_text_field").assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("")))
+        composeTestRule.onNodeWithTag(
+            "note_text_field"
+        ).assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString(""))
+        )
         composeTestRule.onNodeWithTag("capture_discard").performClick()
     }
 
@@ -120,20 +136,32 @@ class AddEventSheetTest {
         val id = runBlocking { contactDao.insert(Contact(displayName = "Temporary Person")) }
         openAddEventSheet()
         composeTestRule.onNodeWithTag("note_text_field").performTextInput("Remember @Temporary")
-        composeTestRule.waitUntil(10_000) { composeTestRule.onAllNodesWithText("Temporary Person").fetchSemanticsNodes().isNotEmpty() }
+        composeTestRule.waitUntil(10_000) {
+            composeTestRule.onAllNodesWithText(
+                "Temporary Person"
+            ).fetchSemanticsNodes().isNotEmpty()
+        }
         composeTestRule.onNodeWithText("Temporary Person").performClick()
-        database.openHelper.writableDatabase.execSQL("CREATE TRIGGER capture_fail_insert BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'forced save failure'); END")
+        database.openHelper.writableDatabase.execSQL(
+            "CREATE TRIGGER capture_fail_insert BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'forced save failure'); END"
+        )
         try {
-        composeTestRule.onNodeWithTag("save_event_button").assertIsDisplayed().performClick()
-        composeTestRule.waitUntilTagExists("event_save_error", 10_000)
-        composeTestRule.waitUntilTagDisplayed("event_save_error", 10_000)
-        composeTestRule.onNodeWithContentDescription("Close").assertIsDisplayed().performClick()
-        composeTestRule.waitUntilTagDisplayed("add_event_fab")
-        composeTestRule.onNodeWithTag("add_event_fab").performClick()
-        composeTestRule.waitUntilTagDisplayed("add_event_sheet")
-        composeTestRule.onNodeWithTag("note_text_field").assertTextContains("Remember @Temporary Person ")
-        composeTestRule.onNodeWithTag("capture_discard").performClick()
-        } finally { database.openHelper.writableDatabase.execSQL("DROP TRIGGER IF EXISTS capture_fail_insert") }
+            composeTestRule.onNodeWithTag("save_event_button").assertIsDisplayed().performClick()
+            composeTestRule.waitUntilTagExists("event_save_error", 10_000)
+            composeTestRule.waitUntilTagDisplayed("event_save_error", 10_000)
+            composeTestRule.onNodeWithContentDescription("Close").assertIsDisplayed().performClick()
+            composeTestRule.waitUntilTagDisplayed("add_event_fab")
+            composeTestRule.onNodeWithTag("add_event_fab").performClick()
+            composeTestRule.waitUntilTagDisplayed("add_event_sheet")
+            composeTestRule.onNodeWithTag(
+                "note_text_field"
+            ).assertTextContains("Remember @Temporary Person ")
+            composeTestRule.onNodeWithTag("capture_discard").performClick()
+        } finally {
+            database.openHelper.writableDatabase.execSQL(
+                "DROP TRIGGER IF EXISTS capture_fail_insert"
+            )
+        }
     }
 
     @Test fun deletingASelectedPersonReconcilesTheDraftWithoutLosingProse() {
@@ -143,14 +171,35 @@ class AddEventSheetTest {
         composeTestRule.onNodeWithText("Draft Person").performClick()
         runBlocking { contactDao.getById(id)?.let { contactDao.delete(it) } }
         composeTestRule.waitUntil(5_000) {
-            val raw = composeTestRule.activity.getSharedPreferences("capture_draft", 0).getString("draft", null)
+            val raw = composeTestRule.activity.getSharedPreferences(
+                "capture_draft",
+                0
+            ).getString("draft", null)
             raw != null && org.json.JSONObject(raw).getJSONArray("contacts").length() == 0
         }
-        composeTestRule.onNodeWithTag("note_text_field").assertTextContains("Remember @Draft Person ")
+        composeTestRule.onNodeWithTag(
+            "note_text_field"
+        ).assertTextContains("Remember @Draft Person ")
         composeTestRule.onNodeWithTag("save_event_button").performClick()
-        composeTestRule.waitUntil(5_000) { runBlocking { eventRepository.getAllEvents().first().any { it.note == "Remember @Draft Person " } } }
-        val saved = runBlocking { eventRepository.getAllEvents().first().first { it.note == "Remember @Draft Person " } }
-        org.junit.Assert.assertTrue(runBlocking { eventRepository.getEventWithMeta(saved.id)!!.contacts.isEmpty() })
+        composeTestRule.waitUntil(5_000) {
+            runBlocking {
+                eventRepository.getAllEvents().first().any {
+                    it.note ==
+                        "Remember @Draft Person "
+                }
+            }
+        }
+        val saved = runBlocking {
+            eventRepository.getAllEvents().first().first {
+                it.note ==
+                    "Remember @Draft Person "
+            }
+        }
+        org.junit.Assert.assertTrue(
+            runBlocking {
+                eventRepository.getEventWithMeta(saved.id)!!.contacts.isEmpty()
+            }
+        )
         org.junit.Assert.assertEquals("[]", saved.inlineTokens)
     }
 
@@ -167,7 +216,9 @@ class AddEventSheetTest {
         composeTestRule.onNodeWithTag("event_person_search").performTextInput("Fact Person")
         composeTestRule.onNodeWithTag("event_person_option_$id").performClick()
         composeTestRule.onNodeWithTag("save_event_button").assertIsDisplayed().performClick()
-        composeTestRule.waitUntil(10_000) { runBlocking { factDao.getByContactIdOnce(id).any { it.text.contains("Likes tea") } } }
+        composeTestRule.waitUntil(10_000) {
+            runBlocking { factDao.getByContactIdOnce(id).any { it.text.contains("Likes tea") } }
+        }
     }
 
     @Test
@@ -207,8 +258,14 @@ class AddEventSheetTest {
             runBlocking { eventRepository.getAllEvents().first().any { it.note == note } }
         }
         composeTestRule.waitUntil(timeoutMillis = 5_000) {
-            try { composeTestRule.onNodeWithTag("add_event_sheet").assertDoesNotExist(); true }
-            catch (_: AssertionError) { false }
+            try {
+                composeTestRule.onNodeWithTag("add_event_sheet").assertDoesNotExist()
+                true
+            } catch (
+                _: AssertionError
+            ) {
+                false
+            }
         }
         composeTestRule.waitUntilTagDisplayed("events_list_screen")
         composeTestRule.onNodeWithText(note).performClick()
@@ -220,9 +277,15 @@ class AddEventSheetTest {
         composeTestRule.onNodeWithTag("event_person_option_$contactId").performClick()
         composeTestRule.onNodeWithTag("save_event_edit_button").performClick()
         composeTestRule.waitUntil(timeoutMillis = 5_000) {
-            runBlocking { eventRepository.getEventsForContact(contactId).first().any { it.note == note } }
+            runBlocking {
+                eventRepository.getEventsForContact(contactId).first().any {
+                    it.note ==
+                        note
+                }
+            }
         }
     }
+
     @Test
     fun factCanCreateANameOnlyPersonWithoutContactsPermission() {
         openAddEventSheet()
@@ -237,8 +300,12 @@ class AddEventSheetTest {
         composeTestRule.onNodeWithTag("save_event_button").performClick()
         composeTestRule.waitUntil(10_000) {
             runBlocking {
-                val person = contactDao.getAll().first().find { it.displayName == "Morgan Capture Test" }
-                person != null && person.androidContactId == null && factDao.getByContactIdOnce(person.id).any { it.text == "Enjoys climbing" }
+                val person = contactDao.getAll().first().find {
+                    it.displayName ==
+                        "Morgan Capture Test"
+                }
+                person != null && person.androidContactId == null &&
+                    factDao.getByContactIdOnce(person.id).any { it.text == "Enjoys climbing" }
             }
         }
     }
@@ -246,7 +313,15 @@ class AddEventSheetTest {
     @Test
     fun editingTagsUsesSharedComposerAndKeepsEventDate() {
         val eventDate = 1_700_000_000_000L
-        val id = runBlocking { eventRepository.createEvent("Original tagged note", emptyList(), listOf("before"), eventDate) }
+        val id =
+            runBlocking {
+                eventRepository.createEvent(
+                    "Original tagged note",
+                    emptyList(),
+                    listOf("before"),
+                    eventDate
+                )
+            }
         composeTestRule.navigateToHistory()
         composeTestRule.waitUntilTagDisplayed("events_list_screen")
         composeTestRule.onNodeWithText("Original tagged note").performClick()
@@ -257,8 +332,21 @@ class AddEventSheetTest {
         composeTestRule.onNodeWithTag("capture_tag_search").performTextInput("after")
         composeTestRule.onNodeWithText("Add #after").performClick()
         composeTestRule.onNodeWithTag("save_event_edit_button").performClick()
-        composeTestRule.waitUntil(10_000) { runBlocking { eventRepository.getEventWithMeta(id)?.tags?.any { it.name == "after" } == true } }
-        org.junit.Assert.assertEquals(eventDate, runBlocking { eventRepository.getEventById(id)!!.eventDate })
+        composeTestRule.waitUntil(10_000) {
+            runBlocking {
+                eventRepository.getEventWithMeta(id)?.tags?.any {
+                    it.name ==
+                        "after"
+                } ==
+                    true
+            }
+        }
+        org.junit.Assert.assertEquals(
+            eventDate,
+            runBlocking {
+                eventRepository.getEventById(id)!!.eventDate
+            }
+        )
     }
 
     @Test
@@ -266,7 +354,10 @@ class AddEventSheetTest {
         openAddEventSheet()
         composeTestRule.onNodeWithTag("note_text_field").performTextInput("Unfinished new note")
         composeTestRule.onNodeWithContentDescription("Close").performClick()
-        val id = runBlocking { eventRepository.createEvent("Existing note to edit", emptyList(), emptyList()) }
+        val id =
+            runBlocking {
+                eventRepository.createEvent("Existing note to edit", emptyList(), emptyList())
+            }
         composeTestRule.waitUntilTagDisplayed("events_list_screen")
         composeTestRule.onNodeWithText("Existing note to edit").performClick()
         composeTestRule.waitUntilTagDisplayed("event_detail_screen")
@@ -275,7 +366,10 @@ class AddEventSheetTest {
         composeTestRule.onNodeWithTag("note_text_field").performTextInput(" appended")
         composeTestRule.onNodeWithContentDescription("Close").performClick()
         composeTestRule.waitUntilTagDisplayed("event_detail_screen")
-        val prefs = composeTestRule.activity.getSharedPreferences("capture_draft", android.content.Context.MODE_PRIVATE)
+        val prefs = composeTestRule.activity.getSharedPreferences(
+            "capture_draft",
+            android.content.Context.MODE_PRIVATE
+        )
         org.junit.Assert.assertTrue(prefs.getString("draft", "")!!.contains("Unfinished new note"))
         org.junit.Assert.assertTrue(prefs.getString("event_$id", "")!!.contains("appended"))
     }
@@ -283,52 +377,105 @@ class AddEventSheetTest {
     @Test
     fun saveStaysVisibleAboveKeyboardWhileEditingALongNote() {
         openAddEventSheet()
-        composeTestRule.onNodeWithTag("note_text_field").performTextInput((1..20).joinToString("\n") { "A detail from this conversation $it" })
+        composeTestRule.onNodeWithTag("note_text_field").performTextInput(
+            (1..20).joinToString("\n") {
+                "A detail from this conversation $it"
+            }
+        )
         composeTestRule.onNodeWithTag("note_text_field").assertIsFocused()
         composeTestRule.waitUntil(10_000) {
-            androidx.core.view.ViewCompat.getRootWindowInsets(composeTestRule.activity.window.decorView)
+            androidx.core.view.ViewCompat.getRootWindowInsets(
+                composeTestRule.activity.window.decorView
+            )
                 ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
         }
         composeTestRule.onNodeWithTag("save_event_button").assertIsDisplayed()
-        for (tag in listOf("capture_people_button", "capture_tags_button", "capture_date_button", "capture_time_button")) composeTestRule.onNodeWithTag(tag).assertIsDisplayed()
+        for (tag in listOf(
+            "capture_people_button",
+            "capture_tags_button",
+            "capture_date_button",
+            "capture_time_button"
+        )) {
+            composeTestRule.onNodeWithTag(tag).assertIsDisplayed()
+        }
         composeTestRule.onNodeWithTag("capture_people_button").performClick()
         composeTestRule.waitUntilTagDisplayed("event_person_search")
         composeTestRule.onNodeWithText("Cancel").performClick()
         composeTestRule.onNodeWithTag("save_event_button").performClick()
-        composeTestRule.waitUntil(10_000) { runBlocking { eventRepository.getAllEvents().first().any { it.note.contains("conversation 20") } } }
+        composeTestRule.waitUntil(10_000) {
+            runBlocking {
+                eventRepository.getAllEvents().first().any { it.note.contains("conversation 20") }
+            }
+        }
     }
 
     @Test
     fun profileCaptureExplainsDifferentDraftBeforeStartingForThatPerson() {
-        val contactId = runBlocking { contactDao.insert(Contact(displayName = "Morgan Note Context")) }
+        val contactId =
+            runBlocking { contactDao.insert(Contact(displayName = "Morgan Note Context")) }
         openAddEventSheet()
-        composeTestRule.onNodeWithTag("note_text_field").performTextInput("A draft about something else")
+        composeTestRule.onNodeWithTag(
+            "note_text_field"
+        ).performTextInput("A draft about something else")
         composeTestRule.onNodeWithContentDescription("Close").performClick()
         composeTestRule.navigateToContactsTab()
         composeTestRule.onNodeWithTag("search_field").performTextInput("Morgan Note Context")
-        composeTestRule.onNode(hasTestTag("contact_list_item") and hasText("Morgan Note Context")).performClick()
+        composeTestRule.onNode(
+            hasTestTag("contact_list_item") and hasText("Morgan Note Context")
+        ).performClick()
         composeTestRule.waitUntilTagDisplayed("contact_detail_screen")
         composeTestRule.onNodeWithTag("person_add_note").performClick()
-        composeTestRule.waitUntil(10_000) { composeTestRule.onAllNodesWithText("Discard draft and start new").fetchSemanticsNodes().isNotEmpty() }
-        val prefs = composeTestRule.activity.getSharedPreferences("capture_draft", android.content.Context.MODE_PRIVATE)
-        org.junit.Assert.assertTrue(prefs.getString("draft", "")!!.contains("A draft about something else"))
+        composeTestRule.waitUntil(10_000) {
+            composeTestRule.onAllNodesWithText(
+                "Discard draft and start new"
+            ).fetchSemanticsNodes().isNotEmpty()
+        }
+        val prefs = composeTestRule.activity.getSharedPreferences(
+            "capture_draft",
+            android.content.Context.MODE_PRIVATE
+        )
+        org.junit.Assert.assertTrue(
+            prefs.getString("draft", "")!!.contains("A draft about something else")
+        )
         composeTestRule.onNodeWithText("Discard draft and start new").performClick()
         composeTestRule.waitUntilTagDisplayed("note_text_field")
-        composeTestRule.onNodeWithTag("note_text_field").performTextInput("Correct person's context")
+        composeTestRule.onNodeWithTag(
+            "note_text_field"
+        ).performTextInput("Correct person's context")
         composeTestRule.onNodeWithTag("save_event_button").performClick()
-        composeTestRule.waitUntil(10_000) { runBlocking { eventRepository.getEventsForContact(contactId).first().any { it.note == "Correct person's context" } } }
+        composeTestRule.waitUntil(10_000) {
+            runBlocking {
+                eventRepository.getEventsForContact(contactId).first().any {
+                    it.note ==
+                        "Correct person's context"
+                }
+            }
+        }
     }
 
     @Test
     fun deletingANoteCanBeUndoneWithoutLosingItsPeople() {
         val contactId = runBlocking { contactDao.insert(Contact(displayName = "Morgan Recovery")) }
-        val eventId = runBlocking { eventRepository.createEvent("Keep this memory", listOf(contactId), listOf("recovery")) }
+        val eventId =
+            runBlocking {
+                eventRepository.createEvent(
+                    "Keep this memory",
+                    listOf(contactId),
+                    listOf("recovery")
+                )
+            }
         composeTestRule.navigateToHistory()
         composeTestRule.onNodeWithText("Keep this memory").performClick()
         composeTestRule.waitUntilTagDisplayed("event_detail_screen")
-        composeTestRule.onNodeWithContentDescription(composeTestRule.activity.getString(com.idontremember.personalcrm.R.string.cd_delete_event)).performClick()
+        composeTestRule.onNodeWithContentDescription(
+            composeTestRule.activity.getString(
+                com.idontremember.personalcrm.R.string.cd_delete_event
+            )
+        ).performClick()
         composeTestRule.onNodeWithText("Delete", substring = false).performClick()
-        composeTestRule.waitUntil(10_000) { composeTestRule.onAllNodesWithText("Undo").fetchSemanticsNodes().isNotEmpty() }
+        composeTestRule.waitUntil(10_000) {
+            composeTestRule.onAllNodesWithText("Undo").fetchSemanticsNodes().isNotEmpty()
+        }
         composeTestRule.onNodeWithText("Undo").performClick()
         composeTestRule.waitUntilTagDisplayed("edit_event_button")
         val restored = runBlocking { eventRepository.getEventWithMeta(eventId) }
@@ -336,7 +483,8 @@ class AddEventSheetTest {
         org.junit.Assert.assertEquals(listOf("recovery"), restored.tags.map { it.name })
     }
 
-    @Test fun fullNameCreationWorksWithExistingShortNameAndExplicitTokenSurvivesReopenThenUnlinks() {
+    @Test
+    fun fullNameCreationWorksWithExistingShortNameAndExplicitTokenSurvivesReopenThenUnlinks() {
         runBlocking { contactDao.insert(Contact(displayName = "Maya")) }
         openAddEventSheet()
         composeTestRule.onNodeWithTag("note_text_field").performTextInput("Met @Maya Chen")
@@ -344,28 +492,70 @@ class AddEventSheetTest {
         composeTestRule.onNodeWithTag("inline_create_person").performClick()
         composeTestRule.onNodeWithTag("person_name_input").assertTextContains("Maya Chen")
         composeTestRule.onNodeWithTag("create_person_button").performClick()
-        composeTestRule.waitUntil(10_000) { runBlocking { contactDao.getAll().first().any { it.displayName == "Maya Chen" } } }
+        composeTestRule.waitUntil(10_000) {
+            runBlocking {
+                contactDao.getAll().first().any {
+                    it.displayName ==
+                        "Maya Chen"
+                }
+            }
+        }
         composeTestRule.waitUntilTagDisplayed("note_text_field")
         composeTestRule.onNodeWithTag("note_text_field").assertTextContains("Met @Maya Chen ")
-        val draft = org.json.JSONObject(composeTestRule.activity.getSharedPreferences("capture_draft", android.content.Context.MODE_PRIVATE).getString("draft", "")!!)
-        org.junit.Assert.assertEquals(1, com.idontremember.personalcrm.data.capture.InlineTokens.decode(draft.getString("tokens")).size)
+        val draft = org.json.JSONObject(
+            composeTestRule.activity.getSharedPreferences(
+                "capture_draft",
+                android.content.Context.MODE_PRIVATE
+            ).getString("draft", "")!!
+        )
+        org.junit.Assert.assertEquals(
+            1,
+            com.idontremember.personalcrm.data.capture.InlineTokens.decode(
+                draft.getString("tokens")
+            ).size
+        )
         composeTestRule.onNodeWithContentDescription("Close").performClick()
         composeTestRule.waitUntilTagDisplayed("add_event_fab")
         composeTestRule.onNodeWithTag("add_event_fab").performClick()
         composeTestRule.waitUntilTagDisplayed("note_text_field")
         composeTestRule.onNodeWithTag("note_text_field").assertTextContains("Met @Maya Chen ")
         composeTestRule.onNodeWithTag("save_event_button").performClick()
-        composeTestRule.waitUntil(10_000) { runBlocking { eventRepository.getAllEvents().first().any { it.note == "Met @Maya Chen " } } }
-        val saved = runBlocking { eventRepository.getAllEvents().first().first { it.note == "Met @Maya Chen " } }
-        org.junit.Assert.assertEquals(1, com.idontremember.personalcrm.data.capture.InlineTokens.decode(saved.inlineTokens).size)
+        composeTestRule.waitUntil(10_000) {
+            runBlocking {
+                eventRepository.getAllEvents().first().any {
+                    it.note ==
+                        "Met @Maya Chen "
+                }
+            }
+        }
+        val saved = runBlocking {
+            eventRepository.getAllEvents().first().first {
+                it.note ==
+                    "Met @Maya Chen "
+            }
+        }
+        org.junit.Assert.assertEquals(
+            1,
+            com.idontremember.personalcrm.data.capture.InlineTokens.decode(saved.inlineTokens).size
+        )
         composeTestRule.onNodeWithText("Met @Maya Chen", substring = true).performClick()
         composeTestRule.waitUntilTagDisplayed("event_detail_screen")
         composeTestRule.onNodeWithTag("edit_event_button").performClick()
         composeTestRule.waitUntilTagDisplayed("note_text_field")
         composeTestRule.onNodeWithTag("note_text_field").performTextReplacement("Met Maya Chen")
         composeTestRule.onNodeWithTag("save_event_edit_button").performClick()
-        composeTestRule.waitUntil(10_000) { runBlocking { eventRepository.getEventWithMeta(saved.id)?.contacts?.isEmpty() == true } }
-        org.junit.Assert.assertEquals("[]", runBlocking { eventRepository.getEventById(saved.id)!!.inlineTokens })
+        composeTestRule.waitUntil(10_000) {
+            runBlocking {
+                eventRepository.getEventWithMeta(saved.id)?.contacts?.isEmpty() ==
+                    true
+            }
+        }
+        org.junit.Assert.assertEquals(
+            "[]",
+            runBlocking {
+                eventRepository.getEventById(saved.id)!!.inlineTokens
+            }
+        )
     }
 
     @Test fun duplicateNamePickerOffersExistingAndAnExplicitSeparatePerson() {
@@ -374,13 +564,34 @@ class AddEventSheetTest {
         openPersonPicker()
         composeTestRule.onNodeWithTag("event_person_search").performTextInput("Zoe Duplicate")
         composeTestRule.onNodeWithTag("capture_create_person").performClick()
-        composeTestRule.onNodeWithTag("event_person_option_$personId").assertTextContains("Use existing Zoe Duplicate")
-        composeTestRule.onNodeWithTag("create_person_button").assertTextContains("Different person with this name")
+        composeTestRule.onNodeWithTag(
+            "event_person_option_$personId"
+        ).assertTextContains("Use existing Zoe Duplicate")
+        composeTestRule.onNodeWithTag(
+            "create_person_button"
+        ).assertTextContains("Different person with this name")
         composeTestRule.onNodeWithTag("event_person_option_$personId").performClick()
-        composeTestRule.onNodeWithTag("note_text_field").performTextInput("Existing person selected")
+        composeTestRule.onNodeWithTag(
+            "note_text_field"
+        ).performTextInput("Existing person selected")
         composeTestRule.onNodeWithTag("save_event_button").performClick()
-        composeTestRule.waitUntil(10_000) { runBlocking { eventRepository.getEventsForContact(personId).first().any { it.note == "Existing person selected" } } }
-        org.junit.Assert.assertEquals(1, runBlocking { contactDao.getAll().first().count { it.displayName == "Zoe Duplicate" } })
+        composeTestRule.waitUntil(10_000) {
+            runBlocking {
+                eventRepository.getEventsForContact(personId).first().any {
+                    it.note ==
+                        "Existing person selected"
+                }
+            }
+        }
+        org.junit.Assert.assertEquals(
+            1,
+            runBlocking {
+                contactDao.getAll().first().count {
+                    it.displayName ==
+                        "Zoe Duplicate"
+                }
+            }
+        )
     }
 
     @Test fun dismissedMentionSuggestionsStayDismissedAndLiteralTextDoesNotLink() {
@@ -391,9 +602,25 @@ class AddEventSheetTest {
         composeTestRule.onNodeWithTag("note_text_field").performTextInput(" yesterday")
         composeTestRule.onNodeWithTag("inline_create_person").assertDoesNotExist()
         composeTestRule.onNodeWithTag("save_event_button").performClick()
-        composeTestRule.waitUntil(10_000) { runBlocking { eventRepository.getAllEvents().first().any { it.note == "Met @Nora yesterday" } } }
-        val saved = runBlocking { eventRepository.getAllEvents().first().first { it.note == "Met @Nora yesterday" } }
-        org.junit.Assert.assertTrue(runBlocking { eventRepository.getEventWithMeta(saved.id)!!.contacts.isEmpty() })
+        composeTestRule.waitUntil(10_000) {
+            runBlocking {
+                eventRepository.getAllEvents().first().any {
+                    it.note ==
+                        "Met @Nora yesterday"
+                }
+            }
+        }
+        val saved = runBlocking {
+            eventRepository.getAllEvents().first().first {
+                it.note ==
+                    "Met @Nora yesterday"
+            }
+        }
+        org.junit.Assert.assertTrue(
+            runBlocking {
+                eventRepository.getEventWithMeta(saved.id)!!.contacts.isEmpty()
+            }
+        )
         org.junit.Assert.assertEquals("[]", saved.inlineTokens)
     }
 
@@ -403,15 +630,28 @@ class AddEventSheetTest {
         composeTestRule.onNodeWithTag("note_text_field").performTextInput("Met @Mode Token Person")
         composeTestRule.onNodeWithText("Mode Token Person").performClick()
         composeTestRule.onNodeWithText("Fact").performScrollTo().performClick()
-        composeTestRule.onNodeWithTag("note_text_field").assertTextContains("Met @Mode Token Person ")
+        composeTestRule.onNodeWithTag(
+            "note_text_field"
+        ).assertTextContains("Met @Mode Token Person ")
         composeTestRule.onNodeWithText("Note").performScrollTo().performClick()
         composeTestRule.onNodeWithTag("note_text_field").performTextReplacement("Met ")
         composeTestRule.onNodeWithTag("save_event_button").performClick()
-        composeTestRule.waitUntil(10_000) { runBlocking { eventRepository.getAllEvents().first().any { it.note == "Met " } } }
-        val saved = runBlocking { eventRepository.getAllEvents().first().first { it.note == "Met " } }
+        composeTestRule.waitUntil(10_000) {
+            runBlocking {
+                eventRepository.getAllEvents().first().any {
+                    it.note ==
+                        "Met "
+                }
+            }
+        }
+        val saved =
+            runBlocking { eventRepository.getAllEvents().first().first { it.note == "Met " } }
         org.junit.Assert.assertEquals("[]", saved.inlineTokens)
-        org.junit.Assert.assertTrue(runBlocking { eventRepository.getEventWithMeta(saved.id)!!.contacts.isEmpty() })
+        org.junit.Assert.assertTrue(
+            runBlocking {
+                eventRepository.getEventWithMeta(saved.id)!!.contacts.isEmpty()
+            }
+        )
         org.junit.Assert.assertNotNull(runBlocking { contactDao.getById(personId) })
     }
-
 }

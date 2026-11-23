@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.idontremember.personalcrm.data.capture.*
+import com.idontremember.personalcrm.data.capture.CaptureDraftStore
+import com.idontremember.personalcrm.data.capture.FollowUpDraft
+import com.idontremember.personalcrm.data.capture.followUpDraftKey
 import com.idontremember.personalcrm.data.followups.FollowUpRepository
 import com.idontremember.personalcrm.data.followups.FollowUpWorker
 import com.idontremember.personalcrm.data.recovery.RecoveryRepository
@@ -13,31 +15,54 @@ import com.idontremember.personalcrm.data.repository.ContactRepository
 import com.idontremember.personalcrm.data.settings.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 enum class FollowUpEditorError { SAVE, UNAVAILABLE }
 data class FollowUpEditorState(
-    val draft: FollowUpDraft = FollowUpDraft(), val loaded: Boolean = false,
-    val busy: Boolean = false, val conflict: Boolean = false, val completed: Boolean = false,
-    val saved: Boolean = false, val askReminders: Boolean = false, val finished: Boolean = false,
-    val deletedId: Long? = null, val error: FollowUpEditorError? = null
+    val draft: FollowUpDraft = FollowUpDraft(),
+    val loaded: Boolean = false,
+    val busy: Boolean = false,
+    val conflict: Boolean = false,
+    val completed: Boolean = false,
+    val saved: Boolean = false,
+    val askReminders: Boolean = false,
+    val finished: Boolean = false,
+    val deletedId: Long? = null,
+    val error: FollowUpEditorError? = null
 )
 
 @HiltViewModel
 class FollowUpEditorViewModel @Inject constructor(
-    private val repository: FollowUpRepository, private val recovery: RecoveryRepository,
-    private val settings: SettingsRepository, private val drafts: CaptureDraftStore,
-    private val contacts: ContactRepository, private val savedState: SavedStateHandle,
+    private val repository: FollowUpRepository,
+    private val recovery: RecoveryRepository,
+    private val settings: SettingsRepository,
+    private val drafts: CaptureDraftStore,
+    private val contacts: ContactRepository,
+    private val savedState: SavedStateHandle,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val _state = MutableStateFlow(FollowUpEditorState())
     val state: StateFlow<FollowUpEditorState> = _state
-    private val allPeople = contacts.getContactsIncludingHidden().shareIn(viewModelScope, SharingStarted.Eagerly, replay = 1)
-    val people = allPeople.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val allPeople = contacts.getContactsIncludingHidden().shareIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        replay = 1
+    )
+    val people = allPeople.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
     private var activeKey: String? = null
     private var existingId: Long? = null
     private var incoming = FollowUpDraft()
@@ -48,9 +73,12 @@ class FollowUpEditorViewModel @Inject constructor(
             allPeople.collect { people ->
                 val value = _state.value
                 val person = value.draft.personId
-                if (value.loaded && !value.busy && !value.saved && person != null && people.none { it.id == person }) {
+                if (value.loaded && !value.busy && !value.saved && person != null &&
+                    people.none { it.id == person }
+                ) {
                     if (existingId != null && repository.get(existingId!!) == null) {
-                        _state.value = value.copy(loaded = false, error = FollowUpEditorError.UNAVAILABLE)
+                        _state.value =
+                            value.copy(loaded = false, error = FollowUpEditorError.UNAVAILABLE)
                     } else {
                         _state.value = value.copy(draft = value.draft.copy(personId = null))
                         persist()
@@ -74,19 +102,44 @@ class FollowUpEditorViewModel @Inject constructor(
                 if (pending) {
                     val committed = repository.get(savedState.get<Long>("followup_committed_id")!!)
                         ?: error("Follow-up unavailable")
-                    _state.value = FollowUpEditorState(FollowUpDraft(committed.text, committed.contactId, committed.dueDate),
-                        loaded = true, busy = true, saved = true, askReminders = true)
+                    _state.value =
+                        FollowUpEditorState(
+                            FollowUpDraft(committed.text, committed.contactId, committed.dueDate),
+                            loaded = true,
+                            busy = true,
+                            saved = true,
+                            askReminders = true
+                        )
                 } else {
                     val stored = drafts.loadFollowUp(key)
                     val old = id?.let { repository.get(it) ?: error("Follow-up unavailable") }
-                    val raw = stored ?: old?.let { FollowUpDraft(it.text, it.contactId, it.dueDate) } ?: incoming
-                    val draft = if (raw.personId != null && contacts.getContactById(raw.personId) == null) raw.copy(personId = null) else raw
-                    _state.value = FollowUpEditorState(draft, loaded = true, completed = old?.completedAt != null,
-                        conflict = !text.isNullOrBlank() && stored != null && stored.text != text)
+                    val raw =
+                        stored ?: old?.let { FollowUpDraft(it.text, it.contactId, it.dueDate) }
+                            ?: incoming
+                    val draft = if (raw.personId != null &&
+                        contacts.getContactById(raw.personId) == null
+                    ) {
+                        raw.copy(personId = null)
+                    } else {
+                        raw
+                    }
+                    _state.value =
+                        FollowUpEditorState(
+                            draft,
+                            loaded = true,
+                            completed =
+                            old?.completedAt != null,
+                            conflict =
+                            !text.isNullOrBlank() && stored != null && stored.text != text
+                        )
                     persist()
                 }
-            } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { _state.value = _state.value.copy(error = FollowUpEditorError.UNAVAILABLE) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _state.value =
+                    _state.value.copy(error = FollowUpEditorError.UNAVAILABLE)
+            }
         }
     }
 
@@ -104,37 +157,68 @@ class FollowUpEditorViewModel @Inject constructor(
     fun person(value: Long) = edit { it.copy(personId = value) }
     fun due(value: String?) = edit { it.copy(dueDate = value) }
     fun resolveConflict(resume: Boolean) {
-        _state.value = _state.value.copy(conflict = false, draft = if (resume) _state.value.draft else incoming)
+        _state.value =
+            _state.value.copy(
+                conflict = false,
+                draft = if (resume) _state.value.draft else incoming
+            )
         persist()
     }
     private fun action(block: suspend () -> Unit) {
-        if (_state.value.busy || !_state.value.loaded || _state.value.conflict || _state.value.saved) return
+        if (_state.value.busy || !_state.value.loaded || _state.value.conflict ||
+            _state.value.saved
+        ) {
+            return
+        }
         _state.value = _state.value.copy(busy = true, error = null)
         viewModelScope.launch {
-            try { block() }
-            catch (e: CancellationException) { throw e }
-            catch (_: Exception) { _state.value = _state.value.copy(busy = false, error = FollowUpEditorError.SAVE) }
+            try {
+                block()
+            } catch (
+                e: CancellationException
+            ) {
+                throw e
+            } catch (_: Exception) {
+                _state.value =
+                    _state.value.copy(busy = false, error = FollowUpEditorError.SAVE)
+            }
         }
     }
     fun save() = action {
         val draft = _state.value.draft
-        val id = repository.save(existingId, requireNotNull(draft.personId), draft.text, draft.dueDate)
+        val id = repository.save(
+            existingId,
+            requireNotNull(draft.personId),
+            draft.text,
+            draft.dueDate
+        )
         activeKey?.let(drafts::remove)
         // Remember the committed ID before showing any optional permission UI.
         savedState["followup_pending_key"] = activeKey
         savedState["followup_committed_id"] = id
         _state.value = _state.value.copy(saved = true)
         val prompt = try {
-            val needed = draft.dueDate != null && !settings.followUpRemindersEnabled.first() && !settings.followUpReminderPrompted.first()
+            val needed =
+                draft.dueDate != null && !settings.followUpRemindersEnabled.first() &&
+                    !settings.followUpReminderPrompted.first()
             if (needed) settings.setFollowUpReminderPrompted()
             needed
-        } catch (e: CancellationException) { throw e }
-        catch (_: Exception) { false } // The record has already committed.
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            false
+        } // The record has already committed.
         _state.value = _state.value.copy(askReminders = prompt, finished = !prompt, busy = prompt)
     }
     fun complete() = action {
         val draft = _state.value.draft
-        repository.saveAndComplete(requireNotNull(existingId), requireNotNull(draft.personId), draft.text, draft.dueDate, !_state.value.completed)
+        repository.saveAndComplete(
+            requireNotNull(existingId),
+            requireNotNull(draft.personId),
+            draft.text,
+            draft.dueDate,
+            !_state.value.completed
+        )
         activeKey?.let(drafts::remove)
         _state.value = _state.value.copy(finished = true, busy = false)
     }
@@ -150,22 +234,39 @@ class FollowUpEditorViewModel @Inject constructor(
             try {
                 if (undo) recovery.restore(TrashKind.FOLLOW_UP, id)
                 _state.value = _state.value.copy(deletedId = null, finished = true, busy = false)
-            } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { _state.value = _state.value.copy(deletedId = null, busy = false, error = FollowUpEditorError.SAVE) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _state.value =
+                    _state.value.copy(
+                        deletedId = null,
+                        busy = false,
+                        error = FollowUpEditorError.SAVE
+                    )
+            }
         }
     }
-    fun requestPermission() { _state.value = _state.value.copy(askReminders = false) }
+    fun requestPermission() {
+        _state.value = _state.value.copy(askReminders = false)
+    }
     fun permissionResult(granted: Boolean) {
         viewModelScope.launch {
             try {
                 settings.setFollowUpRemindersEnabled(granted)
                 if (granted) FollowUpWorker.ensureScheduled(context)
                 finishSaved()
-            } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { _state.value = _state.value.copy(askReminders = true, error = FollowUpEditorError.SAVE) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _state.value =
+                    _state.value.copy(askReminders = true, error = FollowUpEditorError.SAVE)
+            }
         }
     }
-    fun finishSaved() { _state.value = _state.value.copy(askReminders = false, finished = true, busy = false) }
+    fun finishSaved() {
+        _state.value =
+            _state.value.copy(askReminders = false, finished = true, busy = false)
+    }
     fun discard() {
         if (_state.value.busy) return
         activeKey?.let(drafts::remove)
@@ -177,5 +278,8 @@ class FollowUpEditorViewModel @Inject constructor(
         savedState.remove<Long>("followup_committed_id")
         close()
     }
-    fun close() { loading?.cancel(); activeKey = null }
+    fun close() {
+        loading?.cancel()
+        activeKey = null
+    }
 }

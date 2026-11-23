@@ -2,7 +2,7 @@ package com.idontremember.personalcrm.ui.components
 
 import android.content.res.Resources
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.idontremember.personalcrm.R
@@ -87,7 +87,7 @@ fun formatEventDateText(
     absolutePatternRes: Int = R.string.date_pattern_event,
     now: Long = System.currentTimeMillis()
 ): String {
-    val strings = relativeDateStrings(LocalContext.current.resources)
+    val strings = relativeDateStrings(LocalResources.current)
     return formatEventDate(
         timestamp = timestamp,
         dateDisplay = dateDisplay,

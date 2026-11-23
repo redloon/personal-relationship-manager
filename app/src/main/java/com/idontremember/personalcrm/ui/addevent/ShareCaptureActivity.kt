@@ -17,9 +17,16 @@ class ShareCaptureActivity : ComponentActivity() {
         val incoming = if (intent.action == Intent.ACTION_SEND) {
             val text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString().orEmpty()
             val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT).orEmpty()
-            listOf(subject.takeIf { it.isNotBlank() && !text.startsWith(it) }, text.takeIf { it.isNotBlank() })
+            listOf(
+                subject.takeIf {
+                    it.isNotBlank() && !text.startsWith(it)
+                },
+                text.takeIf { it.isNotBlank() }
+            )
                 .filterNotNull().joinToString("\n").takeIf { it.isNotBlank() }
-        } else null
-        setContent { CaptureEntryContent(settings, incoming, onClose = ::finish) }
+        } else {
+            null
+        }
+        setContent { CaptureEntryContent(settings, initialText = incoming, onClose = ::finish) }
     }
 }

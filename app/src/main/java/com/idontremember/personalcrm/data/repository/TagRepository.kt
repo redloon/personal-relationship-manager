@@ -1,15 +1,15 @@
 package com.idontremember.personalcrm.data.repository
 
 import androidx.room.withTransaction
-import com.idontremember.personalcrm.data.db.AppDatabase
-import com.idontremember.personalcrm.data.db.rewriteEventTokens
 import com.idontremember.personalcrm.data.capture.InlineTokens
 import com.idontremember.personalcrm.data.capture.TokenTarget
+import com.idontremember.personalcrm.data.db.AppDatabase
 import com.idontremember.personalcrm.data.db.dao.TagDao
 import com.idontremember.personalcrm.data.db.entity.Tag
-import kotlinx.coroutines.flow.Flow
+import com.idontremember.personalcrm.data.db.rewriteEventTokens
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.flow.Flow
 
 @Singleton
 class TagRepository @Inject constructor(
@@ -31,7 +31,12 @@ class TagRepository @Inject constructor(
     suspend fun getOrCreateTag(name: String): Tag = tagDao.getOrCreate(name)
 
     suspend fun deleteTag(tag: Tag) = database.withTransaction {
-        database.rewriteEventTokens { tokens -> tokens.filterNot { it.target == TokenTarget.Tag(tag.name) } }
+        database.rewriteEventTokens { tokens ->
+            tokens.filterNot {
+                it.target ==
+                    TokenTarget.Tag(tag.name)
+            }
+        }
         tagDao.delete(tag)
     }
 }

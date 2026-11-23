@@ -12,19 +12,24 @@ import com.idontremember.personalcrm.data.db.entity.Contact
 import com.idontremember.personalcrm.data.repository.EventRepository
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import javax.inject.Inject
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import javax.inject.Inject
 
 @HiltAndroidTest
 class EventContactNavigationTest {
-    @get:Rule(order = 0) val hiltRule = HiltAndroidRule(this)
-    @get:Rule(order = 1) val composeTestRule = createAndroidComposeRule<MainActivity>()
+    @get:Rule(order = 0)
+    val hiltRule = HiltAndroidRule(this)
+
+    @get:Rule(order = 1)
+    val composeTestRule = createAndroidComposeRule<MainActivity>()
 
     @Inject lateinit var contactDao: ContactDao
+
     @Inject lateinit var eventDao: EventDao
+
     @Inject lateinit var eventRepository: EventRepository
 
     private var contactId = 0L

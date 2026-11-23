@@ -1,12 +1,12 @@
 package com.idontremember.personalcrm.ui.components
 
 import com.idontremember.personalcrm.data.settings.DateDisplay
-import org.junit.Assert.assertEquals
-import org.junit.Test
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 
 /**
  * JVM unit tests for the date-display preference rendering ([formatEventDate] /

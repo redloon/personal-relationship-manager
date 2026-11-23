@@ -17,25 +17,38 @@ import androidx.compose.ui.unit.dp
 import com.idontremember.personalcrm.R
 
 @Composable
-fun SearchField(query: String, onQueryChange: (String) -> Unit, hint: String, clearTag: String, modifier: Modifier = Modifier) {
+fun SearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    hint: String,
+    clearTag: String,
+    modifier: Modifier = Modifier
+) {
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
         modifier = modifier,
         placeholder = { Text(hint) },
         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-        trailingIcon = if (query.isNotEmpty()) {{
-            IconButton(onClick = { onQueryChange("") }, modifier = Modifier.testTag(clearTag)) {
-                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_clear_search))
+        trailingIcon = if (query.isNotEmpty()) {
+            {
+                IconButton(onClick = { onQueryChange("") }, modifier = Modifier.testTag(clearTag)) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = stringResource(R.string.cd_clear_search)
+                    )
+                }
             }
-        }} else null,
+        } else {
+            null
+        },
         singleLine = true
     )
 }
 
 @Composable
-fun SettingsButton(onClick: () -> Unit) {
-    IconButton(onClick = onClick, modifier = Modifier.size(48.dp).testTag("settings_button")) {
+fun SettingsButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    IconButton(onClick = onClick, modifier = modifier.size(48.dp).testTag("settings_button")) {
         Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.cd_settings))
     }
 }

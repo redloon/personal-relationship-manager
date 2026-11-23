@@ -5,8 +5,12 @@ import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.test.*
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.lifecycle.ViewModelStore
 import androidx.test.platform.app.InstrumentationRegistry
@@ -28,19 +32,28 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
 @HiltAndroidTest
 class RestoreFlowTest {
-    @get:Rule(order = 0) val hilt = HiltAndroidRule(this)
-    @get:Rule(order = 1) val ui = createAndroidComposeRule<MainActivity>()
+    @get:Rule(order = 0)
+    val hilt = HiltAndroidRule(this)
+
+    @get:Rule(order = 1)
+    val ui = createAndroidComposeRule<MainActivity>()
+
     @Inject lateinit var database: AppDatabase
+
     @Inject lateinit var exporter: DataExporter
+
     @Inject lateinit var settings: SettingsRepository
+
     @Inject lateinit var automaticBackup: AutomaticBackup
+
     @Inject lateinit var recovery: RecoveryRepository
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
@@ -57,9 +70,13 @@ class RestoreFlowTest {
             store.put("restore", model)
         }
         // Restoring this empty snapshot would remove the subsequently added note.
-        val backup = File(files, "before.json").apply { writeText(runBlocking { exporter.exportToJson() }) }
+        val backup = File(files, "before.json").apply {
+            writeText(runBlocking { exporter.exportToJson() })
+        }
         runBlocking { database.eventDao().insert(Event(note = "Keep until restore succeeds")) }
-        instrumentation.runOnMainSync { model.readImport(context.contentResolver, Uri.fromFile(backup)) }
+        instrumentation.runOnMainSync {
+            model.readImport(context.contentResolver, Uri.fromFile(backup))
+        }
         awaitState(RestoreState.READY)
     }
 
@@ -110,6 +127,11 @@ class RestoreFlowTest {
     }
 
     private fun assertCurrentNoteKept() = runBlocking {
-        assertEquals(listOf("Keep until restore succeeds"), database.eventDao().getAllOnce().map { it.note })
+        assertEquals(
+            listOf("Keep until restore succeeds"),
+            database.eventDao().getAllOnce().map {
+                it.note
+            }
+        )
     }
 }

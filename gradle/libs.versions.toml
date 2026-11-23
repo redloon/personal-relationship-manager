@@ -14,6 +14,10 @@ datastore = "1.1.7"
 coroutines = "1.10.2"
 hilt = "2.59.2"
 junit = "4.13.2"
+junitJupiter = "5.12.2"
+ktlintPlugin = "14.2.0"
+ktlint = "1.7.1"
+composeLint = "1.4.2"
 kotlin = "2.3.10"
 ksp = "2.3.6"
 nav3Core = "1.0.1"
@@ -23,6 +27,16 @@ work = "2.11.1"
 desugar = "2.1.5"
 
 [libraries]
+kotlinx-serialization-core = { module = "org.jetbrains.kotlinx:kotlinx-serialization-core", version = "1.8.1" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version = "1.8.1" }
+kotlinx-serialization-json-okio = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json-okio", version = "1.8.1" }
+androidx-hilt-navigation-compose = { module = "androidx.hilt:hilt-navigation-compose", version.ref = "androidxHilt" }
+androidx-compose-material-icons-core = { module = "androidx.compose.material:material-icons-core" }
+androidx-compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junitJupiter" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+slack-compose-lint = { module = "com.slack.lint.compose:compose-lint-checks", version.ref = "composeLint" }
 androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 android-desugar = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugar" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
@@ -58,6 +72,7 @@ androidx-navigation3-ui = { module = "androidx.navigation3:navigation3-ui", vers
 androidx-lifecycle-viewmodel-navigation3 = { module = "androidx.lifecycle:lifecycle-viewmodel-navigation3", version.ref = "lifecycleViewmodelNav3" }
 
 [plugins]
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintPlugin" }
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp"}

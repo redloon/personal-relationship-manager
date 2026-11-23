@@ -5,6 +5,9 @@ from pathlib import Path
 import unittest
 import subprocess
 import tempfile
+import select
+import shutil
+import signal
 import sys
 from unittest.mock import patch
 
@@ -65,10 +68,95 @@ class RefreshTests(unittest.TestCase):
                         process.kill()
                     process.wait()
 
+    def test_refresh_stops_initialized_stdio_runner_with_stdin_open(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in setup.RUNTIME_FILES:
+                shutil.copyfile(setup.SOURCE/name, root/name)
+            config = dict(sdk=str(root/'sdk'), inbox=str(root/'inbox'),
+                          state=str(root/'jobs'), avd='android_tests')
+            (root/'config.json').write_text(json.dumps(config))
+            with tempfile.TemporaryFile() as errors, patch.object(setup, 'DEST', root), patch.object(setup, 'STOP_GRACE_SECONDS', .15, create=True):
+                process = subprocess.Popen([sys.executable, str(root/'runner.py'), str(root/'config.json')],
+                                           stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=errors)
+                try:
+                    request = dict(jsonrpc='2.0', id=1, method='initialize', params=dict(
+                        protocolVersion='2025-03-26', capabilities={},
+                        clientInfo=dict(name='refresh-regression', version='1')))
+                    process.stdin.write((json.dumps(request)+'\n').encode())
+                    process.stdin.flush()
+                    self.assertTrue(select.select([process.stdout], [], [], 5)[0], 'MCP startup timed out')
+                    self.assertEqual(json.loads(process.stdout.readline())['id'], 1)
+                    setup.stop_runners(config)
+                    self.assertIn(process.wait(timeout=2), (0, -signal.SIGKILL))
+                    self.assertFalse(process.stdin.closed, 'refresh must work while the gateway keeps stdin open')
+                finally:
+                    if process.poll() is None:
+                        process.kill()
+                    process.wait(timeout=5)
+                    process.stdin.close()
+                    process.stdout.close()
+
+    def test_refresh_forces_verified_idle_process_that_ignores_sigterm(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            script=root/'runner.py'
+            script.write_text('import signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); print("ready",flush=True); time.sleep(60)')
+            process=subprocess.Popen([sys.executable,str(script),str(root/'config.json')],
+                                     stdin=subprocess.PIPE,stdout=subprocess.PIPE)
+            try:
+                self.assertTrue(select.select([process.stdout],[],[],5)[0])
+                self.assertEqual(process.stdout.readline().strip(),b'ready')
+                with patch.object(setup,'DEST',root), patch.object(setup,'STOP_GRACE_SECONDS',.05):
+                    setup.stop_runners(dict(state=str(root/'jobs')))
+                self.assertEqual(process.wait(timeout=2),-signal.SIGKILL)
+            finally:
+                if process.poll() is None:process.kill()
+                process.wait(timeout=5)
+                process.stdin.close();process.stdout.close()
+
+    def test_active_job_refuses_every_shutdown_signal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = root/'runner.py'
+            script.write_text('import time; time.sleep(60)')
+            status = root/'jobs'/'job'/'status.json'
+            status.parent.mkdir(parents=True)
+            status.write_text(json.dumps(dict(status='running', phase='cleanup')))
+            with patch.object(setup, 'DEST', root), patch.object(setup, 'terminate_runner') as terminate:
+                process = subprocess.Popen([sys.executable, str(script), str(root/'config.json')])
+                try:
+                    with self.assertRaisesRegex(RuntimeError, 'Finish/cancel'):
+                        setup.stop_runners(dict(state=str(root/'jobs')))
+                    terminate.assert_not_called()
+                    self.assertIsNone(process.poll())
+                finally:
+                    process.kill()
+                    process.wait(timeout=5)
+
     def test_changed_identity_is_not_signalled(self):
-        with patch.object(setup.os, 'pidfd_open', None, create=True), patch.object(setup, 'process_identity', return_value='new'), patch.object(setup.os, 'kill') as kill:
-            setup.terminate_runner(123, 'old')
-            kill.assert_not_called()
+        for signum in (signal.SIGTERM, signal.SIGKILL):
+            with self.subTest(signal=signum), patch.object(setup.os, 'pidfd_open', None, create=True), patch.object(setup, 'process_identity', return_value='new'), patch.object(setup.os, 'kill') as kill:
+                setup.terminate_runner(123, 'old', signum)
+                kill.assert_not_called()
+
+    def test_pidfd_rechecks_identity_before_force_stop(self):
+        with patch.object(setup.os, 'pidfd_open', return_value=42, create=True), patch.object(setup.signal, 'pidfd_send_signal', create=True) as send, patch.object(setup.os, 'close') as close, patch.object(setup, 'process_identity', return_value='new'):
+            setup.terminate_runner(123, 'old', signal.SIGKILL)
+            send.assert_not_called()
+            close.assert_called_once_with(42)
+
+    def test_unrelated_process_survives_refresh(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(setup, 'DEST', root):
+                process = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
+                try:
+                    setup.stop_runners(dict(state=str(root/'jobs')))
+                    self.assertIsNone(process.poll())
+                finally:
+                    process.kill()
+                    process.wait(timeout=5)
 
 class EmulatorChecks(unittest.TestCase):
     def check(self, outputs):

@@ -80,7 +80,7 @@ def _write(directory, name, data):
 class Captures:
     def __init__(self, directory, outbox, owner_id, app_sha256, test_sha256, device):
         self.owner_id = _identifier(owner_id)
-        for value in [app_sha256, test_sha256]:
+        for value in [app_sha256] + ([] if test_sha256 is None else [test_sha256]):
             if not isinstance(value, str) or not re.fullmatch('[0-9a-f]{64}', value):
                 raise ValueError('Invalid APK hash')
         self.directory = Path(os.path.abspath(directory))

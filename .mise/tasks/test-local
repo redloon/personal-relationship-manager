@@ -155,7 +155,7 @@ adb logcat -c 2>/dev/null || true
 echo ""
 echo "▶ Step 5/6: Running instrumented tests..."
 
-TEST_COMMAND=(adb shell am instrument -w -e clearPackageData true)
+TEST_COMMAND=(adb shell am instrument -w -r -e clearPackageData true)
 
 if [ -n "$FILTER" ]; then
     TEST_COMMAND+=(-e class "$FILTER")

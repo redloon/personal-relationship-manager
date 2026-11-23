@@ -7,10 +7,10 @@ import androidx.compose.ui.test.onNodeWithText
 import com.idontremember.personalcrm.data.db.AppDatabase
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import javax.inject.Inject
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import javax.inject.Inject
 
 /**
  * UI tests for complete capture History.

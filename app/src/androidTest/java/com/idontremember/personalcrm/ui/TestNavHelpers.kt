@@ -2,11 +2,11 @@ package com.idontremember.personalcrm.ui
 
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.view.accessibility.AccessibilityWindowInfo
-import androidx.test.platform.app.InstrumentationRegistry
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.test.platform.app.InstrumentationRegistry
 
 /**
  * Shared navigation helpers for UI tests.
@@ -16,7 +16,8 @@ import androidx.compose.ui.test.performClick
  */
 fun ComposeTestRule.navigateToHistory() {
     onNodeWithTag("nav_tab_home").performClick()
-    onNodeWithTag("nav_tab_home").performClick() // Reselect restores the Home root if its history was retained.
+    // Reselect restores the Home root if its history was retained.
+    onNodeWithTag("nav_tab_home").performClick()
     waitUntilTagExists("nav_tab_events")
     onNodeWithTag("nav_tab_events").performClick()
     waitUntilTagDisplayed("events_list_screen")
@@ -59,7 +60,8 @@ fun ComposeTestRule.waitForKeyboard(visible: Boolean, timeoutMillis: Long = 10_0
             flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         }
         waitUntil(timeoutMillis) {
-            automation.windows.any { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD } == visible
+            automation.windows.any { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD } ==
+                visible
         }
         waitForIdle()
     } finally {

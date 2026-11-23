@@ -5,16 +5,17 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.idontremember.personalcrm.data.backup.AutomaticBackup
-import com.idontremember.personalcrm.data.recovery.RecoveryRepository
-import com.idontremember.personalcrm.data.recovery.TrashKind
 import com.idontremember.personalcrm.data.backup.BackupJson
 import com.idontremember.personalcrm.data.backup.BackupSnapshot
 import com.idontremember.personalcrm.data.backup.DataExporter
+import com.idontremember.personalcrm.data.recovery.RecoveryRepository
+import com.idontremember.personalcrm.data.recovery.TrashKind
 import com.idontremember.personalcrm.data.settings.DateDisplay
 import com.idontremember.personalcrm.data.settings.DefaultEventTime
 import com.idontremember.personalcrm.data.settings.SettingsRepository
 import com.idontremember.personalcrm.data.settings.ThemeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,7 +24,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
 
 enum class ExportState { IDLE, EXPORTING, DONE, ERROR }
 enum class RestoreState { IDLE, LOADING, READY, RESTORING, DONE, ERROR }
@@ -44,45 +44,78 @@ class SettingsViewModel @Inject constructor(
     val defaultEventTime: StateFlow<DefaultEventTime> = settingsRepository.defaultEventTime
         .stateIn(viewModelScope, SharingStarted.Eagerly, DefaultEventTime.NOW)
 
-    val backupStatus = automaticBackup.status.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000),
-        com.idontremember.personalcrm.data.backup.BackupStatus(null, null, false))
-    val deletedItems = recovery.observeDeleted().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val backupStatus = automaticBackup.status.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        com.idontremember.personalcrm.data.backup.BackupStatus(null, null, false)
+    )
+    val deletedItems = recovery.observeDeleted().stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
     private val _backupBusy = MutableStateFlow(false)
     val backupBusy: StateFlow<Boolean> = _backupBusy
     private val _recoveryFailed = MutableStateFlow(false)
     val recoveryFailed: StateFlow<Boolean> = _recoveryFailed
 
-    init { viewModelScope.launch {
-        try { recovery.purgeExpired() }
-        catch(e: CancellationException) { throw e }
-        catch(_: Exception) { _recoveryFailed.value = true }
-    } }
+    init {
+        viewModelScope.launch {
+            try {
+                recovery.purgeExpired()
+            } catch (
+                e: CancellationException
+            ) {
+                throw e
+            } catch (_: Exception) {
+                _recoveryFailed.value = true
+            }
+        }
+    }
 
     fun setBackupFolder(uri: Uri?) {
         viewModelScope.launch {
-            try { automaticBackup.setFolder(uri); if(uri != null) backUpNow() }
-            catch(e: CancellationException) { throw e }
-            catch(_: Exception) { _exportState.value = ExportState.ERROR }
+            try {
+                automaticBackup.setFolder(uri)
+                if (uri != null) backUpNow()
+            } catch (
+                e: CancellationException
+            ) {
+                throw e
+            } catch (_: Exception) {
+                _exportState.value = ExportState.ERROR
+            }
         }
     }
 
     fun backUpNow() {
-        if(_backupBusy.value) return
+        if (_backupBusy.value) return
         _backupBusy.value = true
         viewModelScope.launch {
-            try { automaticBackup.backUpNow() }
-            finally { _backupBusy.value = false }
+            try {
+                automaticBackup.backUpNow()
+            } finally {
+                _backupBusy.value = false
+            }
         }
     }
 
     fun recover(kind: TrashKind, id: Long) {
         viewModelScope.launch {
-            try { recovery.restore(kind, id) }
-            catch(e: CancellationException) { throw e }
-            catch(_: Exception) { _recoveryFailed.value = true }
+            try {
+                recovery.restore(kind, id)
+            } catch (
+                e: CancellationException
+            ) {
+                throw e
+            } catch (_: Exception) {
+                _recoveryFailed.value = true
+            }
         }
     }
-    fun clearRecoveryError() { _recoveryFailed.value = false }
+    fun clearRecoveryError() {
+        _recoveryFailed.value = false
+    }
 
     private val _exportState = MutableStateFlow(ExportState.IDLE)
     val exportState: StateFlow<ExportState> = _exportState
@@ -91,10 +124,18 @@ class SettingsViewModel @Inject constructor(
     private val _restorePreview = MutableStateFlow<BackupSnapshot?>(null)
     val restorePreview: StateFlow<BackupSnapshot?> = _restorePreview
 
-    fun setThemeMode(value: ThemeMode) { viewModelScope.launch { settingsRepository.setThemeMode(value) } }
-    fun setDynamicColor(value: Boolean) { viewModelScope.launch { settingsRepository.setDynamicColor(value) } }
-    fun setDateDisplay(value: DateDisplay) { viewModelScope.launch { settingsRepository.setDateDisplay(value) } }
-    fun setDefaultEventTime(value: DefaultEventTime) { viewModelScope.launch { settingsRepository.setDefaultEventTime(value) } }
+    fun setThemeMode(value: ThemeMode) {
+        viewModelScope.launch { settingsRepository.setThemeMode(value) }
+    }
+    fun setDynamicColor(value: Boolean) {
+        viewModelScope.launch { settingsRepository.setDynamicColor(value) }
+    }
+    fun setDateDisplay(value: DateDisplay) {
+        viewModelScope.launch { settingsRepository.setDateDisplay(value) }
+    }
+    fun setDefaultEventTime(value: DefaultEventTime) {
+        viewModelScope.launch { settingsRepository.setDefaultEventTime(value) }
+    }
 
     fun exportTo(resolver: ContentResolver, uri: Uri) {
         if (_exportState.value == ExportState.EXPORTING) return
@@ -103,17 +144,28 @@ class SettingsViewModel @Inject constructor(
             try {
                 val json = dataExporter.exportToJson()
                 withContext(Dispatchers.IO) {
-                    val output = resolver.openOutputStream(uri, "wt") ?: error("Cannot open backup file")
-                    output.use { it.write(json.toByteArray(Charsets.UTF_8)); it.flush() }
+                    val output =
+                        resolver.openOutputStream(uri, "wt") ?: error("Cannot open backup file")
+                    output.use {
+                        it.write(json.toByteArray(Charsets.UTF_8))
+                        it.flush()
+                    }
                 }
                 _exportState.value = ExportState.DONE
-            } catch (e: CancellationException) { throw e
-            } catch (_: Exception) { _exportState.value = ExportState.ERROR }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _exportState.value = ExportState.ERROR
+            }
         }
     }
 
     fun readImport(resolver: ContentResolver, uri: Uri) {
-        if (_restoreState.value == RestoreState.LOADING || _restoreState.value == RestoreState.RESTORING) return
+        if (_restoreState.value == RestoreState.LOADING ||
+            _restoreState.value == RestoreState.RESTORING
+        ) {
+            return
+        }
         _restorePreview.value = null
         _restoreState.value = RestoreState.LOADING
         viewModelScope.launch {
@@ -124,8 +176,11 @@ class SettingsViewModel @Inject constructor(
                 }
                 _restorePreview.value = BackupJson.decode(source)
                 _restoreState.value = RestoreState.READY
-            } catch (e: CancellationException) { throw e
-            } catch (_: Exception) { _restoreState.value = RestoreState.ERROR }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _restoreState.value = RestoreState.ERROR
+            }
         }
     }
 
@@ -137,21 +192,39 @@ class SettingsViewModel @Inject constructor(
             try {
                 val safety = dataExporter.exportToJson()
                 withContext(Dispatchers.IO) {
-                    val output = resolver.openOutputStream(safetyUri, "wt") ?: error("Cannot open safety backup")
-                    output.use { it.write(safety.toByteArray(Charsets.UTF_8)); it.flush() }
-                    val saved = resolver.openInputStream(safetyUri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
-                        ?: error("Cannot verify safety backup")
+                    val output =
+                        resolver.openOutputStream(safetyUri, "wt")
+                            ?: error("Cannot open safety backup")
+                    output.use {
+                        it.write(safety.toByteArray(Charsets.UTF_8))
+                        it.flush()
+                    }
+                    val saved =
+                        resolver.openInputStream(safetyUri)?.bufferedReader(Charsets.UTF_8)?.use {
+                            it.readText()
+                        }
+                            ?: error("Cannot verify safety backup")
                     require(BackupJson.decode(saved) == BackupJson.decode(safety))
                 }
                 dataExporter.restore(snapshot)
                 _restorePreview.value = null
                 _restoreState.value = RestoreState.DONE
-            } catch (e: CancellationException) { throw e
-            } catch (_: Exception) { _restoreState.value = RestoreState.ERROR }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _restoreState.value = RestoreState.ERROR
+            }
         }
     }
 
-    fun cancelRestore() { _restorePreview.value = null; _restoreState.value = RestoreState.IDLE }
-    fun clearExportFeedback() { _exportState.value = ExportState.IDLE }
-    fun clearRestoreFeedback() { _restoreState.value = RestoreState.IDLE }
+    fun cancelRestore() {
+        _restorePreview.value = null
+        _restoreState.value = RestoreState.IDLE
+    }
+    fun clearExportFeedback() {
+        _exportState.value = ExportState.IDLE
+    }
+    fun clearRestoreFeedback() {
+        _restoreState.value = RestoreState.IDLE
+    }
 }

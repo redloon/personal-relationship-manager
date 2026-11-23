@@ -1,5 +1,6 @@
 package com.idontremember.personalcrm.ui
 
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsSelected
@@ -8,20 +9,19 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.graphics.toPixelMap
 import com.idontremember.personalcrm.data.settings.DateDisplay
 import com.idontremember.personalcrm.data.settings.DefaultEventTime
 import com.idontremember.personalcrm.data.settings.SettingsRepository
 import com.idontremember.personalcrm.data.settings.ThemeMode
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import javax.inject.Inject
 
 /**
  * UI tests for the Settings screen (packet P1).
@@ -119,12 +119,17 @@ class SettingsScreenTest {
 
         composeTestRule.waitUntilTagExists("date_display_selector")
         composeTestRule.onNodeWithTag("date_display_relative").performScrollTo().performClick()
-        awaitStored { runBlocking { settingsRepository.dateDisplay.first() } == DateDisplay.RELATIVE }
+        awaitStored {
+            runBlocking { settingsRepository.dateDisplay.first() } == DateDisplay.RELATIVE
+        }
         composeTestRule.onNodeWithTag("date_display_relative").assertIsSelected()
 
-        composeTestRule.onNodeWithTag("default_event_time_last_used").performScrollTo().performClick()
+        composeTestRule.onNodeWithTag(
+            "default_event_time_last_used"
+        ).performScrollTo().performClick()
         awaitStored {
-            runBlocking { settingsRepository.defaultEventTime.first() } == DefaultEventTime.LAST_USED
+            runBlocking { settingsRepository.defaultEventTime.first() } ==
+                DefaultEventTime.LAST_USED
         }
         composeTestRule.onNodeWithTag("default_event_time_last_used").assertIsSelected()
 

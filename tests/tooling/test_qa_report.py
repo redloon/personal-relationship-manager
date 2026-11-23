@@ -49,6 +49,19 @@ class QaReportTests(unittest.TestCase):
         self.assertIn('not a regression-suite pass', report)
         self.assertIn(self.artifacts[0]['sha256'], report)
 
+    def test_app_only_recovery_captures_keep_app_hash_without_inventing_test_apk(self):
+        for mixed in [False,True]:
+            with self.subTest(mixed=mixed):
+                self.artifacts[0]['test_sha256']=None
+                self.artifacts[1]['test_sha256']='e'*64 if mixed else None
+                self.write_manifest()
+                result=self.run_task()
+                self.assertEqual(result.returncode,0,result.stderr)
+                report=(self.directory/'review.md').read_text()
+                self.assertIn('App-only',report)
+                self.assertNotIn('`None`',report)
+                self.assertIn('d'*64,report)
+
     def test_optional_output_and_evidence_preserve_failure_and_steps(self):
         evidence = self.root/'evidence.json'
         evidence.write_text(json.dumps(dict(status='failed', steps=[

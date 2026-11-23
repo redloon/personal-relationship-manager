@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+#MISE description="Stage an exact release bundle APK, or build/stage the debug app only"
+set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/task-env.sh"
+if [[ $# == 0 ]]; then
+    exec "$TASK_ROOT/.mise/tasks/gradle" assembleDebug --stage-app --console=plain
+fi
+[[ $# == 1 ]] || { echo 'Usage: test-stage-app [RELEASE_BUNDLE_APK]' >&2; exit 1; }
+mkdir -p "$TASK_ROOT/.gradle"
+exec flock --close --timeout "${BUILD_LOCK_TIMEOUT:-300}" "$TASK_ROOT/.gradle/agent-build.lock" \
+    python3 "$TASK_ROOT/scripts/stage-mcp-apks.py" --release-apk "$1"

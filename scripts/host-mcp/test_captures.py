@@ -57,6 +57,16 @@ class CapturesTests(unittest.TestCase):
         self.assertEqual((self.outbox/result['relative_path']).read_bytes(), PNG)
         self.assertEqual(self.capture.list_artifacts(), [result])
 
+    def test_recovery_artifacts_have_no_invented_instrumentation_hash(self):
+        app_only = captures.Captures(self.directory, self.outbox, 'a'*32, 'b'*64, None, self.device)
+        result = app_only.screenshot('saved_records')
+        self.assertIsNone(result['test_sha256'])
+        reopened = captures.Captures(self.directory, self.outbox, 'a'*32, 'b'*64, None, self.device)
+        self.assertEqual(reopened.list_artifacts(), [result])
+        for invalid in ['', 'invalid']:
+            with self.assertRaises(ValueError):
+                captures.Captures(self.directory, self.outbox, 'a'*32, 'b'*64, invalid, self.device)
+
     def test_artifacts_survive_reinstantiation(self):
         result = self.capture.screenshot()
         reopened = captures.Captures(self.directory, self.outbox, 'a'*32, 'b'*64, 'c'*64, self.device)

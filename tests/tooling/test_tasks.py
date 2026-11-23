@@ -41,7 +41,29 @@ class TasksTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         calls = (self.root / 'calls').read_text().splitlines()
         self.assertEqual(calls.count('invocation'), 1)
-        self.assertTrue({'testDebugUnitTest', 'assembleDebug', 'assembleDebugAndroidTest', 'lintDebug'} <= set(calls))
+        self.assertTrue({'testDebugUnitTest', 'assembleDebug', 'assembleDebugAndroidTest', 'lintDebug', 'ktlintCheck'} <= set(calls))
+
+    def test_staging_holds_build_lock_and_records_provenance(self):
+        self.wrapper("""mkdir -p app/build/outputs/apk/debug app/build/outputs/apk/androidTest/debug
+printf app > app/build/outputs/apk/debug/app-debug.apk
+printf test > app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+""")
+        stage = self.root / 'scripts/stage-mcp-apks.py'
+        stage.write_text(stage.read_text().replace('    inbox.mkdir', """    import fcntl
+    with (ROOT / '.gradle/agent-build.lock').open('a') as probe:
+        try:
+            fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            pass
+        else:
+            raise AssertionError('staging lost the build lock')
+    inbox.mkdir"""))
+        result = self.task('test-stage')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        import json
+        manifest = json.loads((self.root / 'ignored/mcp-inbox/manifest.json').read_text())
+        self.assertEqual(len(manifest['provenance']['source_sha256']), 64)
+        self.assertIn('git_revision', manifest['provenance'])
 
     def test_gradle_failure_is_blocking(self):
         self.wrapper('exit 17\n')
@@ -61,6 +83,14 @@ class TasksTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('changed during', result.stderr)
 
+    def test_lint_baseline_change_during_build_is_rejected(self):
+        (self.root / 'app').mkdir()
+        (self.root / 'app/lint-baseline.xml').write_text('<issues/>')
+        self.wrapper('echo changed > app/lint-baseline.xml\n')
+        result = self.task('build')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('changed during', result.stderr)
+
     def test_schema_change_during_build_is_rejected(self):
         (self.root / 'app/schemas').mkdir(parents=True)
         (self.root / 'app/schemas/2.json').write_text('{}')
@@ -72,7 +102,7 @@ class TasksTest(unittest.TestCase):
     def test_instrumentation_requires_nonzero_success_and_no_failure_markers(self):
         log = self.root / 'instrumentation.txt'
         for output, expected in [
-            ('OK (3 tests)\n', 0), ('OK (1 test)\n', 0),
+            ('OK (3 tests)\nINSTRUMENTATION_CODE: -1\n', 0), ('OK (1 test)\nINSTRUMENTATION_CODE: -1\n', 0),
             ('INSTRUMENTATION_FAILED: runner missing\n', 1),
             ('OK (0 tests)\n', 1), ('', 1),
             ('FAILURES!!!\nOK (3 tests)\n', 1),
@@ -105,7 +135,7 @@ class TasksTest(unittest.TestCase):
     def test_sdk_home_fallback(self):
         sdk = self.root / 'android-sdk/platform-tools'
         sdk.mkdir(parents=True)
-        env = dict(self.env, HOME=str(self.root), ANDROID_HOME='', ANDROID_SDK_ROOT='')
+        env = dict(self.env, HOME=str(self.root), ANDROID_HOME='', ANDROID_SDK_ROOT='', PATH=os.defpath)
         result = subprocess.run(['bash', '-c', 'source scripts/android-sdk-env.sh; echo "$ANDROID_HOME"'],
                                 cwd=self.root, env=env, capture_output=True, text=True)
         self.assertEqual(result.stdout.strip(), str(sdk.parent))

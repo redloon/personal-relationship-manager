@@ -38,7 +38,9 @@ class AppDatabaseMigrationTest : MigrationTestBase() {
     @Test
     fun productionMigration_preservesPopulatedData() {
         helper.createDatabase("production-migration", 1).use { it.seedSampleData() }
-        helper.runMigrationsAndValidate("production-migration", 2, true, MIGRATION_1_2).use { it.assertSampleDataPreserved() }
+        helper.runMigrationsAndValidate("production-migration", 2, true, MIGRATION_1_2).use {
+            it.assertSampleDataPreserved()
+        }
     }
 
     /**
@@ -46,7 +48,8 @@ class AppDatabaseMigrationTest : MigrationTestBase() {
      * the inherited production `helper` on purpose — see the class KDoc.
      */
     @get:Rule
-    @Suppress("DEPRECATION") // assets-folder ctor: the only way to load non-production schema fixtures
+    // assets-folder ctor: the only way to load non-production schema fixtures
+    @Suppress("DEPRECATION")
     val scratchHelper = MigrationTestHelper(
         InstrumentationRegistry.getInstrumentation(),
         SCRATCH_SCHEMA_ASSETS

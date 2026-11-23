@@ -4,12 +4,18 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract
+import androidx.core.net.toUri
 
 internal fun backupFolderIntent(folder: String): Intent {
-    val tree = Uri.parse(folder)
+    val tree = folder.toUri()
     require(tree.scheme == "content" && DocumentsContract.isTreeUri(tree))
-    val document = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
-    return Intent(Intent.ACTION_VIEW).setDataAndType(document, DocumentsContract.Document.MIME_TYPE_DIR)
+    val document = DocumentsContract.buildDocumentUriUsingTree(
+        tree,
+        DocumentsContract.getTreeDocumentId(tree)
+    )
+    return Intent(
+        Intent.ACTION_VIEW
+    ).setDataAndType(document, DocumentsContract.Document.MIME_TYPE_DIR)
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 }
 

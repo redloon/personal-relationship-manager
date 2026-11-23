@@ -9,12 +9,12 @@ import androidx.compose.ui.test.performTextInput
 import com.idontremember.personalcrm.data.db.dao.ContactDao
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import javax.inject.Inject
 
 /**
  * UI tests for the ContactsListScreen.
@@ -131,7 +131,9 @@ class ContactsListScreenTest {
     @Test
     fun clearSearchRestoresContacts() {
         runBlocking {
-            contactDao.insert(com.idontremember.personalcrm.data.db.entity.Contact(displayName = "Alice"))
+            contactDao.insert(
+                com.idontremember.personalcrm.data.db.entity.Contact(displayName = "Alice")
+            )
         }
         composeTestRule.waitUntilTagDisplayed("contact_list_item")
         composeTestRule.onNodeWithTag("search_field").performTextInput("nobody")

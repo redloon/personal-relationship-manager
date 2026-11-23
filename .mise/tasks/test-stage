@@ -2,5 +2,4 @@
 #MISE description="Build and stage APKs for exclusive Android MCP testing"
 set -euo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/task-env.sh"
-"$TASK_ROOT/.mise/tasks/gradle" assembleDebug assembleDebugAndroidTest --console=plain "$@"
-python3 "$TASK_ROOT/scripts/stage-mcp-apks.py"
+"$TASK_ROOT/.mise/tasks/gradle" assembleDebug assembleDebugAndroidTest --stage-apks --console=plain "$@"

@@ -12,6 +12,7 @@ import com.idontremember.personalcrm.data.db.entity.Contact
 import com.idontremember.personalcrm.testdata.RandomContactGenerator
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -25,7 +26,6 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import javax.inject.Inject
 
 /**
  * Large-scale idempotent sync test.
@@ -177,14 +177,23 @@ class ContactsSyncStressTest {
     fun hiddenContactStaysAttachedAndReceivesUpdatesAcrossRepeatedSyncs(): Unit = runTest {
         contactsSyncManager.syncContacts()
         val people = contactDao.getAllIncludingHiddenOnce()
-        val uniqueNames = people.groupingBy { it.displayName }.eachCount().filterValues { it == 1 }.keys
+        val uniqueNames = people.groupingBy {
+            it.displayName
+        }.eachCount().filterValues { it == 1 }.keys
         val original = people.first { it.displayName in uniqueNames }
         contactDao.setHidden(listOf(original.id), true)
         val renamed = "Hidden Sync Test Person"
-        contentResolver.update(ContactsContract.Data.CONTENT_URI,
-            ContentValues().apply { put(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, renamed) },
+        contentResolver.update(
+            ContactsContract.Data.CONTENT_URI,
+            ContentValues().apply {
+                put(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, renamed)
+            },
             "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
-            arrayOf(original.androidContactId.toString(), ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE))
+            arrayOf(
+                original.androidContactId.toString(),
+                ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE
+            )
+        )
         repeat(2) { contactsSyncManager.syncContacts() }
         val after = contactDao.getById(original.id)!!
         assertTrue(after.isHidden)
@@ -193,7 +202,12 @@ class ContactsSyncStressTest {
         assertEquals(people.size, contactDao.getAllIncludingHiddenOnce().size)
         assertFalse(contactDao.getAll().first().any { it.id == original.id })
         contactDao.setHidden(listOf(original.id), false)
-        assertTrue(contactDao.getAll().first().any { it.id == original.id && it.displayName == renamed })
+        assertTrue(
+            contactDao.getAll().first().any {
+                it.id == original.id &&
+                    it.displayName == renamed
+            }
+        )
     }
 
     @Test
@@ -204,19 +218,30 @@ class ContactsSyncStressTest {
         // what the provider reports after seeding, not the seeded row count.
         val providerNames = providerDisplayNames()
         val providerCount = providerNames.size
-        assertTrue("Seed should produce 400+ aggregated contacts, got $providerCount", providerCount > 400)
+        assertTrue(
+            "Seed should produce 400+ aggregated contacts, got $providerCount",
+            providerCount > 400
+        )
 
         // Act: perform first sync
         val result = contactsSyncManager.syncContacts()
 
         // Assert: every provider contact was added, nothing updated
-        assertEquals("Sync should report one result per provider contact", providerCount, result.total)
+        assertEquals(
+            "Sync should report one result per provider contact",
+            providerCount,
+            result.total
+        )
         assertEquals("Expected all contacts to be added", result.total, result.added)
         assertEquals("Expected zero updates on first sync", 0, result.updated)
 
         // Verify Room mirrors the provider exactly
         val allContacts = contactDao.getAll().first()
-        assertEquals("Room should mirror the provider contact count", providerCount, allContacts.size)
+        assertEquals(
+            "Room should mirror the provider contact count",
+            providerCount,
+            allContacts.size
+        )
     }
 
     @Test
@@ -269,7 +294,11 @@ class ContactsSyncStressTest {
         assertNotNull("Expected at least one contact with a single provider phone row", target)
 
         val providerPhones = providerPhoneNumbers(target!!.androidContactId!!)
-        assertEquals("Synced phone should match the provider", providerPhones.first(), target.phoneNumber)
+        assertEquals(
+            "Synced phone should match the provider",
+            providerPhones.first(),
+            target.phoneNumber
+        )
     }
 
     @Test
@@ -314,9 +343,21 @@ class ContactsSyncStressTest {
 
         // Assert: no data changed
         for (i in afterFirst.indices) {
-            assertEquals("Name changed for ${afterFirst[i].id}", afterFirst[i].displayName, afterSecond[i].displayName)
-            assertEquals("Phone changed for ${afterFirst[i].id}", afterFirst[i].phoneNumber, afterSecond[i].phoneNumber)
-            assertEquals("Email changed for ${afterFirst[i].id}", afterFirst[i].email, afterSecond[i].email)
+            assertEquals(
+                "Name changed for ${afterFirst[i].id}",
+                afterFirst[i].displayName,
+                afterSecond[i].displayName
+            )
+            assertEquals(
+                "Phone changed for ${afterFirst[i].id}",
+                afterFirst[i].phoneNumber,
+                afterSecond[i].phoneNumber
+            )
+            assertEquals(
+                "Email changed for ${afterFirst[i].id}",
+                afterFirst[i].email,
+                afterSecond[i].email
+            )
         }
     }
 
@@ -340,16 +381,28 @@ class ContactsSyncStressTest {
         ops.add(
             ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
                 .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, rawIdx)
-                .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
-                .withValue(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, newContactName)
+                .withValue(
+                    ContactsContract.Data.MIMETYPE,
+                    ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE
+                )
+                .withValue(
+                    ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME,
+                    newContactName
+                )
                 .build()
         )
         ops.add(
             ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
                 .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, rawIdx)
-                .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
+                .withValue(
+                    ContactsContract.Data.MIMETYPE,
+                    ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE
+                )
                 .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, "+19999999999")
-                .withValue(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE)
+                .withValue(
+                    ContactsContract.CommonDataKinds.Phone.TYPE,
+                    ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE
+                )
                 .build()
         )
         contentResolver.applyBatch(ContactsContract.AUTHORITY, ops)
@@ -444,11 +497,17 @@ class ContactsSyncStressTest {
         val allContacts = contactDao.getAll().first()
 
         // Check CJK names
-        val cjkContact = allContacts.find { it.displayName.contains("田中") || it.displayName.contains("中田") }
+        val cjkContact = allContacts.find {
+            it.displayName.contains("田中") ||
+                it.displayName.contains("中田")
+        }
         assertNotNull("CJK contact should survive round-trip", cjkContact)
 
         // Check accented names
-        val accentedContact = allContacts.find { it.displayName.contains("José") || it.displayName.contains("García") }
+        val accentedContact = allContacts.find {
+            it.displayName.contains("José") ||
+                it.displayName.contains("García")
+        }
         assertNotNull("Accented contact should survive round-trip", accentedContact)
 
         // Check emoji name

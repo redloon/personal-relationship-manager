@@ -7,13 +7,18 @@ import android.provider.DocumentsContract
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.idontremember.personalcrm.ui.settings.backupFolderIntent
 import com.idontremember.personalcrm.ui.settings.openBackupFolder
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class BackupFolderTest {
-    private val tree = Uri.parse("content://com.android.externalstorage.documents/tree/primary%3ADocuments")
+    private val tree = Uri.parse(
+        "content://com.android.externalstorage.documents/tree/primary%3ADocuments"
+    )
+
     @Test fun opensTheSelectedDirectoryWithReadAccess() {
         val intent = backupFolderIntent(tree.toString())
         assertEquals(Intent.ACTION_VIEW, intent.action)
@@ -24,6 +29,7 @@ class BackupFolderTest {
         assertTrue(openBackupFolder(tree.toString()) { launched = it })
         assertEquals(intent.data, launched!!.data)
     }
+
     @Test fun missingViewerRevokedAccessAndMalformedFolderReturnFailure() {
         assertFalse(openBackupFolder(tree.toString()) { throw ActivityNotFoundException() })
         assertFalse(openBackupFolder(tree.toString()) { throw SecurityException("revoked") })

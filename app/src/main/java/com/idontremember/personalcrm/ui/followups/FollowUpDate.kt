@@ -7,4 +7,6 @@ import java.util.Locale
 
 /** Planned dates are calendar dates, so timezone conversion must not move them. */
 fun formatFollowUpDate(date: String, locale: Locale = Locale.getDefault()): String =
-    LocalDate.parse(date).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale))
+    LocalDate.parse(
+        date
+    ).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale))

@@ -20,7 +20,10 @@
         <item quantity="one">Delete %d person?</item>
         <item quantity="other">Delete %d people?</item>
     </plurals>
-    <string name="people_delete_more_names">And %1$d more</string>
+    <plurals name="people_delete_more_names">
+        <item quantity="one">And %1$d more</item>
+        <item quantity="other">And %1$d more</item>
+    </plurals>
     <string name="people_delete_counts">Facts to delete: %1$d\nFollow-ups to delete: %2$d\nRelationships to remove: %3$d\nEvent notes to keep: %4$d</string>
     <string name="people_delete_permanent">This is permanent, including their facts and follow-ups in Recently deleted. Event notes and shared tags will be kept.</string>
     <string name="people_delete_protected">Phone contacts and older profiles we can’t verify are protected. You can hide them instead.</string>

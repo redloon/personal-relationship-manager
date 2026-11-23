@@ -8,7 +8,8 @@ import kotlinx.coroutines.flow.Flow
 /** A single reactive snapshot; no per-row metadata lookups or stale person chips. */
 @Dao
 interface RecallDao {
-    @Query("""
+    @Query(
+        """
         SELECT 'person' AS kind, c.id AS id, c.id AS contactId,
             c.display_name AS title, '' AS text, c.updated_at AS date,
             ',' || c.id || ',' AS personIds,
@@ -40,6 +41,7 @@ interface RecallDao {
         SELECT 'tag', t.id, NULL, t.name, '', t.created_at, '', t.name,
             NULL, NULL, t.created_at
         FROM tags t
-    """)
+    """
+    )
     fun rows(): Flow<List<RecallRow>>
 }

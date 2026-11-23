@@ -12,6 +12,5 @@
     <string name="usability_fact_prompt">What would you like to remember?</string>
     <string name="usability_fact_person_required">Choose one person for this fact</string>
     <string name="usability_resume_draft">Resume draft</string>
-    <string name="usability_capture_actions">Capture actions</string>
     <string name="usability_keep_text">Keep as text</string>
 </resources>

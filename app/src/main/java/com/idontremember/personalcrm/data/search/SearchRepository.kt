@@ -1,9 +1,9 @@
 package com.idontremember.personalcrm.data.search
 
 import com.idontremember.personalcrm.data.db.AppDatabase
-import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.flow.map
 
 @Singleton
 class SearchRepository @Inject constructor(database: AppDatabase) {

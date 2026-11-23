@@ -1,12 +1,12 @@
 package com.idontremember.personalcrm.data.db.dao
 
-import com.idontremember.personalcrm.data.contacts.InteractionStats
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import com.idontremember.personalcrm.data.contacts.InteractionStats
 import com.idontremember.personalcrm.data.db.entity.Contact
 import kotlinx.coroutines.flow.Flow
 
@@ -29,7 +29,9 @@ interface ContactDao {
     @Query("SELECT * FROM contacts ORDER BY display_name COLLATE NOCASE")
     fun getAllIncludingHidden(): Flow<List<Contact>>
 
-    @Query("SELECT * FROM visible_contacts WHERE android_contact_id IS NULL ORDER BY display_name COLLATE NOCASE")
+    @Query(
+        "SELECT * FROM visible_contacts WHERE android_contact_id IS NULL ORDER BY display_name COLLATE NOCASE"
+    )
     fun getAppOnly(): Flow<List<Contact>>
 
     @Query("SELECT * FROM contacts WHERE is_hidden = 1 ORDER BY display_name COLLATE NOCASE")
@@ -41,10 +43,23 @@ interface ContactDao {
     @Query("UPDATE contacts SET is_hidden = :hidden WHERE id IN (:ids)")
     suspend fun setHidden(ids: List<Long>, hidden: Boolean)
 
-    @Query("UPDATE contacts SET display_name = :name, android_contact_id = :androidId, phone_number = :phone, email = :email, photo_uri = :photo, lookup_key = :lookup, updated_at = :updatedAt, deletion_allowed = 0 WHERE id = :id")
-    suspend fun updateProviderFields(id: Long, name: String, androidId: Long, phone: String?, email: String?, photo: String?, lookup: String?, updatedAt: Long)
+    @Query(
+        "UPDATE contacts SET display_name = :name, android_contact_id = :androidId, phone_number = :phone, email = :email, photo_uri = :photo, lookup_key = :lookup, updated_at = :updatedAt, deletion_allowed = 0 WHERE id = :id"
+    )
+    suspend fun updateProviderFields(
+        id: Long,
+        name: String,
+        androidId: Long,
+        phone: String?,
+        email: String?,
+        photo: String?,
+        lookup: String?,
+        updatedAt: Long
+    )
 
-    @Query("UPDATE contacts SET android_contact_id = NULL, lookup_key = NULL, photo_uri = NULL, deletion_allowed = 0 WHERE id = :id")
+    @Query(
+        "UPDATE contacts SET android_contact_id = NULL, lookup_key = NULL, photo_uri = NULL, deletion_allowed = 0 WHERE id = :id"
+    )
     suspend fun detachAndroidContact(id: Long)
 
     @Query("DELETE FROM contacts")
@@ -59,18 +74,22 @@ interface ContactDao {
     @Query("SELECT * FROM contacts WHERE android_contact_id = :androidContactId")
     suspend fun getByAndroidContactId(androidContactId: Long): Contact?
 
-    @Query("SELECT * FROM visible_contacts WHERE display_name LIKE '%' || :query || '%' ORDER BY display_name ASC")
+    @Query(
+        "SELECT * FROM visible_contacts WHERE display_name LIKE '%' || :query || '%' ORDER BY display_name ASC"
+    )
     fun search(query: String): Flow<List<Contact>>
 
     @Delete
     suspend fun delete(contact: Contact)
 
-    @Query("""
+    @Query(
+        """
         SELECT ec.contact_id AS contactId, MAX(e.event_date) AS lastInteractionAt, COUNT(e.id) AS interactionCount
         FROM event_contacts ec JOIN events e ON e.id = ec.event_id
         WHERE e.deleted_at IS NULL AND e.event_date <= :asOf
         GROUP BY ec.contact_id
-    """)
+    """
+    )
     fun interactionStats(asOf: Long): Flow<List<InteractionStats>>
 
     @Query("DELETE FROM contacts WHERE id IN (:ids)")

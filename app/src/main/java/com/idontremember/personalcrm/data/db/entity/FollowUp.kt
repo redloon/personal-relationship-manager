@@ -1,8 +1,23 @@
 package com.idontremember.personalcrm.data.db.entity
 
-import androidx.room.*
+import androidx.room.ColumnInfo
+import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
+import androidx.room.PrimaryKey
 
-@Entity(tableName = "follow_ups", foreignKeys = [ForeignKey(entity = Contact::class, parentColumns = ["id"], childColumns = ["contact_id"], onDelete = ForeignKey.CASCADE)], indices = [Index("contact_id")])
+@Entity(
+    tableName = "follow_ups",
+    foreignKeys = [
+        ForeignKey(
+            entity = Contact::class,
+            parentColumns = ["id"],
+            childColumns = ["contact_id"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index("contact_id")]
+)
 data class FollowUp(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     @ColumnInfo(name = "contact_id") val contactId: Long,

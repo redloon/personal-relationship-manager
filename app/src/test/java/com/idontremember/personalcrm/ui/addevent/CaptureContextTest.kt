@@ -2,10 +2,12 @@ package com.idontremember.personalcrm.ui.addevent
 
 import com.idontremember.personalcrm.ui.components.TriggerType
 import com.idontremember.personalcrm.ui.components.detectTrigger
-import org.junit.Assert.*
-import org.junit.Test
 import java.util.Calendar
 import java.util.TimeZone
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Test
 
 class CaptureContextTest {
     @Test fun editingNeverUsesTheNewCaptureDraft() {
@@ -58,9 +60,18 @@ class CaptureContextTest {
 
     @Test fun datePickerKeepsLocalTimeInsteadOfSwitchingToUtcMidnight() {
         val zone = TimeZone.getTimeZone("America/Los_Angeles")
-        val original = Calendar.getInstance(zone).apply { set(2026, Calendar.NOVEMBER, 1, 17, 35, 0); set(Calendar.MILLISECOND, 0) }
-        val pickedUtc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { clear(); set(2026, Calendar.NOVEMBER, 5) }
-        val result = Calendar.getInstance(zone).apply { timeInMillis = withPickedDate(original.timeInMillis, pickedUtc.timeInMillis, zone) }
+        val original = Calendar.getInstance(zone).apply {
+            set(2026, Calendar.NOVEMBER, 1, 17, 35, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val pickedUtc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+            clear()
+            set(2026, Calendar.NOVEMBER, 5)
+        }
+        val result = Calendar.getInstance(zone).apply {
+            timeInMillis =
+                withPickedDate(original.timeInMillis, pickedUtc.timeInMillis, zone)
+        }
         assertEquals(5, result.get(Calendar.DAY_OF_MONTH))
         assertEquals(17, result.get(Calendar.HOUR_OF_DAY))
         assertEquals(35, result.get(Calendar.MINUTE))

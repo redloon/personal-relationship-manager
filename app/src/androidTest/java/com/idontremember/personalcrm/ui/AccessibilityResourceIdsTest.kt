@@ -25,8 +25,11 @@ import org.junit.Test
 /** Validate the external accessibility tree used by ADB QA, not only Compose tags. */
 @HiltAndroidTest
 class AccessibilityResourceIdsTest {
-    @get:Rule(order = 0) val hilt = HiltAndroidRule(this)
-    @get:Rule(order = 1) val ui = createAndroidComposeRule<MainActivity>()
+    @get:Rule(order = 0)
+    val hilt = HiltAndroidRule(this)
+
+    @get:Rule(order = 1)
+    val ui = createAndroidComposeRule<MainActivity>()
     private val automation get() = InstrumentationRegistry.getInstrumentation().uiAutomation
     private var originalFlags = 0
 
@@ -55,7 +58,9 @@ class AccessibilityResourceIdsTest {
 
     @Test fun quickCaptureExposesStableResourceIds() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        ActivityScenario.launch<QuickAddEventActivity>(Intent(context, QuickAddEventActivity::class.java)).use {
+        ActivityScenario.launch<QuickAddEventActivity>(
+            Intent(context, QuickAddEventActivity::class.java)
+        ).use {
             ui.waitUntilTagDisplayed("note_text_field", 10_000)
             waitForResourceId("note_text_field")
         }

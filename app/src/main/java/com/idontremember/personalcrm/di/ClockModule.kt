@@ -10,5 +10,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object ClockModule {
-    @Provides @Singleton fun clock(): Clock = Clock.systemDefaultZone()
+    @Provides @Singleton
+    fun clock(): Clock = Clock.systemDefaultZone()
 }

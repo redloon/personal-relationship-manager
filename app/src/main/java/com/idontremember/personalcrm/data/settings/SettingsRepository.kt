@@ -1,16 +1,16 @@
 package com.idontremember.personalcrm.data.settings
 
-import com.idontremember.personalcrm.data.contacts.PeopleListScope
-import com.idontremember.personalcrm.data.contacts.PeopleSort
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.idontremember.personalcrm.data.contacts.PeopleListScope
+import com.idontremember.personalcrm.data.contacts.PeopleSort
+import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import javax.inject.Inject
 
 /** How the app decides between light and dark color schemes. */
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
@@ -29,9 +29,7 @@ enum class DefaultEventTime { NOW, LAST_USED }
  * packets (e.g. P10 notifications) add their own keys next to the existing ones and
  * hang new typed flows/setters off this class; nothing else needs to change.
  */
-class SettingsRepository @Inject constructor(
-    private val dataStore: DataStore<Preferences>
-) {
+class SettingsRepository @Inject constructor(private val dataStore: DataStore<Preferences>) {
 
     fun peopleSort(scope: PeopleListScope): Flow<PeopleSort> = dataStore.data.map { prefs ->
         enumValueOrDefault(prefs[SettingsKeys.peopleSort(scope)], PeopleSort.RECENT)
@@ -40,16 +38,50 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[SettingsKeys.peopleSort(scope)] = value.name }
     }
 
-    val followUpReminderPrompted: Flow<Boolean> = dataStore.data.map { it[SettingsKeys.FOLLOW_UP_REMINDER_PROMPTED] ?: false }
-    suspend fun setFollowUpReminderPrompted(prompted: Boolean = true) { dataStore.edit { it[SettingsKeys.FOLLOW_UP_REMINDER_PROMPTED] = prompted } }
+    val followUpReminderPrompted: Flow<Boolean> = dataStore.data.map {
+        it[SettingsKeys.FOLLOW_UP_REMINDER_PROMPTED]
+            ?: false
+    }
+    suspend fun setFollowUpReminderPrompted(prompted: Boolean = true) {
+        dataStore.edit {
+            it[SettingsKeys.FOLLOW_UP_REMINDER_PROMPTED] =
+                prompted
+        }
+    }
 
-    val followUpRemindersEnabled: Flow<Boolean> = dataStore.data.map { it[SettingsKeys.FOLLOW_UP_REMINDERS_ENABLED] ?: false }
-    val reminderHour: Flow<Int> = dataStore.data.map { (it[SettingsKeys.REMINDER_HOUR] ?: 9L).toInt().coerceIn(6, 19) }
+    val followUpRemindersEnabled: Flow<Boolean> = dataStore.data.map {
+        it[SettingsKeys.FOLLOW_UP_REMINDERS_ENABLED]
+            ?: false
+    }
+    val reminderHour: Flow<Int> = dataStore.data.map {
+        (it[SettingsKeys.REMINDER_HOUR] ?: 9L).toInt().coerceIn(6, 19)
+    }
     val lastReminderDay: Flow<String?> = dataStore.data.map { it[SettingsKeys.LAST_REMINDER_DAY] }
 
-    suspend fun setFollowUpRemindersEnabled(enabled: Boolean) { dataStore.edit { it[SettingsKeys.FOLLOW_UP_REMINDERS_ENABLED] = enabled } }
-    suspend fun setReminderHour(hour: Int) { dataStore.edit { it[SettingsKeys.REMINDER_HOUR] = hour.coerceIn(6, 19).toLong() } }
-    suspend fun setLastReminderDay(day: String?) { dataStore.edit { if (day == null) it.remove(SettingsKeys.LAST_REMINDER_DAY) else it[SettingsKeys.LAST_REMINDER_DAY] = day } }
+    suspend fun setFollowUpRemindersEnabled(enabled: Boolean) {
+        dataStore.edit {
+            it[SettingsKeys.FOLLOW_UP_REMINDERS_ENABLED] =
+                enabled
+        }
+    }
+    suspend fun setReminderHour(hour: Int) {
+        dataStore.edit {
+            it[SettingsKeys.REMINDER_HOUR] =
+                hour.coerceIn(6, 19).toLong()
+        }
+    }
+    suspend fun setLastReminderDay(day: String?) {
+        dataStore.edit {
+            if (day ==
+                null
+            ) {
+                it.remove(SettingsKeys.LAST_REMINDER_DAY)
+            } else {
+                it[SettingsKeys.LAST_REMINDER_DAY] =
+                    day
+            }
+        }
+    }
 
     val themeMode: Flow<ThemeMode> = dataStore.data.map { prefs ->
         enumValueOrDefault(prefs[SettingsKeys.THEME_MODE], ThemeMode.SYSTEM)
@@ -98,7 +130,9 @@ class SettingsRepository @Inject constructor(
  * never inline `stringPreferencesKey("...")` at call sites.
  */
 object SettingsKeys {
-    private val peopleSortKeys = PeopleListScope.entries.associateWith { stringPreferencesKey("people_sort_${it.name.lowercase(java.util.Locale.ROOT)}") }
+    private val peopleSortKeys = PeopleListScope.entries.associateWith {
+        stringPreferencesKey("people_sort_${it.name.lowercase(java.util.Locale.ROOT)}")
+    }
     fun peopleSort(scope: PeopleListScope) = peopleSortKeys.getValue(scope)
 
     val FOLLOW_UP_REMINDER_PROMPTED = booleanPreferencesKey("followup_reminder_prompted")
