@@ -75,6 +75,20 @@ printf test > app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
         self.assertEqual((self.root / 'calls').read_text().splitlines(),
                          ['testDebugUnitTest', '--tests', 'a name with spaces'])
 
+    def test_codex_task_uses_daily_launcher_from_repository_root(self):
+        binary_directory = self.root / 'bin'
+        binary_directory.mkdir()
+        launcher = binary_directory / 'codex-sbx'
+        launcher.write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$PWD" "$@" > "$TASK_LOG"\n')
+        launcher.chmod(0o755)
+        self.env['PATH'] = str(binary_directory) + os.pathsep + self.env['PATH']
+
+        result = self.task('codex', 'resume', '--all', 'two words')
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / 'calls').read_text().splitlines(),
+                         [str(self.root), '--', 'resume', '--all', 'two words'])
+
     def test_source_change_during_build_is_rejected(self):
         (self.root / 'app/src').mkdir(parents=True)
         (self.root / 'app/src/test.kt').write_text('before')

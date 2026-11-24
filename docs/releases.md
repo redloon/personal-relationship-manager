@@ -13,6 +13,11 @@ Android SDK Command-line Tools and Build Tools. Configure `origin` as the intend
 GitHub repository. `release-build` must fetch its tags successfully; offline builds
 are refused. Ordinary development and debug builds need no release credentials.
 
+```bash
+git remote get-url origin
+# Expected: https://github.com/redloon/personal-relationship-manager.git
+```
+
 Create the key **outside the checkout**, using the interactive password prompts:
 
 ```bash
@@ -51,6 +56,10 @@ an independently recoverable copy. Check that copy with `keytool -list` before
 relying on it. Replacing the key prevents ordinary APK updates for existing users.
 Never put credentials in command arguments, Git, release notes or release bundles.
 The signing invocation disables Gradle configuration caching.
+
+The `personal-crm-signing` directory, key alias, application ID and APK filenames
+intentionally remain stable when the checkout directory or GitHub repository is
+renamed. They identify the Android app and its signing lineage, not the checkout.
 
 ## Choose, review and commit a version
 
@@ -140,9 +149,15 @@ Read its recorded commit, then create and push the matching tag at that commit:
 ```bash
 RELEASE_COMMIT="$(python3 -c 'import json; print(json.load(open("ignored/releases/v0.1.0/manifest.json"))["git_revision"])')"
 git show --stat "$RELEASE_COMMIT"
+git merge-base --is-ancestor "$RELEASE_COMMIT" main
+git push -u origin main
 git tag -a v0.1.0 "$RELEASE_COMMIT" -m "Release 0.1.0"
 git push origin v0.1.0
 ```
+
+The branch push publishes the exact release commit before its tag. On the first
+publication it also records `origin/main` as the local branch's upstream; later
+releases use the same command to update it.
 
 In the GitHub repository:
 

@@ -6,7 +6,7 @@ Link feedback notes to a dedicated fictional Android contact. On the host, save 
 
 ```bash
 mise run pull-dogfood
-sbx run codex
+mise run codex
 ```
 
 Ask Codex to read the newest `ignored/dogfood-notes-*.md`. Each pull creates a UTC timestamped file and refuses to overwrite an existing one. The phone needs an installed debug build; the pull briefly stops the app and extracts only linked event notes.

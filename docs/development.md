@@ -1,11 +1,15 @@
 # Development workflow
 
+Use `codex-sbx` for daily sandbox work. See [Codex sandboxes](codex-sandboxes.md)
+for installation, persistent history and emergency session rescue.
+
 ## Commands
 
 Executable tasks in `.mise/tasks/` are the source of truth. Use `mise run TASK`, or run the same file with Bash when mise is unavailable. Prerequisites are Bash, Python 3.11+, Git, and `flock` (util-linux on Linux). Builds also require JDK 21 and the Android SDK. Tasks discover JDK 21 from `JAVA_HOME`, PATH, standard Linux installs, or Mise; SDK discovery includes `~/android-sdk` and `~/Android/Sdk`. Keep machine-specific SDK paths out of shared `local.properties`.
 
 | Task | Without mise | Purpose |
 |---|---|---|
+| `codex` | `bash .mise/tasks/codex [CODEX_ARGS...]` | Start or resume Codex through `codex-sbx` |
 | `build` | `bash .mise/tasks/build` | Build the debug app APK |
 | `unit` | `bash .mise/tasks/unit` | Run JVM tests without an emulator |
 | `gradle` | `bash .mise/tasks/gradle TASK [OPTIONS]` | Run Gradle with project SDK discovery |

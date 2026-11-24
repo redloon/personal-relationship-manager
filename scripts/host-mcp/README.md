@@ -45,6 +45,8 @@ Staging holds the checkout build lock through both APK copies, fingerprints sour
 
 Do not restage while another agent/job uses the shared inbox. Host and sandbox must share `ignored/mcp-inbox`; private-clone setups need an explicitly shared inbox configured on the host.
 
+After moving a checkout, update `inbox` in the host's `~/.local/share/android-tests-mcp/config.json` while the runner is idle, then refresh and reload its gateway connection as above. Setup preserves an existing inbox path; it does not retarget it to the checkout running setup. Confirm health reports the moved checkout's `ignored/mcp-inbox` before staging.
+
 If mise is unavailable, use the equivalent commands:
 
 ```bash
