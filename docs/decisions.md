@@ -2,6 +2,12 @@
 
 Record important, non-obvious product decisions here, briefly.
 
+## 2026-11-24 — Conservative reconciliation after portable restore
+
+Contact sync may automatically reconnect a protected app-only profile when its normalized name and exact normalized phone or email match one Android contact bidirectionally uniquely. The app-only profile survives with its identity, creation date, visibility and saved context; Android supplies current contact details. Ambiguous, name-only and renamed-detail matches require review and can be dismissed durably. Dismissals are device-local and clear after restore.
+
+This is a restore-recovery exception to explicit linking. Newly created deletion-eligible profiles are never candidates, ordinary same-name people may remain separate, and general-purpose merging remains deferred.
+
 ## 2026-11-23 — Native contact creation and explicit foreground sync
 
 Unlinked people may be linked to an existing Android contact or used to open Android's native contact editor with their current name prefilled. A saved Android contact is attached to the existing app profile, retaining its context while Android Contacts becomes authoritative for contact details. This supersedes the earlier decision not to offer Android contact creation.

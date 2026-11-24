@@ -114,4 +114,24 @@ class UsabilityNavigationTest {
         ui.waitUntilTagDisplayed("search_field", 10_000)
         ui.onNodeWithTag("search_field").assertTextContains("Maya", substring = true)
     }
+
+    @Test fun homeOpensAnUnfilteredProfileAndKeepsItsQueryOnBack() {
+        val person = runBlocking {
+            db.contactDao().insert(Contact(displayName = "Maya Query"))
+        }
+        ui.waitUntilTagDisplayed("dashboard_search", 10_000)
+        ui.onNodeWithTag("dashboard_search").performTextInput("Maya")
+        ui.waitUntilTagDisplayed("dashboard_person_$person", 10_000)
+        ui.onNodeWithTag("dashboard_person_$person").performClick()
+        ui.waitUntilTagDisplayed("person_search", 10_000)
+        ui.onNodeWithTag("person_search").assert(
+            SemanticsMatcher.expectValue(
+                androidx.compose.ui.semantics.SemanticsProperties.EditableText,
+                androidx.compose.ui.text.AnnotatedString("")
+            )
+        )
+        ui.runOnUiThread { ui.activity.onBackPressedDispatcher.onBackPressed() }
+        ui.waitUntilTagDisplayed("dashboard_search", 10_000)
+        ui.onNodeWithTag("dashboard_search").assertTextContains("Maya", substring = true)
+    }
 }

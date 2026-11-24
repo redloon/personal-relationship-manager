@@ -94,7 +94,6 @@ fun ContactDetailScreen(
     onEventClick: (Long) -> Unit,
     modifier: Modifier = Modifier,
     onContactClick: (Long) -> Unit = {},
-    initialQuery: String = "",
     viewModel: ContactDetailViewModel = hiltViewModel(),
     recall: RecallViewModel = hiltViewModel()
 ) {
@@ -107,7 +106,7 @@ fun ContactDetailScreen(
     val events by viewModel.events.collectAsState()
     val dateDisplay by viewModel.dateDisplay.collectAsState()
     val entries by recall.entries.collectAsState()
-    var query by rememberSaveable(contactId) { mutableStateOf(initialQuery) }
+    var query by rememberSaveable(contactId) { mutableStateOf("") }
     var rename by rememberSaveable { mutableStateOf(false) }
     var newName by rememberSaveable { mutableStateOf("") }
     var management by rememberSaveable { mutableStateOf(false) }

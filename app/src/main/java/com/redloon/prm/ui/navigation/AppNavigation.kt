@@ -67,7 +67,7 @@ data object AppOnlyPeopleRoute : NavKey
 data object HiddenPeopleRoute : NavKey
 
 @Serializable
-data class ContactDetailRoute(val contactId: Long, val initialQuery: String = "") : NavKey
+data class ContactDetailRoute(val contactId: Long) : NavKey
 
 @Serializable
 data object EventsRoute : NavKey
@@ -161,9 +161,6 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                             onFollowUp = { readingFollowUp = it },
                             onTag = { homeStack.add(TagDetailRoute(it)) },
                             onFollowUps = { showFollowUps = true },
-                            onContactSearch = { id, query ->
-                                homeStack.add(ContactDetailRoute(id, query))
-                            },
                             hasDraft = hasDraft
                         )
                     }
@@ -205,7 +202,6 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     is ContactDetailRoute -> NavEntry(route) {
                         ContactDetailScreen(
                             contactId = route.contactId,
-                            initialQuery = route.initialQuery,
                             onBack = {
                                 backStack.removeLastOrNull()
                             },

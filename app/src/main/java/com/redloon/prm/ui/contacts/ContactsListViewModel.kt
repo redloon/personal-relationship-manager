@@ -12,6 +12,7 @@ import com.redloon.prm.data.contacts.PeopleDeletionPreview
 import com.redloon.prm.data.contacts.PeopleListItem
 import com.redloon.prm.data.contacts.PeopleListScope
 import com.redloon.prm.data.contacts.PeopleSort
+import com.redloon.prm.data.contacts.ReconnectCandidate
 import com.redloon.prm.data.contacts.deletePeople
 import com.redloon.prm.data.contacts.previewPeopleDeletion
 import com.redloon.prm.data.db.entity.canDelete
@@ -45,6 +46,8 @@ sealed interface PeopleFeedback {
     data object Protected : PeopleFeedback
     data object PreviewChanged : PeopleFeedback
     data object SortFailed : PeopleFeedback
+    data object Reconnected : PeopleFeedback
+    data object ReconnectFailed : PeopleFeedback
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -78,6 +81,10 @@ class ContactsListViewModel @Inject constructor(
     val visibilityChanges = changes.receiveAsFlow()
     private val messages = Channel<PeopleFeedback>(Channel.BUFFERED)
     val feedback = messages.receiveAsFlow()
+    val reconnectCandidates = contactRepository.observeReconnectCandidates()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val _reconnectBusy = MutableStateFlow(false)
+    val reconnectBusy: StateFlow<Boolean> = _reconnectBusy
     private val _deletion = MutableStateFlow<PeopleDeletionPreview?>(null)
     val deletion: StateFlow<PeopleDeletionPreview?> = _deletion
     data class VisibilityChange(val ids: Set<Long>, val hidden: Boolean)
@@ -324,7 +331,8 @@ class ContactsListViewModel @Inject constructor(
             settings.setLastSuccessfulContactSyncAt(System.currentTimeMillis())
             _syncState.value = SyncState.Success(
                 result = result,
-                announce = !automatic || result.added > 0
+                announce = !automatic || result.added > 0 || result.reconnected > 0 ||
+                    result.reviewable > 0
             )
         } catch (e: CancellationException) {
             throw e
@@ -337,6 +345,47 @@ class ContactsListViewModel @Inject constructor(
     }
     fun clearSyncState() {
         _syncState.value = SyncState.Idle
+    }
+
+    fun reconnect(candidate: ReconnectCandidate) {
+        if (_reconnectBusy.value) return
+        _reconnectBusy.value = true
+        viewModelScope.launch {
+            try {
+                if (
+                    contactRepository.reconnectProfiles(
+                        candidate.savedProfile.id,
+                        candidate.androidProfile.id
+                    )
+                ) {
+                    messages.send(PeopleFeedback.Reconnected)
+                } else {
+                    messages.send(PeopleFeedback.ReconnectFailed)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                messages.send(PeopleFeedback.ReconnectFailed)
+            } finally {
+                _reconnectBusy.value = false
+            }
+        }
+    }
+
+    fun dismissReconnect(candidate: ReconnectCandidate) {
+        if (_reconnectBusy.value) return
+        _reconnectBusy.value = true
+        viewModelScope.launch {
+            try {
+                contactRepository.dismissReconnectCandidate(candidate.pair)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                messages.send(PeopleFeedback.ReconnectFailed)
+            } finally {
+                _reconnectBusy.value = false
+            }
+        }
     }
     sealed class SyncState {
         data object Idle : SyncState()

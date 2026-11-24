@@ -9,6 +9,7 @@ import com.redloon.prm.data.capture.TokenTarget
 import com.redloon.prm.data.db.AppDatabase
 import com.redloon.prm.data.db.entity.Contact
 import com.redloon.prm.data.db.entity.ContactFact
+import com.redloon.prm.data.db.entity.ContactTag
 import com.redloon.prm.data.db.entity.Event
 import com.redloon.prm.data.db.entity.EventContact
 import com.redloon.prm.data.db.entity.EventTag
@@ -106,6 +107,88 @@ class PeopleManagementTest {
         assertTrue(db.profileLinksDao().allRelationships().isEmpty())
         BackupJson.decode(exporter.exportToJson())
     }
+
+    @Test
+    fun reconnectKeepsRestoredIdentityAndConsolidatesAllAndroidProfileContext(): Unit =
+        runBlocking {
+            val saved = db.contactDao().insert(
+                Contact(
+                    displayName = "Old Maya",
+                    phoneNumber = "4155550123",
+                    createdAt = 10,
+                    updatedAt = 11,
+                    isHidden = true
+                )
+            )
+            val android = db.contactDao().insert(
+                Contact(
+                    androidContactId = 42,
+                    displayName = "Maya Chen",
+                    phoneNumber = "(415) 555-0123",
+                    email = "maya@example.com",
+                    photoUri = "content://photo",
+                    lookupKey = "maya-key",
+                    createdAt = 20
+                )
+            )
+            val other = db.contactDao().insert(Contact(displayName = "Other"))
+            db.contactFactDao().insert(ContactFact(contactId = saved, text = "Saved fact"))
+            db.contactFactDao().insert(ContactFact(contactId = android, text = "Android fact"))
+            db.followUpDao().insert(FollowUp(contactId = saved, text = "Saved follow-up"))
+            db.followUpDao().insert(FollowUp(contactId = android, text = "Android follow-up"))
+            val note = "@Old Maya met @Maya Chen"
+            val event = db.eventDao().insert(
+                Event(
+                    note = note,
+                    inlineTokens = InlineTokens.encode(
+                        listOf(
+                            InlineToken(0, 9, TokenTarget.Person(saved)),
+                            InlineToken(14, note.length, TokenTarget.Person(android))
+                        )
+                    )
+                )
+            )
+            db.eventDao().insertEventContact(EventContact(event, saved))
+            db.eventDao().insertEventContact(EventContact(event, android))
+            val tag = db.tagDao().insert(Tag(name = "friend"))
+            db.profileLinksDao().addTag(ContactTag(saved, tag))
+            db.profileLinksDao().addTag(ContactTag(android, tag))
+            db.profileLinksDao().addRelationship(
+                Relationship(minOf(saved, other), maxOf(saved, other), "Friend")
+            )
+            db.profileLinksDao().addRelationship(
+                Relationship(minOf(android, other), maxOf(android, other), "Friend")
+            )
+            db.profileLinksDao().addRelationship(
+                Relationship(minOf(saved, android), maxOf(saved, android), "Duplicate")
+            )
+
+            assertTrue(repository.reconnectProfiles(saved, android))
+
+            val survivor = repository.getContactById(saved)!!
+            assertEquals("Maya Chen", survivor.displayName)
+            assertEquals(42L, survivor.androidContactId)
+            assertEquals("(415) 555-0123", survivor.phoneNumber)
+            assertEquals("maya@example.com", survivor.email)
+            assertEquals("content://photo", survivor.photoUri)
+            assertEquals("maya-key", survivor.lookupKey)
+            assertEquals(10L, survivor.createdAt)
+            assertTrue(survivor.isHidden)
+            assertFalse(survivor.deletionAllowed)
+            assertNull(repository.getContactById(android))
+            assertEquals(2, db.contactFactDao().getByContactId(saved).first().size)
+            assertEquals(2, db.followUpDao().getAllOnce().count { it.contactId == saved })
+            assertEquals(listOf(saved), db.eventDao().getContactIdsForEvent(event))
+            assertEquals(listOf(ContactTag(saved, tag)), db.profileLinksDao().allContactTags())
+            assertEquals(
+                listOf(Relationship(minOf(saved, other), maxOf(saved, other), "Friend")),
+                db.profileLinksDao().allRelationships()
+            )
+            assertEquals(
+                listOf(TokenTarget.Person(saved), TokenTarget.Person(saved)),
+                InlineTokens.decode(db.eventDao().getById(event)!!.inlineTokens).map { it.target }
+            )
+        }
 
     @Test fun protectedAndMixedSelectionsAreRejectedAndChangedPreviewsAreNotExecuted(): Unit =
         runBlocking {

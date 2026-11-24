@@ -66,7 +66,6 @@ fun HomeScreen(
     vm: RecallViewModel = hiltViewModel(),
     onTag: (Long) -> Unit = {},
     onFollowUps: () -> Unit = {},
-    onContactSearch: ((Long, String) -> Unit)? = null,
     hasDraft: Boolean = false
 ) {
     val query by vm.query.collectAsState()
@@ -182,7 +181,7 @@ fun HomeScreen(
                                 modifier = Modifier.testTag(
                                     "dashboard_person_${row.id}"
                                 ).clickable {
-                                    onContactSearch?.invoke(row.id, query) ?: onContact(row.id)
+                                    onContact(row.id)
                                 }
                             )
                         }

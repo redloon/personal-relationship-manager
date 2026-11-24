@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import com.redloon.prm.data.contacts.ProfilePair
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -95,6 +96,22 @@ class SettingsRepositoryTest {
         assertEquals(true, repository.contactImportOnboardingDismissed.first())
         assertEquals(true, repository.automaticContactSyncEnabled.first())
         assertEquals(1_700_000_000_000L, repository.lastSuccessfulContactSyncAt.first())
+    }
+
+    @Test
+    fun dismissedReconnectPairsPersistAndCanBeClearedAfterRestore() = runBlocking {
+        val repository = SettingsRepository(newStore(newFile("reconnect.preferences_pb")))
+        val first = ProfilePair(10, 20)
+        val second = ProfilePair(30, 40)
+
+        assertTrue(repository.dismissedReconnectPairs.first().isEmpty())
+        repository.dismissReconnectPair(first)
+        repository.dismissReconnectPair(second)
+        repository.dismissReconnectPair(first)
+        assertEquals(setOf(first, second), repository.dismissedReconnectPairs.first())
+
+        repository.clearDismissedReconnectPairs()
+        assertTrue(repository.dismissedReconnectPairs.first().isEmpty())
     }
 
     @Test

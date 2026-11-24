@@ -2,6 +2,7 @@ package com.redloon.prm.data.db
 
 import com.redloon.prm.data.backup.BackupJson
 import com.redloon.prm.data.backup.DataExporter
+import com.redloon.prm.data.contacts.ProfilePair
 import com.redloon.prm.data.db.entity.Contact
 import com.redloon.prm.data.db.entity.ContactFact
 import com.redloon.prm.data.db.entity.ContactTag
@@ -50,6 +51,7 @@ class BackupRestoreTest {
     @Before fun setup() {
         hiltRule.inject()
         database.clearAllTables()
+        runBlocking { settings.clearDismissedReconnectPairs() }
     }
 
     @Test fun exportClearAndRestorePreservesRelationships() = runBlocking {
@@ -132,6 +134,7 @@ class BackupRestoreTest {
             )
         )
         settings.setFollowUpRemindersEnabled(true)
+        settings.dismissReconnectPair(ProfilePair(person, 999))
         val snapshot = BackupJson.decode(exporter.exportToJson())
         assertEquals(now, snapshot.facts.single().deletedAt)
         exporter.restore(snapshot)
@@ -140,6 +143,7 @@ class BackupRestoreTest {
         assertNull(restored.lookupKey)
         assertNull(restored.photoUri)
         assertFalse(settings.followUpRemindersEnabled.first())
+        assertTrue(settings.dismissedReconnectPairs.first().isEmpty())
         assertNull(database.followUpDao().getById(follow)?.notifiedAt)
         assertTrue(database.contactFactDao().getByContactIdOnce(person).isEmpty())
         recovery.restore(TrashKind.FACT, fact)

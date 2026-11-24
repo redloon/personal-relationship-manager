@@ -8,19 +8,29 @@ import android.provider.ContactsContract
 import androidx.core.content.ContextCompat
 import com.redloon.prm.data.db.dao.ContactDao
 import com.redloon.prm.data.db.entity.Contact
+import com.redloon.prm.data.settings.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 @Singleton
 class ContactsSyncManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val contactDao: ContactDao
+    private val contactDao: ContactDao,
+    private val profileConsolidator: ProfileConsolidator,
+    private val settings: SettingsRepository
 ) {
 
-    data class SyncResult(val added: Int, val updated: Int, val total: Int)
+    data class SyncResult(
+        val added: Int,
+        val updated: Int,
+        val total: Int,
+        val reconnected: Int,
+        val reviewable: Int
+    )
 
     fun hasPermission(): Boolean = ContextCompat.checkSelfPermission(
         context,
@@ -46,6 +56,7 @@ class ContactsSyncManager @Inject constructor(
         }.associateBy { it.lookupKey }
         var added = 0
         var updated = 0
+        val insertedProfileIds = mutableSetOf<Long>()
 
         for (sysContact in systemContacts) {
             val attached =
@@ -84,7 +95,7 @@ class ContactsSyncManager @Inject constructor(
             }
             if (existing == null) {
                 // New contact — insert
-                contactDao.insert(sysContact)
+                contactDao.insert(sysContact).takeIf { it > 0 }?.let(insertedProfileIds::add)
                 added++
             } else {
                 // Existing — update basic fields if changed, preserve local data
@@ -112,10 +123,31 @@ class ContactsSyncManager @Inject constructor(
             }
         }
 
+        val dismissed = settings.dismissedReconnectPairs.first()
+        val currentAndroidIds = systemContacts.mapNotNull { it.androidContactId }.toSet()
+        val profiles = contactDao.getAllIncludingHiddenOnce().filter {
+            it.androidContactId == null || it.androidContactId in currentAndroidIds
+        }
+        var reconnected = 0
+        for (pair in ReconnectMatching.autoReconnectPairs(profiles, dismissed)) {
+            if (
+                profileConsolidator.autoReconnectProtected(pair, dismissed)
+            ) {
+                reconnected++
+                if (insertedProfileIds.remove(pair.androidProfileId)) added--
+            }
+        }
+        val reviewable = ReconnectMatching.reviewCandidates(
+            contactDao.getAllIncludingHiddenOnce(),
+            dismissed
+        ).size
+
         SyncResult(
             added = added,
             updated = updated,
-            total = systemContacts.size
+            total = systemContacts.size,
+            reconnected = reconnected,
+            reviewable = reviewable
         )
     }
 

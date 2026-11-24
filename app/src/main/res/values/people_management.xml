@@ -33,4 +33,17 @@
         <item quantity="one">Deleted %d person</item>
         <item quantity="other">Deleted %d people</item>
     </plurals>
+    <string name="people_review_duplicates">Review possible duplicates</string>
+    <string name="people_review_action">Review</string>
+    <plurals name="people_possible_duplicates_title">
+        <item quantity="one">Possible duplicate</item>
+        <item quantity="other">Possible duplicates (%d)</item>
+    </plurals>
+    <string name="people_saved_profile">Saved profile</string>
+    <string name="people_android_contact">Android contact</string>
+    <string name="people_reconnect_explanation">Reconnect to combine all saved context and use the Android contact’s current details.</string>
+    <string name="people_reconnect">Reconnect</string>
+    <string name="people_not_same">Not the same person</string>
+    <string name="people_reconnected">Profiles reconnected</string>
+    <string name="people_reconnect_failed">These profiles changed or couldn’t be reconnected. Review them again.</string>
 </resources>

@@ -339,6 +339,7 @@ class DataExporter @Inject constructor(
                     database.eventDao().insertEventTag(EventTag(it.eventId, it.tagId))
                 }
             }
+            settingsRepository.clearDismissedReconnectPairs()
             NotificationManagerCompat.from(context).cancel(803)
             context.getSharedPreferences(
                 "capture_draft",

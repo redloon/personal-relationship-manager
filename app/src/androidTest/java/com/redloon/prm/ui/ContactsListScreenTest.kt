@@ -1,14 +1,19 @@
 package com.redloon.prm.ui
 
+import android.content.ContentResolver
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.test.platform.app.InstrumentationRegistry
 import com.redloon.prm.data.db.dao.ContactDao
+import com.redloon.prm.data.db.entity.Contact
 import com.redloon.prm.data.settings.SettingsRepository
+import com.redloon.prm.testdata.RandomContactGenerator
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import javax.inject.Inject
@@ -37,9 +42,13 @@ class ContactsListScreenTest {
 
     @Inject lateinit var settings: SettingsRepository
 
+    private lateinit var resolver: ContentResolver
+
     @Before
     fun setup() {
         hiltRule.inject()
+        resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        RandomContactGenerator.clearContactsProvider(resolver)
         runBlocking {
             // Start clean: the test DB singleton is shared across tests in this run
             // (e.g. AppDatabaseTest inserts contacts) — clear before asserting on
@@ -48,6 +57,7 @@ class ContactsListScreenTest {
             settings.setContactImportOnboardingDismissed(false)
             settings.setAutomaticContactSyncEnabled(false)
             settings.setLastSuccessfulContactSyncAt(0)
+            settings.clearDismissedReconnectPairs()
         }
         composeTestRule.navigateToContactsTab()
     }
@@ -58,6 +68,7 @@ class ContactsListScreenTest {
         settings.setContactImportOnboardingDismissed(true)
         settings.setAutomaticContactSyncEnabled(false)
         settings.setLastSuccessfulContactSyncAt(0)
+        RandomContactGenerator.clearContactsProvider(resolver)
     }
 
     @Test
@@ -163,5 +174,83 @@ class ContactsListScreenTest {
         composeTestRule.onNodeWithTag("clear_contacts_search_button").performClick()
         composeTestRule.waitUntilTagDisplayed("contact_list_item")
         composeTestRule.onNodeWithTag("clear_contacts_search_button").assertDoesNotExist()
+    }
+
+    @Test
+    fun possibleDuplicateCanBeDismissedFromTheDurablePeopleMenu() {
+        runBlocking {
+            contactDao.insert(Contact(displayName = "Maya Chen", phoneNumber = "4155550123"))
+            contactDao.insert(
+                Contact(
+                    androidContactId = 42,
+                    displayName = "Maya Alvarez",
+                    phoneNumber = "415-555-0123"
+                )
+            )
+        }
+        composeTestRule.onNodeWithTag("people_menu").performClick()
+        composeTestRule.waitUntilTagDisplayed("review_duplicates_menu")
+        composeTestRule.onNodeWithTag("review_duplicates_menu").performClick()
+        composeTestRule.onNodeWithTag("duplicate_review_dialog").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Saved profile").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Android contact").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("dismiss_duplicate").performClick()
+        composeTestRule.waitUntil(5_000) {
+            runBlocking { settings.dismissedReconnectPairs.first().size == 1 }
+        }
+        composeTestRule.onNodeWithTag("duplicate_review_dialog").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("people_menu").performClick()
+        composeTestRule.onNodeWithTag("review_duplicates_menu").assertDoesNotExist()
+    }
+
+    @Test
+    fun possibleDuplicateReconnectKeepsTheSavedProfile() {
+        val saved = runBlocking {
+            val keeper = contactDao.insert(Contact(displayName = "Maya Chen"))
+            contactDao.insert(Contact(androidContactId = 42, displayName = "Maya Chen"))
+            keeper
+        }
+        composeTestRule.onNodeWithTag("people_menu").performClick()
+        composeTestRule.waitUntilTagDisplayed("review_duplicates_menu")
+        composeTestRule.onNodeWithTag("review_duplicates_menu").performClick()
+        composeTestRule.onNodeWithTag("reconnect_profiles").performClick()
+        composeTestRule.waitUntil(5_000) {
+            runBlocking {
+                val profiles = contactDao.getAllIncludingHiddenOnce()
+                profiles.size == 1 && profiles.single().id == saved &&
+                    profiles.single().androidContactId == 42L
+            }
+        }
+        composeTestRule.onNodeWithTag("duplicate_review_dialog").assertDoesNotExist()
+    }
+
+    @Test
+    fun syncSnackbarReviewActionOpensPossibleDuplicate() {
+        RandomContactGenerator.seedContactsProvider(
+            resolver,
+            listOf(
+                RandomContactGenerator.SystemContact(
+                    1,
+                    "Maya Alvarez",
+                    "415-555-0123",
+                    null
+                )
+            )
+        )
+        runBlocking {
+            contactDao.insert(Contact(displayName = "Maya Chen", phoneNumber = "4155550123"))
+            settings.setContactImportOnboardingDismissed()
+            settings.setAutomaticContactSyncEnabled(true)
+        }
+        composeTestRule.onNodeWithTag("people_menu").performClick()
+        composeTestRule.onNodeWithTag("contacts_sync_menu").performClick()
+        composeTestRule.waitUntil(10_000) {
+            composeTestRule.onAllNodesWithText(
+                "possible duplicate needs review",
+                substring = true
+            ).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithText("Review").performClick()
+        composeTestRule.onNodeWithTag("duplicate_review_dialog").assertIsDisplayed()
     }
 }

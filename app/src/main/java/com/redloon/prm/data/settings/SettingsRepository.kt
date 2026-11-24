@@ -6,8 +6,10 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.redloon.prm.data.contacts.PeopleListScope
 import com.redloon.prm.data.contacts.PeopleSort
+import com.redloon.prm.data.contacts.ProfilePair
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -40,6 +42,14 @@ class SettingsRepository @Inject constructor(private val dataStore: DataStore<Pr
     val lastSuccessfulContactSyncAt: Flow<Long> = dataStore.data.map {
         it[SettingsKeys.LAST_SUCCESSFUL_CONTACT_SYNC_AT] ?: 0L
     }
+    val dismissedReconnectPairs: Flow<Set<ProfilePair>> = dataStore.data.map { preferences ->
+        preferences[SettingsKeys.DISMISSED_RECONNECT_PAIRS].orEmpty().mapNotNull { encoded ->
+            val parts = encoded.split(':', limit = 2)
+            val saved = parts.getOrNull(0)?.toLongOrNull()
+            val android = parts.getOrNull(1)?.toLongOrNull()
+            if (saved != null && android != null) ProfilePair(saved, android) else null
+        }.toSet()
+    }
 
     suspend fun setContactImportOnboardingDismissed(dismissed: Boolean = true) {
         dataStore.edit { it[SettingsKeys.CONTACT_IMPORT_ONBOARDING_DISMISSED] = dismissed }
@@ -51,6 +61,18 @@ class SettingsRepository @Inject constructor(private val dataStore: DataStore<Pr
 
     suspend fun setLastSuccessfulContactSyncAt(timestamp: Long) {
         dataStore.edit { it[SettingsKeys.LAST_SUCCESSFUL_CONTACT_SYNC_AT] = timestamp }
+    }
+
+    suspend fun dismissReconnectPair(pair: ProfilePair) {
+        dataStore.edit { preferences ->
+            val encoded = "${pair.savedProfileId}:${pair.androidProfileId}"
+            preferences[SettingsKeys.DISMISSED_RECONNECT_PAIRS] =
+                preferences[SettingsKeys.DISMISSED_RECONNECT_PAIRS].orEmpty() + encoded
+        }
+    }
+
+    suspend fun clearDismissedReconnectPairs() {
+        dataStore.edit { it.remove(SettingsKeys.DISMISSED_RECONNECT_PAIRS) }
     }
 
     fun peopleSort(scope: PeopleListScope): Flow<PeopleSort> = dataStore.data.map { prefs ->
@@ -172,6 +194,7 @@ object SettingsKeys {
         booleanPreferencesKey("automatic_contact_sync_enabled")
     val LAST_SUCCESSFUL_CONTACT_SYNC_AT =
         longPreferencesKey("last_successful_contact_sync_at")
+    val DISMISSED_RECONNECT_PAIRS = stringSetPreferencesKey("dismissed_reconnect_pairs")
 }
 
 private inline fun <reified T : Enum<T>> enumValueOrDefault(raw: String?, default: T): T =

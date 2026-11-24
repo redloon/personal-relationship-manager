@@ -2,10 +2,12 @@ package com.redloon.prm.data.repository
 
 import androidx.room.withTransaction
 import com.redloon.prm.data.capture.ContactNames
-import com.redloon.prm.data.capture.InlineTokens
-import com.redloon.prm.data.capture.TokenTarget
 import com.redloon.prm.data.contacts.ContactsSyncManager
 import com.redloon.prm.data.contacts.PeopleDeletionPreview
+import com.redloon.prm.data.contacts.ProfileConsolidator
+import com.redloon.prm.data.contacts.ProfilePair
+import com.redloon.prm.data.contacts.ReconnectCandidate
+import com.redloon.prm.data.contacts.ReconnectMatching
 import com.redloon.prm.data.contacts.deletePeople
 import com.redloon.prm.data.contacts.previewPeopleDeletion
 import com.redloon.prm.data.db.AppDatabase
@@ -16,10 +18,11 @@ import com.redloon.prm.data.db.entity.Contact
 import com.redloon.prm.data.db.entity.ContactFact
 import com.redloon.prm.data.db.entity.Event
 import com.redloon.prm.data.db.entity.canDelete
-import com.redloon.prm.data.db.rewriteEventTokens
+import com.redloon.prm.data.settings.SettingsRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 
 @Singleton
 class ContactRepository @Inject constructor(
@@ -27,7 +30,9 @@ class ContactRepository @Inject constructor(
     private val contactFactDao: ContactFactDao,
     private val eventDao: EventDao,
     private val contactsSyncManager: ContactsSyncManager,
-    private val database: AppDatabase
+    private val database: AppDatabase,
+    private val profileConsolidator: ProfileConsolidator,
+    private val settings: SettingsRepository
 ) {
 
     // --- Contacts ---
@@ -63,6 +68,20 @@ class ContactRepository @Inject constructor(
 
     suspend fun syncContacts(): ContactsSyncManager.SyncResult = contactsSyncManager.syncContacts()
 
+    fun observeReconnectCandidates(): Flow<List<ReconnectCandidate>> = combine(
+        contactDao.getAllIncludingHidden(),
+        settings.dismissedReconnectPairs
+    ) { profiles, dismissed ->
+        ReconnectMatching.reviewCandidates(profiles, dismissed)
+    }
+
+    suspend fun reconnectProfiles(savedProfileId: Long, androidProfileId: Long): Boolean =
+        profileConsolidator.reconnectProtected(savedProfileId, androidProfileId)
+
+    suspend fun dismissReconnectCandidate(pair: ProfilePair) {
+        settings.dismissReconnectPair(pair)
+    }
+
     suspend fun createLocalContact(name: String, allowDuplicate: Boolean = false): Long =
         database.withTransaction {
             val trimmed = name.trim()
@@ -92,76 +111,7 @@ class ContactRepository @Inject constructor(
     suspend fun linkAndroidContact(appContactId: Long, androidId: Long) {
         val provider = contactsSyncManager.getSystemContact(androidId)
             ?: error("Android contact unavailable")
-        database.withTransaction {
-            val keeper = contactDao.getById(appContactId) ?: error("Person unavailable")
-            val imported = contactDao.getByAndroidContactId(androidId)
-            if (imported != null &&
-                imported.id != appContactId
-            ) {
-                consolidate(appContactId, imported.id)
-            }
-            contactDao.update(
-                keeper.copy(
-                    deletionAllowed = false,
-                    displayName = provider.displayName,
-                    androidContactId = androidId,
-                    lookupKey = provider.lookupKey,
-                    phoneNumber = provider.phoneNumber,
-                    email = provider.email,
-                    photoUri = provider.photoUri,
-                    updatedAt = System.currentTimeMillis()
-                )
-            )
-        }
-    }
-
-    private fun consolidate(keep: Long, remove: Long) {
-        val sql = database.openHelper.writableDatabase
-        sql.execSQL(
-            "UPDATE contact_facts SET contact_id = ? WHERE contact_id = ?",
-            arrayOf(keep, remove)
-        )
-        sql.execSQL(
-            "UPDATE follow_ups SET contact_id = ? WHERE contact_id = ?",
-            arrayOf(keep, remove)
-        )
-        sql.execSQL(
-            "INSERT OR IGNORE INTO event_contacts(event_id, contact_id) SELECT event_id, ? FROM event_contacts WHERE contact_id = ?",
-            arrayOf(keep, remove)
-        )
-        sql.execSQL(
-            "INSERT OR IGNORE INTO contact_tags(contact_id, tag_id) SELECT ?, tag_id FROM contact_tags WHERE contact_id = ?",
-            arrayOf(keep, remove)
-        )
-        val links = mutableListOf<Triple<Long, Long, String>>()
-        sql.query(
-            "SELECT contact_a, contact_b, label FROM relationships WHERE contact_a = ? OR contact_b = ?",
-            arrayOf(remove, remove)
-        ).use { c ->
-            while (c.moveToNext()) {
-                val a = if (c.getLong(0) == remove) keep else c.getLong(0)
-                val b = if (c.getLong(1) == remove) keep else c.getLong(1)
-                if (a != b) links += Triple(minOf(a, b), maxOf(a, b), c.getString(2))
-            }
-        }
-        for ((a, b, label) in links) {
-            sql.execSQL(
-                "INSERT OR IGNORE INTO relationships(contact_a, contact_b, label) VALUES (?, ?, ?)",
-                arrayOf<Any>(a, b, label)
-            )
-        }
-        database.rewriteEventTokens { tokens ->
-            tokens.map {
-                if (it.target ==
-                    TokenTarget.Person(remove)
-                ) {
-                    it.copy(target = TokenTarget.Person(keep))
-                } else {
-                    it
-                }
-            }
-        }
-        sql.execSQL("DELETE FROM contacts WHERE id = ?", arrayOf(remove))
+        profileConsolidator.linkToAndroid(appContactId, provider)
     }
 
     suspend fun previewPeopleDeletion(ids: Set<Long>) = database.previewPeopleDeletion(ids)

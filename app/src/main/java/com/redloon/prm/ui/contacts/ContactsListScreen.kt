@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonOutline
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -94,6 +95,7 @@ import com.redloon.prm.data.contacts.PeopleBulkAction
 import com.redloon.prm.data.contacts.PeopleListItem
 import com.redloon.prm.data.contacts.PeopleListScope
 import com.redloon.prm.data.contacts.PeopleSort
+import com.redloon.prm.data.contacts.ReconnectCandidate
 import com.redloon.prm.data.db.entity.Contact
 import com.redloon.prm.data.settings.DateDisplay
 import com.redloon.prm.ui.components.EmptyState
@@ -161,7 +163,10 @@ fun ContactsListScreen(
     }
     var addPerson by rememberSaveable { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
+    var reviewingDuplicates by rememberSaveable { mutableStateOf(false) }
     val contacts by viewModel.contacts.collectAsStateWithLifecycle()
+    val reconnectCandidates by viewModel.reconnectCandidates.collectAsStateWithLifecycle()
+    val reconnectBusy by viewModel.reconnectBusy.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
@@ -231,6 +236,9 @@ fun ContactsListScreen(
                 PeopleFeedback.Protected -> resources.getString(R.string.people_delete_protected)
                 PeopleFeedback.PreviewChanged -> resources.getString(R.string.people_delete_changed)
                 PeopleFeedback.SortFailed -> resources.getString(R.string.people_sort_failed)
+                PeopleFeedback.Reconnected -> resources.getString(R.string.people_reconnected)
+                PeopleFeedback.ReconnectFailed ->
+                    resources.getString(R.string.people_reconnect_failed)
             }
             snackbar.showSnackbar(message)
         }
@@ -238,12 +246,30 @@ fun ContactsListScreen(
 
     val syncFeedback: String? = when (val state = syncState) {
         is ContactsListViewModel.SyncState.Success -> if (state.announce) {
-            pluralStringResource(
-                R.plurals.sync_result,
-                state.result.added,
-                state.result.added,
-                state.result.updated
-            )
+            when {
+                state.result.reconnected > 0 && state.result.reviewable > 0 -> pluralStringResource(
+                    R.plurals.sync_reconnected_and_reviewable,
+                    state.result.reconnected,
+                    state.result.reconnected,
+                    state.result.reviewable
+                )
+                state.result.reconnected > 0 -> pluralStringResource(
+                    R.plurals.sync_reconnected,
+                    state.result.reconnected,
+                    state.result.reconnected
+                )
+                state.result.reviewable > 0 -> pluralStringResource(
+                    R.plurals.sync_reviewable,
+                    state.result.reviewable,
+                    state.result.reviewable
+                )
+                else -> pluralStringResource(
+                    R.plurals.sync_result,
+                    state.result.added,
+                    state.result.added,
+                    state.result.updated
+                )
+            }
         } else {
             null
         }
@@ -257,9 +283,21 @@ fun ContactsListScreen(
     }
     LaunchedEffect(syncState) {
         if (syncFeedback != null) {
-            snackbar.showSnackbar(syncFeedback)
-            viewModel.clearSyncState()
+            val reviewable = (syncState as? ContactsListViewModel.SyncState.Success)
+                ?.result?.reviewable?.takeIf { it > 0 }
+            val result = snackbar.showSnackbar(
+                syncFeedback,
+                actionLabel = reviewable?.let {
+                    resources.getString(R.string.people_review_action)
+                },
+                duration = if (reviewable != null) SnackbarDuration.Long else SnackbarDuration.Short
+            )
+            if (result == SnackbarResult.ActionPerformed) reviewingDuplicates = true
         }
+        if (syncState !is ContactsListViewModel.SyncState.Syncing) viewModel.clearSyncState()
+    }
+    LaunchedEffect(reviewingDuplicates, reconnectCandidates) {
+        if (reviewingDuplicates && reconnectCandidates.isEmpty()) reviewingDuplicates = false
     }
 
     Scaffold(
@@ -352,6 +390,18 @@ fun ContactsListScreen(
                                             runDirectorySync()
                                         },
                                         modifier = Modifier.testTag("contacts_sync_menu")
+                                    )
+                                }
+                                if (!secondary && reconnectCandidates.isNotEmpty()) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(stringResource(R.string.people_review_duplicates))
+                                        },
+                                        onClick = {
+                                            menu = false
+                                            reviewingDuplicates = true
+                                        },
+                                        modifier = Modifier.testTag("review_duplicates_menu")
                                     )
                                 }
                                 DropdownMenuItem(
@@ -549,6 +599,82 @@ fun ContactsListScreen(
             },
             startCreating = true
         )
+    }
+    if (reviewingDuplicates) {
+        reconnectCandidates.firstOrNull()?.let { candidate ->
+            PossibleDuplicateDialog(
+                candidate = candidate,
+                remaining = reconnectCandidates.size,
+                busy = reconnectBusy,
+                onReconnect = { viewModel.reconnect(candidate) },
+                onDifferent = { viewModel.dismissReconnect(candidate) },
+                onDismiss = { if (!reconnectBusy) reviewingDuplicates = false }
+            )
+        }
+    }
+}
+
+@Composable
+private fun PossibleDuplicateDialog(
+    candidate: ReconnectCandidate,
+    remaining: Int,
+    busy: Boolean,
+    onReconnect: () -> Unit,
+    onDifferent: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                pluralStringResource(
+                    R.plurals.people_possible_duplicates_title,
+                    remaining,
+                    remaining
+                )
+            )
+        },
+        text = {
+            Column {
+                ContactComparison(
+                    stringResource(R.string.people_saved_profile),
+                    candidate.savedProfile
+                )
+                ContactComparison(
+                    stringResource(R.string.people_android_contact),
+                    candidate.androidProfile
+                )
+                Text(
+                    stringResource(R.string.people_reconnect_explanation),
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onReconnect,
+                enabled = !busy,
+                modifier = Modifier.testTag("reconnect_profiles")
+            ) { Text(stringResource(R.string.people_reconnect)) }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDifferent,
+                enabled = !busy,
+                modifier = Modifier.testTag("dismiss_duplicate")
+            ) { Text(stringResource(R.string.people_not_same)) }
+        },
+        modifier = Modifier.testTag("duplicate_review_dialog")
+    )
+}
+
+@Composable
+private fun ContactComparison(label: String, contact: Contact) {
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge)
+        Text(contact.displayName, style = MaterialTheme.typography.bodyLarge)
+        contact.phoneNumber?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+        contact.email?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
     }
 }
 
