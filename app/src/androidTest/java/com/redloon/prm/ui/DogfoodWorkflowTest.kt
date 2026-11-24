@@ -157,6 +157,8 @@ class DogfoodWorkflowTest {
         ui.waitUntilTagDisplayed("edit_person_button")
         ui.onNodeWithTag("edit_person_button").performClick()
         ui.onNodeWithTag("open_android_contact").assertDoesNotExist()
+        ui.onNodeWithText("Create Android contact").assertIsDisplayed()
+        ui.onNodeWithText("Link existing Android contact").assertIsDisplayed()
         ui.onNodeWithTag("rename_person_name").performTextReplacement("Maya Chen")
         ui.onNodeWithTag("save_person_name").performClick()
         ui.waitUntil(5_000) {

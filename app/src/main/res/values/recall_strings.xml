@@ -19,7 +19,7 @@
     <string name="recall_followup">Follow-up</string>
     <string name="recall_management_search">Find a person</string>
     <string name="recall_tag_search">Find a tag</string>
-    <string name="recall_link_android">Link Android contact</string>
+    <string name="recall_link_android">Link existing Android contact</string>
     <string name="recall_confirm_link">Link this Android contact?</string>
     <string name="recall_confirm_link_detail">This attaches the Android contact to this person. If it was already imported, their saved notes and connections will be combined here.</string>
     <string name="recall_link_failed">Couldn’t link this contact. Try again.</string>
