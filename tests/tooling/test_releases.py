@@ -52,7 +52,7 @@ print('Signer #1 certificate SHA-256 digest: '+os.environ.get('CERT_PROBE','a'*6
 import os,sys
 from pathlib import Path
 v=dict(line.split('=') for line in Path('app/version.properties').read_text().splitlines())
-print({'application-id':os.environ.get('PACKAGE_PROBE','com.idontremember.personalcrm'),
+print({'application-id':os.environ.get('PACKAGE_PROBE','com.redloon.prm'),
        'version-name':v['versionName'], 'version-code':v['versionCode'],
        'debuggable':os.environ.get('DEBUG_PROBE','false')}[sys.argv[2]])
 ''')
@@ -206,8 +206,8 @@ print({'application-id':os.environ.get('PACKAGE_PROBE','com.idontremember.person
     def test_successful_metadata_excludes_stderr_diagnostics(self):
         spec=importlib.util.spec_from_file_location('releases',SOURCE/'scripts/releases.py')
         releases=importlib.util.module_from_spec(spec);spec.loader.exec_module(releases)
-        script='import sys; print("com.idontremember.personalcrm"); print("Java startup diagnostic",file=sys.stderr)'
-        self.assertEqual(releases.run(self.root,[sys.executable,'-c',script]),'com.idontremember.personalcrm')
+        script='import sys; print("com.redloon.prm"); print("Java startup diagnostic",file=sys.stderr)'
+        self.assertEqual(releases.run(self.root,[sys.executable,'-c',script]),'com.redloon.prm')
 
     def test_nested_gradle_inherits_release_lock_through_export(self):
         path=self.root/'sdk/cmdline-tools/latest/bin/apkanalyzer'

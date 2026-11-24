@@ -14,7 +14,7 @@ import uuid
 from sessions import SessionTools, InteractiveSession
 from instrumentation import instrumentation_result, InstrumentationResults
 
-PACKAGE = 'com.idontremember.personalcrm'
+PACKAGE = 'com.redloon.prm'
 def source_fingerprint():
     names = ['runner.py', 'sessions.py', 'interaction.py', 'captures.py', 'instrumentation.py', 'recovery.py', 'requirements.txt']
     digest = hashlib.sha256()
@@ -167,7 +167,7 @@ class Runner(SessionTools):
         tmp.replace(p)
 
     def start_test(self, app_sha256: str, test_sha256: str, filter: str | None = None, timeout_seconds: int | None = None):
-        if filter and not re.fullmatch(r'com\.idontremember\.personalcrm\.[A-Za-z0-9_.$]+(?:#[A-Za-z0-9_$]+)?', filter):
+        if filter and not re.fullmatch(r'com\.redloon\.prm\.[A-Za-z0-9_.$]+(?:#[A-Za-z0-9_$]+)?', filter):
             raise ValueError('Invalid test filter')
         timeout_seconds = (180 if filter else 900) if timeout_seconds is None else timeout_seconds
         if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 900:

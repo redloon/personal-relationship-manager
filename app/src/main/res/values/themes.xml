@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.PersonalCRM" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.PRM" parent="android:Theme.Material.Light.NoActionBar" />
 
     <!-- Transparent overlay theme for the Quick Settings tile activity -->
-    <style name="Theme.PersonalCRM.Overlay" parent="Theme.PersonalCRM">
+    <style name="Theme.PRM.Overlay" parent="Theme.PRM">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowContentOverlay">@null</item>

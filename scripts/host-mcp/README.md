@@ -40,7 +40,7 @@ Staging holds the checkout build lock through both APK copies, fingerprints sour
 ## Agent workflow
 
 1. Discover the `android-tests` tools and call `health()`. Check `sdk_available`, `avd=android_tests`, the configured inbox, and `busy=false`. Health confirms the connection/configuration, not emulator readiness.
-2. Run `mise run test-stage` inside the sandbox; use its printed hashes in `start_test`, optionally filtering to `com.idontremember.personalcrm.AppLaunchTest`.
+2. Run `mise run test-stage` inside the sandbox; use its printed hashes in `start_test`, optionally filtering to `com.redloon.prm.AppLaunchTest`.
 3. Poll status and read logs through MCP. Run without a filter for the full suite. Report job ID, test count and outcome.
 
 Do not restage while another agent/job uses the shared inbox. Host and sandbox must share `ignored/mcp-inbox`; private-clone setups need an explicitly shared inbox configured on the host.

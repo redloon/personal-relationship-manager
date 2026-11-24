@@ -46,7 +46,7 @@ else
     exit 1
 fi
 
-PACKAGE="com.idontremember.personalcrm"
+PACKAGE="com.redloon.prm"
 ADB=(adb -s "$SERIAL")
 if ! "${ADB[@]}" shell run-as "$PACKAGE" pwd >/dev/null 2>&1; then
     echo "Cannot access $PACKAGE with run-as. Install the debug APK and unlock the phone." >&2
@@ -55,7 +55,7 @@ fi
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf -- "$TMP_DIR"' EXIT
-DB_NAME="personal_crm.db"
+DB_NAME="prm.db"
 
 # Stopping the app closes its writer before copying the database and WAL.
 "${ADB[@]}" shell am force-stop "$PACKAGE"

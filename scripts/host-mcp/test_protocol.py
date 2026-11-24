@@ -22,12 +22,12 @@ import sys,time
 args=sys.argv[1:]
 a=args[2:] if args[:1]==['-s'] else args
 if args[:2]==['manifest','application-id']:
- print('com.idontremember.personalcrm'+('.test' if args[-1].endswith('test.apk') else ''))
+ print('com.redloon.prm'+('.test' if args[-1].endswith('test.apk') else ''))
 elif a==['devices']: print('emulator-5580 device')
 elif a==['emu','avd','name']: print('android_tests')
 elif a==['shell','getprop','sys.boot_completed']: print('1')
-elif a==['shell','pm','list','instrumentation']: print('com.idontremember.personalcrm.test/com.idontremember.personalcrm.HiltTestRunner')
-elif a==['exec-out','uiautomator','dump','/dev/tty']: print('<hierarchy rotation="0"><node text="Search" resource-id="com.idontremember.personalcrm:id/dashboard_search" class="android.widget.EditText" bounds="[0,0][100,50]" enabled="true" clickable="true" /></hierarchy>')
+elif a==['shell','pm','list','instrumentation']: print('com.redloon.prm.test/com.redloon.prm.HiltTestRunner')
+elif a==['exec-out','uiautomator','dump','/dev/tty']: print('<hierarchy rotation="0"><node text="Search" resource-id="com.redloon.prm:id/dashboard_search" class="android.widget.EditText" bounds="[0,0][100,50]" enabled="true" clickable="true" /></hierarchy>')
 elif a==['shell','wm','size']: print('Physical size: 320x640')
 elif a==['exec-out','screencap','-p']: sys.stdout.buffer.write(b'\\x89PNG\\r\\n\\x1a\\n\\x00\\xffbinary')
 elif a[:1]==['shell'] and 'screenrecord --time-limit' in a[-1]: print('123 456')
@@ -103,7 +103,7 @@ else: print('Success')
                         self.assertFalse(health['busy'])
                         artifacts,_=await call('list_artifacts',dict(job_id=sid))
                         self.assertEqual(len(artifacts['artifacts']),4)
-                        for filter_value, expected_timeout in [(None, 900), ('com.idontremember.personalcrm.Example#works', 180)]:
+                        for filter_value, expected_timeout in [(None, 900), ('com.redloon.prm.Example#works', 180)]:
                             started,_=await call('start_test',dict(app_sha256=digest,test_sha256=digest,filter=filter_value))
                             status,_=await call('get_status',dict(job_id=started['job_id'],wait_seconds=5))
                             self.assertEqual(status['status'],'passed')

@@ -1,0 +1,81 @@
+package com.redloon.prm.ui
+
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import com.redloon.prm.data.followups.FollowUpWorker
+import com.redloon.prm.data.recovery.RecoveryRepository
+import com.redloon.prm.data.settings.SettingsRepository
+import com.redloon.prm.data.settings.ThemeMode
+import com.redloon.prm.ui.components.exposeTestTags
+import com.redloon.prm.ui.followups.FollowUpsOverlay
+import com.redloon.prm.ui.navigation.AppNavigation
+import com.redloon.prm.ui.theme.PrmTheme
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+import kotlinx.coroutines.launch
+
+@AndroidEntryPoint
+class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var settingsRepository: SettingsRepository
+
+    @Inject lateinit var recovery: RecoveryRepository
+
+    private var openFollowUps by mutableStateOf(false)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra(FollowUpWorker.OPEN_FOLLOW_UPS, false)) openFollowUps = true
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        enableEdgeToEdge()
+
+        openFollowUps = intent.getBooleanExtra(FollowUpWorker.OPEN_FOLLOW_UPS, false)
+        FollowUpWorker.ensureScheduled(this)
+        lifecycleScope.launch { recovery.purgeExpired() }
+
+        setContent {
+            // P1: theme preferences apply reactively — no restart needed on change.
+            val themeMode by settingsRepository.themeMode
+                .collectAsStateWithLifecycle(initialValue = ThemeMode.SYSTEM)
+            val dynamicColor by settingsRepository.dynamicColor
+                .collectAsStateWithLifecycle(initialValue = true)
+            val darkTheme = when (themeMode) {
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+            }
+            PrmTheme(darkTheme = darkTheme, dynamicColor = dynamicColor) {
+                Surface(
+                    modifier = Modifier.fillMaxSize().exposeTestTags(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    AppNavigation()
+                    if (openFollowUps) FollowUpsOverlay(onDismiss = { openFollowUps = false })
+                }
+            }
+        }
+    }
+}

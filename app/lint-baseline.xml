@@ -76,24 +76,24 @@
         <location file="../gradle/libs.versions.toml" line="21" column="10" />
     </issue>
     <issue id="ComposeUnstableCollections" message="The Compose Compiler cannot infer the stability of a parameter if a List&lt;PersonChoice&gt; is used in it, even if the item type is stable.&#10;You should use Kotlinx Immutable Collections instead: `contacts: ImmutableList&lt;PersonChoice&gt;` or create an `@Immutable` wrapper for this class: `@Immutable data class ContactsList(val items: List&lt;PersonChoice&gt;)`&#10;See https://slackhq.github.io/compose-lints/rules/#avoid-using-unstable-collections for more information." errorLine1="    contacts: List&lt;PersonChoice&gt;," errorLine2="              ~~~~~~~~~~~~~~~~~~">
-        <location file="src/main/java/com/idontremember/personalcrm/ui/components/AutocompleteTextField.kt" line="35" column="15" />
+        <location file="src/main/java/com/redloon/prm/ui/components/AutocompleteTextField.kt" line="35" column="15" />
     </issue>
     <issue id="ComposeUnstableCollections" message="The Compose Compiler cannot infer the stability of a parameter if a List&lt;TagChoice&gt; is used in it, even if the item type is stable.&#10;You should use Kotlinx Immutable Collections instead: `tags: ImmutableList&lt;TagChoice&gt;` or create an `@Immutable` wrapper for this class: `@Immutable data class TagsList(val items: List&lt;TagChoice&gt;)`&#10;See https://slackhq.github.io/compose-lints/rules/#avoid-using-unstable-collections for more information." errorLine1="    tags: List&lt;TagChoice&gt;," errorLine2="          ~~~~~~~~~~~~~~~">
-        <location file="src/main/java/com/idontremember/personalcrm/ui/components/AutocompleteTextField.kt" line="36" column="11" />
+        <location file="src/main/java/com/redloon/prm/ui/components/AutocompleteTextField.kt" line="36" column="11" />
     </issue>
     <issue id="ComposeUnstableCollections" message="The Compose Compiler cannot infer the stability of a parameter if a List&lt;InlineToken&gt; is used in it, even if the item type is stable.&#10;You should use Kotlinx Immutable Collections instead: `inlineTokens: ImmutableList&lt;InlineToken&gt;` or create an `@Immutable` wrapper for this class: `@Immutable data class InlineTokensList(val items: List&lt;InlineToken&gt;)`&#10;See https://slackhq.github.io/compose-lints/rules/#avoid-using-unstable-collections for more information." errorLine1="    inlineTokens: List&lt;InlineToken&gt; = emptyList()," errorLine2="                  ~~~~~~~~~~~~~~~~~">
-        <location file="src/main/java/com/idontremember/personalcrm/ui/components/AutocompleteTextField.kt" line="44" column="19" />
+        <location file="src/main/java/com/redloon/prm/ui/components/AutocompleteTextField.kt" line="44" column="19" />
     </issue>
     <issue id="ComposeUnstableCollections" message="The Compose Compiler cannot infer the stability of a parameter if a Set&lt;Long&gt; is used in it, even if the item type is stable.&#10;You should use Kotlinx Immutable Collections instead: `selectedIds: ImmutableSet&lt;Long&gt;` or create an `@Immutable` wrapper for this class: `@Immutable data class SelectedIdsSet(val items: Set&lt;Long&gt;)`&#10;See https://slackhq.github.io/compose-lints/rules/#avoid-using-unstable-collections for more information." errorLine1="    selectedIds: Set&lt;Long&gt; = emptySet()," errorLine2="                 ~~~~~~~~~">
-        <location file="src/main/java/com/idontremember/personalcrm/ui/components/PersonPicker.kt" line="36" column="18" />
+        <location file="src/main/java/com/redloon/prm/ui/components/PersonPicker.kt" line="36" column="18" />
     </issue>
     <issue id="ComposeUnstableCollections" message="The Compose Compiler cannot infer the stability of a parameter if a List&lt;Contact&gt; is used in it, even if the item type is stable.&#10;You should use Kotlinx Immutable Collections instead: `people: ImmutableList&lt;Contact&gt;` or create an `@Immutable` wrapper for this class: `@Immutable data class PeopleList(val items: List&lt;Contact&gt;)`&#10;See https://slackhq.github.io/compose-lints/rules/#avoid-using-unstable-collections for more information." errorLine1="    people: List&lt;Contact&gt;, label: String, onLabel: (String) -&gt; Unit," errorLine2="            ~~~~~~~~~~~~~">
-        <location file="src/main/java/com/idontremember/personalcrm/ui/contacts/ProfileLinks.kt" line="78" column="13" />
+        <location file="src/main/java/com/redloon/prm/ui/contacts/ProfileLinks.kt" line="78" column="13" />
     </issue>
     <issue id="ComposeUnstableCollections" message="The Compose Compiler cannot infer the stability of a parameter if a List&lt;SettingsChoiceOption&gt; is used in it, even if the item type is stable.&#10;You should use Kotlinx Immutable Collections instead: `options: ImmutableList&lt;SettingsChoiceOption&gt;` or create an `@Immutable` wrapper for this class: `@Immutable data class OptionsList(val items: List&lt;SettingsChoiceOption&gt;)`&#10;See https://slackhq.github.io/compose-lints/rules/#avoid-using-unstable-collections for more information." errorLine1="    options: List&lt;SettingsChoiceOption&gt;," errorLine2="             ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location file="src/main/java/com/idontremember/personalcrm/ui/settings/SettingsScreen.kt" line="325" column="14" />
+        <location file="src/main/java/com/redloon/prm/ui/settings/SettingsScreen.kt" line="325" column="14" />
     </issue>
     <issue id="ComposeUnstableCollections" message="The Compose Compiler cannot infer the stability of a parameter if a List&lt;Tag&gt; is used in it, even if the item type is stable.&#10;You should use Kotlinx Immutable Collections instead: `tags: ImmutableList&lt;Tag&gt;` or create an `@Immutable` wrapper for this class: `@Immutable data class TagsList(val items: List&lt;Tag&gt;)`&#10;See https://slackhq.github.io/compose-lints/rules/#avoid-using-unstable-collections for more information." errorLine1="    tags: List&lt;Tag&gt;, query: String, onQuery: (String) -&gt; Unit," errorLine2="          ~~~~~~~~~">
-        <location file="src/main/java/com/idontremember/personalcrm/ui/components/TagPicker.kt" line="18" column="11" />
+        <location file="src/main/java/com/redloon/prm/ui/components/TagPicker.kt" line="18" column="11" />
     </issue>
 </issues>

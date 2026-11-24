@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">PersonalCRM</string>
+    <string name="app_name">PRM</string>
     <string name="tile_description">Quickly add a note about someone</string>
 
     <!-- Screen titles -->

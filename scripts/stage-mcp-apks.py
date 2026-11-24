@@ -41,7 +41,7 @@ def stage_release(inbox, apk):
     digest = hashlib.sha256(apk.read_bytes()).hexdigest()
     if original.get('app_sha256') != digest:
         raise ValueError('Release APK hash does not match original manifest')
-    if original.get('apk') != apk.name or original.get('application_id') != 'com.idontremember.personalcrm':
+    if original.get('apk') != apk.name or original.get('application_id') != 'com.redloon.prm':
         raise ValueError('Release APK identity does not match original manifest')
     if not re.fullmatch('[0-9a-f]{64}', original.get('source_sha256', '')) or not re.fullmatch('[0-9a-f]{40}|[0-9a-f]{64}', original.get('git_revision', '')):
         raise ValueError('Release bundle has no valid original source provenance')

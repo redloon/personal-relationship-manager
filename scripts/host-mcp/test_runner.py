@@ -200,11 +200,11 @@ class RunnerTests(unittest.TestCase):
 import sys
 a=sys.argv[1:]
 if a[:2] == ['manifest', 'application-id']:
- print('com.idontremember.personalcrm'+('.test' if a[-1].endswith('test.apk') else ''))
+ print('com.redloon.prm'+('.test' if a[-1].endswith('test.apk') else ''))
 elif a == ['devices']: print('emulator-5580 device')
 elif a[2:] == ['emu','avd','name']: print('android_tests')
 elif a[2:] == ['shell','getprop','sys.boot_completed']: print('1')
-elif a[2:] == ['shell','pm','list','instrumentation']: print('com.idontremember.personalcrm.test/com.idontremember.personalcrm.HiltTestRunner')
+elif a[2:] == ['shell','pm','list','instrumentation']: print('com.redloon.prm.test/com.redloon.prm.HiltTestRunner')
 elif 'instrument' in a: print('OK (3 tests)\\nINSTRUMENTATION_CODE: -1')
 else: print('Success')
 '''

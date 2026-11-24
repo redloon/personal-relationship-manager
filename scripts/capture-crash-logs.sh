@@ -16,14 +16,14 @@ echo "Capturing logcat..."
 if ! timeout 30 adb logcat -d \
     -s "AndroidRuntime:E" \
     -s "FATAL:E" \
-    "idontremember.personalcrm:*" \
+    "redloon.prm:*" \
     > "$LOG_FILE" 2>/dev/null; then
     echo "⚠ adb logcat timed out or failed — skipping capture"
     exit 0
 fi
 
 # Also grab a broader dump for context
-timeout 30 adb logcat -d 2>/dev/null | grep -E "(FATAL|AndroidRuntime|idontremember\.personalcrm|Process.*died|Force finishing)" \
+timeout 30 adb logcat -d 2>/dev/null | grep -E "(FATAL|AndroidRuntime|redloon\.prm|Process.*died|Force finishing)" \
     >> "$LOG_FILE" 2>/dev/null || true
 
 # Extract just the stack trace section

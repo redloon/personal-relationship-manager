@@ -3,8 +3,8 @@
         android:icon="@drawable/ic_add_event"
         android:shortcutShortLabel="@string/capture_add_note"
         android:shortcutLongLabel="@string/capture_shortcut_long">
-        <intent android:action="com.idontremember.personalcrm.ADD_NOTE"
-            android:targetPackage="com.idontremember.personalcrm"
-            android:targetClass="com.idontremember.personalcrm.ui.addevent.ShareCaptureActivity" />
+        <intent android:action="com.redloon.prm.ADD_NOTE"
+            android:targetPackage="com.redloon.prm"
+            android:targetClass="com.redloon.prm.ui.addevent.ShareCaptureActivity" />
     </shortcut>
 </shortcuts>

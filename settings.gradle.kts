@@ -28,6 +28,6 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "PersonalCRM"
+rootProject.name = "PRM"
 
 include(":app")

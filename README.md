@@ -1,10 +1,10 @@
-# Personal CRM
+# Personal Relationship Manager
 
 Remember the little things about the people in your life.
 
 Save a quick note after a conversation. Find it later by searching for a detail, even when you've forgotten the name.
 
-**In development.** No public download yet. Requires Android 7.0 or later.
+**In development.** Download from Github Releases. Requires Android 7.0 or later.
 
 <p>
   <img src="docs/images/capture.png" width="240" alt="Writing a note about coffee with Maya and linking it to her profile">
@@ -17,6 +17,10 @@ Save a quick note after a conversation. Find it later by searching for a detail,
 - **Follow up on your terms.** Choose what to follow up on, with optional reminders.
 
 No account needed. Your notes stay on your device, with backups to a folder you choose. Add people by name or import your Android contacts.
+
+## Inspiration
+
+- [Monica: self-hosted personal relationship manager](https://www.monicahq.com/en/)
 
 ## Learn more
 

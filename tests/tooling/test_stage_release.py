@@ -17,7 +17,7 @@ class StageReleaseTests(unittest.TestCase):
             root=Path(tmp);bundle=root/'bundle';bundle.mkdir()
             apk=bundle/'prm-0.1.0.apk';apk.write_bytes(b'signed release')
             digest=hashlib.sha256(apk.read_bytes()).hexdigest()
-            original=dict(version='0.1.0',version_code=2,application_id='com.idontremember.personalcrm',
+            original=dict(version='0.1.0',version_code=2,application_id='com.redloon.prm',
                           app_sha256=digest,apk=apk.name,certificate_sha256='c'*64,
                           source_sha256='a'*64,git_revision='b'*40)
             (bundle/'manifest.json').write_text(json.dumps(original))

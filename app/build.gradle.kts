@@ -45,17 +45,17 @@ if (releaseSigning) {
 }
 
 android {
-    namespace = "com.idontremember.personalcrm"
+    namespace = "com.redloon.prm"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.idontremember.personalcrm"
+        applicationId = "com.redloon.prm"
         minSdk = 24
         targetSdk = 36
         versionCode = appVersion.getProperty("versionCode").toInt()
         versionName = appVersion.getProperty("versionName")
 
-        testInstrumentationRunner = "com.idontremember.personalcrm.HiltTestRunner"
+        testInstrumentationRunner = "com.redloon.prm.HiltTestRunner"
         vectorDrawables {
             useSupportLibrary = true
         }

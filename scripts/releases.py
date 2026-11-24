@@ -12,7 +12,7 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = 'com.idontremember.personalcrm'
+PACKAGE = 'com.redloon.prm'
 SEMVER = r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
 MAX_CODE = 2100000000
 

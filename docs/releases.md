@@ -3,7 +3,7 @@
 Releases are signed APKs distributed through GitHub Releases. There is no hosted CI,
 Play integration, automatic commit, tag, push or upload. Choose the app's public name
 before later Google Play account/release work. Naming does not change the installed
-identity: keep `com.idontremember.personalcrm` and the signing key stable, including
+identity: keep `com.redloon.prm` and the signing key stable, including
 across future display-name changes.
 
 ## One-time setup
@@ -57,7 +57,7 @@ relying on it. Replacing the key prevents ordinary APK updates for existing user
 Never put credentials in command arguments, Git, release notes or release bundles.
 The signing invocation disables Gradle configuration caching.
 
-The application ID remains `com.idontremember.personalcrm`; changing the checkout,
+The application ID remains `com.redloon.prm`; changing the checkout,
 repository, signing-key alias or release filename does not change the installed app.
 
 ## Choose, review and commit a version

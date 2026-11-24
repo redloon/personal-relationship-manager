@@ -8,7 +8,7 @@ import re
 import time
 from interaction import Interaction
 
-PACKAGE = 'com.idontremember.personalcrm'
+PACKAGE = 'com.redloon.prm'
 CASES = ('saved_records', 'edited_records', 'deleted_records')
 
 

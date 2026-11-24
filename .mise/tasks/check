@@ -8,7 +8,7 @@ ERRORS=0
 echo "▶ Scanning for known issues..."
 
 # Check NavDisplay has SaveableStateHolder decorator
-NAV_FILE="app/src/main/java/com/idontremember/personalcrm/ui/navigation/AppNavigation.kt"
+NAV_FILE="app/src/main/java/com/redloon/prm/ui/navigation/AppNavigation.kt"
 if [ -f "$NAV_FILE" ]; then
     if grep -q "rememberViewModelStoreNavEntryDecorator" "$NAV_FILE" && \
        ! grep -q "rememberSaveableStateHolderNavEntryDecorator" "$NAV_FILE"; then
@@ -29,7 +29,7 @@ fi
 
 # P2: hardcoded UI strings — all user-visible copy lives in res/values/strings.xml.
 # Fail on Text("...") literals and hardcoded icon contentDescription literals in ui/.
-UI_DIR="app/src/main/java/com/idontremember/personalcrm/ui"
+UI_DIR="app/src/main/java/com/redloon/prm/ui"
 if [ -d "$UI_DIR" ]; then
     HARDCODED_TEXT=$(grep -rn --include='*.kt' 'Text("' "$UI_DIR" || true)
     if [ -n "$HARDCODED_TEXT" ]; then
