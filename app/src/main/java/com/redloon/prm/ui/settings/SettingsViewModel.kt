@@ -43,6 +43,9 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, DateDisplay.ABSOLUTE)
     val defaultEventTime: StateFlow<DefaultEventTime> = settingsRepository.defaultEventTime
         .stateIn(viewModelScope, SharingStarted.Eagerly, DefaultEventTime.NOW)
+    val automaticContactSyncEnabled: StateFlow<Boolean> =
+        settingsRepository.automaticContactSyncEnabled
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val backupStatus = automaticBackup.status.stateIn(
         viewModelScope,
@@ -135,6 +138,12 @@ class SettingsViewModel @Inject constructor(
     }
     fun setDefaultEventTime(value: DefaultEventTime) {
         viewModelScope.launch { settingsRepository.setDefaultEventTime(value) }
+    }
+    fun setAutomaticContactSyncEnabled(value: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setContactImportOnboardingDismissed()
+            settingsRepository.setAutomaticContactSyncEnabled(value)
+        }
     }
 
     fun exportTo(resolver: ContentResolver, uri: Uri) {

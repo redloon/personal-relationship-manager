@@ -27,12 +27,11 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonOutline
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -87,6 +86,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.redloon.prm.R
@@ -123,15 +123,22 @@ fun ContactsListScreen(
     val hidden = scope == PeopleListScope.HIDDEN
     val secondary = scope != PeopleListScope.ALL
     val context = LocalContext.current
+    val automaticSyncEnabled by viewModel.automaticContactSyncEnabled.collectAsStateWithLifecycle()
+    val onboardingDismissed by
+        viewModel.contactImportOnboardingDismissed.collectAsStateWithLifecycle()
     val permission =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) viewModel.syncContacts()
+            if (granted) viewModel.importContacts() else viewModel.onContactPermissionDenied()
         }
-    val importContacts = {
+    val runDirectorySync = {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) ==
             PackageManager.PERMISSION_GRANTED
         ) {
-            viewModel.syncContacts()
+            if (automaticSyncEnabled) {
+                viewModel.refreshContacts()
+            } else {
+                viewModel.importContacts()
+            }
         } else {
             permission.launch(Manifest.permission.READ_CONTACTS)
         }
@@ -187,6 +194,15 @@ fun ContactsListScreen(
     }
 
     LaunchedEffect(scope) { viewModel.configure(scope) }
+    if (!secondary) {
+        LifecycleResumeEffect(viewModel, context) {
+            viewModel.onPrimaryPeopleResumed(
+                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) ==
+                    PackageManager.PERMISSION_GRANTED
+            )
+            onPauseOrDispose {}
+        }
+    }
     BackHandler(enabled = selection.active || busy) { viewModel.clearSelection() }
     LaunchedEffect(viewModel, resources, undo) {
         viewModel.visibilityChanges.collectLatest { change ->
@@ -221,12 +237,18 @@ fun ContactsListScreen(
     }
 
     val syncFeedback: String? = when (val state = syncState) {
-        is ContactsListViewModel.SyncState.Success -> pluralStringResource(
-            R.plurals.sync_result,
-            state.result.added,
-            state.result.added,
-            state.result.updated
-        )
+        is ContactsListViewModel.SyncState.Success -> if (state.announce) {
+            pluralStringResource(
+                R.plurals.sync_result,
+                state.result.added,
+                state.result.added,
+                state.result.updated
+            )
+        } else {
+            null
+        }
+        ContactsListViewModel.SyncState.PermissionDenied ->
+            stringResource(R.string.contacts_permission_required)
         is ContactsListViewModel.SyncState.Error -> stringResource(
             R.string.sync_error,
             state.message ?: stringResource(R.string.error_sync_failed)
@@ -296,17 +318,6 @@ fun ContactsListScreen(
                     },
                     actions = {
                         if (!secondary) {
-                            IconButton(
-                                onClick = importContacts,
-                                enabled = syncState !is ContactsListViewModel.SyncState.Syncing,
-                                modifier = Modifier.size(48.dp).testTag("sync_button")
-                            ) {
-                                if (syncState is ContactsListViewModel.SyncState.Syncing) {
-                                    CircularProgressIndicator(Modifier.size(24.dp))
-                                } else {
-                                    Icon(Icons.Default.Refresh, stringResource(R.string.cd_sync))
-                                }
-                            }
                             SettingsButton(onClick = onSettingsClick)
                         }
                         Box {
@@ -321,6 +332,28 @@ fun ContactsListScreen(
                             DropdownMenu(expanded = menu, onDismissRequest = {
                                 menu = false
                             }, modifier = Modifier.exposeTestTags()) {
+                                if (!secondary) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                stringResource(
+                                                    if (automaticSyncEnabled) {
+                                                        R.string.contacts_refresh_action
+                                                    } else {
+                                                        R.string.contacts_import_action
+                                                    }
+                                                )
+                                            )
+                                        },
+                                        enabled = syncState !is
+                                            ContactsListViewModel.SyncState.Syncing,
+                                        onClick = {
+                                            menu = false
+                                            runDirectorySync()
+                                        },
+                                        modifier = Modifier.testTag("contacts_sync_menu")
+                                    )
+                                }
                                 DropdownMenuItem(
                                     text = {
                                         Text(
@@ -404,6 +437,12 @@ fun ContactsListScreen(
                     ),
                     Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.bodySmall
+                )
+            }
+            if (!secondary && !onboardingDismissed) {
+                ContactImportOnboardingCard(
+                    onImport = runDirectorySync,
+                    onNotNow = viewModel::dismissContactImportOnboarding
                 )
             }
             SearchField(
@@ -510,6 +549,39 @@ fun ContactsListScreen(
             },
             startCreating = true
         )
+    }
+}
+
+@Composable
+private fun ContactImportOnboardingCard(onImport: () -> Unit, onNotNow: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+            .testTag("contact_import_onboarding")
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                stringResource(R.string.contacts_import_onboarding_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                stringResource(R.string.contacts_import_onboarding_body),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End
+            ) {
+                TextButton(
+                    onClick = onNotNow,
+                    modifier = Modifier.testTag("contact_import_not_now")
+                ) { Text(stringResource(R.string.contacts_import_not_now)) }
+                TextButton(
+                    onClick = onImport,
+                    modifier = Modifier.testTag("contact_import_confirm")
+                ) { Text(stringResource(R.string.contacts_import_action)) }
+            }
+        }
     }
 }
 

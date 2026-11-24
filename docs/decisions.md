@@ -2,6 +2,14 @@
 
 Record important, non-obvious product decisions here, briefly.
 
+## 2026-11-23 — Native contact creation and explicit foreground sync
+
+Unlinked people may be linked to an existing Android contact or used to open Android's native contact editor with their current name prefilled. A saved Android contact is attached to the existing app profile, retaining its context while Android Contacts becomes authoritative for contact details. This supersedes the earlier decision not to offer Android contact creation.
+
+Whole-directory import is a separate, explicit opt-in. People explains once that import adds all current Android contacts and enables foreground refresh; dismissing the explanation is remembered. After opt-in, People refreshes on resume only when the last successful full sync is at least 24 hours old. One-contact creation or linking never opts into directory sync, and permission alone is not consent. Disabling automatic refresh retains all existing people. No background worker is used.
+
+People exposes a labelled overflow action: Import Android contacts before opt-in and Refresh Android contacts afterward. This supersedes the icon-only manual import behavior. Only a successful full directory sync advances the refresh timestamp; automatic detail-only updates are quiet, while manual refresh always reports its result.
+
 ## 2026-11-22 — Unlinked people, permanent deletion and interaction sorting
 
 Unlinked people is the user-facing name for profiles without a current Android attachment; hidden profiles remain in Hidden people. Newly created local profiles may be permanently deleted after an affected-data confirmation from any People list. Imported or ever-linked profiles are protected permanently. Earlier profiles with unverifiable history are protected too; a missing attachment is not proof of local creation. This adds bounded local-profile deletion to the earlier management decision; general merge remains deferred.

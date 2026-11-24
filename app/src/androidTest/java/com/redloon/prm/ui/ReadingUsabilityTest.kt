@@ -115,6 +115,7 @@ class ReadingUsabilityTest {
         ui.onNodeWithTag("edit_person_button").assertIsDisplayed().performClick()
         ui.waitUntilTagDisplayed("rename_person_name", 10_000)
         ui.onNodeWithTag("rename_person_name").performTextReplacement("After Rename")
+        ui.onNodeWithTag("create_android_contact").assertIsDisplayed()
         ui.onNodeWithTag("link_android_contact").assertIsDisplayed()
         ui.onNodeWithTag("save_person_name").performClick()
         ui.waitUntil(10_000) {

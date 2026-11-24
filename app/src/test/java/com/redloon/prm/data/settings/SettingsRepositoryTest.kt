@@ -81,6 +81,23 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun contactImportChoiceAndRefreshStateAreExplicitAndPersistent() = runBlocking {
+        val repository = SettingsRepository(newStore(newFile("contacts.preferences_pb")))
+
+        assertEquals(false, repository.contactImportOnboardingDismissed.first())
+        assertEquals(false, repository.automaticContactSyncEnabled.first())
+        assertEquals(0L, repository.lastSuccessfulContactSyncAt.first())
+
+        repository.setContactImportOnboardingDismissed()
+        repository.setAutomaticContactSyncEnabled(true)
+        repository.setLastSuccessfulContactSyncAt(1_700_000_000_000L)
+
+        assertEquals(true, repository.contactImportOnboardingDismissed.first())
+        assertEquals(true, repository.automaticContactSyncEnabled.first())
+        assertEquals(1_700_000_000_000L, repository.lastSuccessfulContactSyncAt.first())
+    }
+
+    @Test
     fun defaultsMatchDocumentedDefaults() = runBlocking {
         val repository = SettingsRepository(newStore(newFile("defaults.preferences_pb")))
 
@@ -89,6 +106,9 @@ class SettingsRepositoryTest {
         assertEquals(DateDisplay.ABSOLUTE, repository.dateDisplay.first())
         assertEquals(DefaultEventTime.NOW, repository.defaultEventTime.first())
         assertEquals(0L, repository.lastUsedEventTimestamp.first())
+        assertEquals(false, repository.contactImportOnboardingDismissed.first())
+        assertEquals(false, repository.automaticContactSyncEnabled.first())
+        assertEquals(0L, repository.lastSuccessfulContactSyncAt.first())
     }
 
     @Test
@@ -122,6 +142,9 @@ class SettingsRepositoryTest {
             repository.setDateDisplay(DateDisplay.RELATIVE)
             repository.setDefaultEventTime(DefaultEventTime.LAST_USED)
             repository.setLastUsedEventTimestamp(1_234L)
+            repository.setContactImportOnboardingDismissed()
+            repository.setAutomaticContactSyncEnabled(true)
+            repository.setLastSuccessfulContactSyncAt(5_678L)
         }
         scope1.cancel()
         runBlocking { scope1.coroutineContext.job.join() }
@@ -137,6 +160,9 @@ class SettingsRepositoryTest {
                 assertEquals(DateDisplay.RELATIVE, repository.dateDisplay.first())
                 assertEquals(DefaultEventTime.LAST_USED, repository.defaultEventTime.first())
                 assertEquals(1_234L, repository.lastUsedEventTimestamp.first())
+                assertEquals(true, repository.contactImportOnboardingDismissed.first())
+                assertEquals(true, repository.automaticContactSyncEnabled.first())
+                assertEquals(5_678L, repository.lastSuccessfulContactSyncAt.first())
             }
         }
     }

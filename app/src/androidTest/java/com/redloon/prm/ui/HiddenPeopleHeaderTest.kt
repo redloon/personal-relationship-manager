@@ -57,6 +57,7 @@ class HiddenPeopleHeaderTest {
         runBlocking {
             settings.setThemeMode(ThemeMode.LIGHT)
             settings.setDynamicColor(false)
+            settings.setAutomaticContactSyncEnabled(false)
             first =
                 db.contactDao().insert(Contact(displayName = "Hidden person 00", isHidden = true))
             for (i in 1..24) {
@@ -74,13 +75,15 @@ class HiddenPeopleHeaderTest {
         runBlocking {
             settings.setThemeMode(ThemeMode.SYSTEM)
             settings.setDynamicColor(true)
+            settings.setAutomaticContactSyncEnabled(false)
         }
         db.clearAllTables()
     }
 
-    @Test fun peopleKeepsSyncWithoutTheDuplicateImportButton() {
-        compose.onNodeWithText("Import Android contacts").assertDoesNotExist()
-        compose.onNodeWithTag("sync_button").assertIsDisplayed().assertHasClickAction()
+    @Test fun peopleUsesLabelledSyncOverflowWithoutAStandaloneIcon() {
+        compose.onNodeWithTag("sync_button").assertDoesNotExist()
+        compose.onNodeWithTag("people_menu").performClick()
+        compose.onNodeWithTag("contacts_sync_menu").assertIsDisplayed().assertHasClickAction()
     }
 
     @Test fun hiddenIdentitySurvivesScrollingSearchSelectionRecreationAndBack() {

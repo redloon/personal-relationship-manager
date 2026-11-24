@@ -56,6 +56,7 @@ class SettingsScreenTest {
             settingsRepository.setDynamicColor(true)
             settingsRepository.setDateDisplay(DateDisplay.ABSOLUTE)
             settingsRepository.setDefaultEventTime(DefaultEventTime.NOW)
+            settingsRepository.setAutomaticContactSyncEnabled(false)
         }
     }
 
@@ -136,6 +137,14 @@ class SettingsScreenTest {
         composeTestRule.onNodeWithTag("dynamic_color_toggle").performScrollTo().performClick()
         awaitStored { runBlocking { settingsRepository.dynamicColor.first() } == false }
         composeTestRule.onNodeWithTag("dynamic_color_toggle").assertIsOff()
+    }
+
+    @Test
+    fun automaticContactRefreshToggleReflectsDisabledSetting() {
+        openSettingsFromContacts()
+        composeTestRule.onNodeWithTag("automatic_contact_refresh_toggle")
+            .performScrollTo()
+        composeTestRule.onNodeWithTag("automatic_contact_refresh_toggle").assertIsOff()
     }
 
     // --- helpers ---

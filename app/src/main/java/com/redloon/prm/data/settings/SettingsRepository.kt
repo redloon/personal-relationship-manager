@@ -31,6 +31,28 @@ enum class DefaultEventTime { NOW, LAST_USED }
  */
 class SettingsRepository @Inject constructor(private val dataStore: DataStore<Preferences>) {
 
+    val contactImportOnboardingDismissed: Flow<Boolean> = dataStore.data.map {
+        it[SettingsKeys.CONTACT_IMPORT_ONBOARDING_DISMISSED] ?: false
+    }
+    val automaticContactSyncEnabled: Flow<Boolean> = dataStore.data.map {
+        it[SettingsKeys.AUTOMATIC_CONTACT_SYNC_ENABLED] ?: false
+    }
+    val lastSuccessfulContactSyncAt: Flow<Long> = dataStore.data.map {
+        it[SettingsKeys.LAST_SUCCESSFUL_CONTACT_SYNC_AT] ?: 0L
+    }
+
+    suspend fun setContactImportOnboardingDismissed(dismissed: Boolean = true) {
+        dataStore.edit { it[SettingsKeys.CONTACT_IMPORT_ONBOARDING_DISMISSED] = dismissed }
+    }
+
+    suspend fun setAutomaticContactSyncEnabled(enabled: Boolean) {
+        dataStore.edit { it[SettingsKeys.AUTOMATIC_CONTACT_SYNC_ENABLED] = enabled }
+    }
+
+    suspend fun setLastSuccessfulContactSyncAt(timestamp: Long) {
+        dataStore.edit { it[SettingsKeys.LAST_SUCCESSFUL_CONTACT_SYNC_AT] = timestamp }
+    }
+
     fun peopleSort(scope: PeopleListScope): Flow<PeopleSort> = dataStore.data.map { prefs ->
         enumValueOrDefault(prefs[SettingsKeys.peopleSort(scope)], PeopleSort.RECENT)
     }
@@ -144,6 +166,12 @@ object SettingsKeys {
     val DATE_DISPLAY = stringPreferencesKey("date_display")
     val DEFAULT_EVENT_TIME = stringPreferencesKey("default_event_time")
     val LAST_USED_EVENT_TIMESTAMP = longPreferencesKey("last_used_event_timestamp")
+    val CONTACT_IMPORT_ONBOARDING_DISMISSED =
+        booleanPreferencesKey("contact_import_onboarding_dismissed")
+    val AUTOMATIC_CONTACT_SYNC_ENABLED =
+        booleanPreferencesKey("automatic_contact_sync_enabled")
+    val LAST_SUCCESSFUL_CONTACT_SYNC_AT =
+        longPreferencesKey("last_successful_contact_sync_at")
 }
 
 private inline fun <reified T : Enum<T>> enumValueOrDefault(raw: String?, default: T): T =

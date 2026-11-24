@@ -137,7 +137,7 @@ class AccessibilitySmokeTest {
         composeTestRule.onNodeWithTag("search_field").assertIsDisplayed()
         composeTestRule.waitUntilTagDisplayed("contacts_empty_state")
         composeTestRule.onNodeWithTag("contacts_empty_state").assertIsDisplayed()
-        assertTouchTargetAtLeast48dp("sync_button")
+        assertTouchTargetAtLeast48dp("people_menu")
         assertTouchTargetAtLeast48dp("settings_button")
 
         composeTestRule.navigateToHistory()

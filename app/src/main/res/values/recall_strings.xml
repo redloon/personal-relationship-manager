@@ -23,6 +23,8 @@
     <string name="recall_confirm_link">Link this Android contact?</string>
     <string name="recall_confirm_link_detail">This attaches the Android contact to this person. If it was already imported, their saved notes and connections will be combined here.</string>
     <string name="recall_link_failed">Couldn’t link this contact. Try again.</string>
+    <string name="contacts_create_action">Create Android contact</string>
+    <string name="contacts_create_cancelled">Contact creation cancelled.</string>
     <string name="recall_fact_deleted">Fact moved to Recently deleted</string>
     <string name="recall_undo">Undo</string>
     <string name="recall_more_facts">See all facts</string>

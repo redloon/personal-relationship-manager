@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.redloon.prm.data.contacts.ContactDirectorySearch
+import com.redloon.prm.data.contacts.ContactSyncPolicy
 import com.redloon.prm.data.contacts.ContactsSyncManager
 import com.redloon.prm.data.contacts.InteractionRepository
 import com.redloon.prm.data.contacts.PeopleBulkAction
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -53,6 +55,10 @@ class ContactsListViewModel @Inject constructor(
     interactions: InteractionRepository,
     private val savedState: SavedStateHandle
 ) : ViewModel() {
+    val contactImportOnboardingDismissed = settings.contactImportOnboardingDismissed
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val automaticContactSyncEnabled = settings.automaticContactSyncEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val searchQuery = savedState.getStateFlow("people_query", "")
     private val scope = savedState.getStateFlow("people_scope", PeopleListScope.ALL.name)
     private val _selection =
@@ -263,18 +269,70 @@ class ContactsListViewModel @Inject constructor(
 
     private val _syncState = MutableStateFlow<SyncState>(SyncState.Idle)
     val syncState: StateFlow<SyncState> = _syncState
-    fun syncContacts() {
+    fun dismissContactImportOnboarding() {
+        viewModelScope.launch { settings.setContactImportOnboardingDismissed() }
+    }
+
+    fun importContacts() {
         viewModelScope.launch {
-            _syncState.value = SyncState.Syncing
-            try {
-                _syncState.value = SyncState.Success(contactRepository.syncContacts())
-            } catch (
-                e: CancellationException
-            ) {
-                throw e
-            } catch (e: Exception) {
-                _syncState.value = SyncState.Error(e.message)
+            settings.setContactImportOnboardingDismissed()
+            settings.setAutomaticContactSyncEnabled(true)
+            syncDirectory(automatic = false)
+        }
+    }
+
+    fun refreshContacts() {
+        viewModelScope.launch { syncDirectory(automatic = false) }
+    }
+
+    /** Compatibility for callers that still mean an explicit, user-requested refresh. */
+    fun syncContacts() = refreshContacts()
+
+    fun onContactPermissionDenied() {
+        viewModelScope.launch {
+            settings.setContactImportOnboardingDismissed()
+            settings.setAutomaticContactSyncEnabled(false)
+            _syncState.value = SyncState.PermissionDenied
+        }
+    }
+
+    fun onPrimaryPeopleResumed(hasPermission: Boolean, now: Long = System.currentTimeMillis()) {
+        viewModelScope.launch {
+            val enabled = settings.automaticContactSyncEnabled.first()
+            if (enabled && !hasPermission) {
+                settings.setAutomaticContactSyncEnabled(false)
+                return@launch
             }
+            if (
+                ContactSyncPolicy.shouldRefresh(
+                    enabled = enabled,
+                    hasPermission = hasPermission,
+                    lastSuccessfulSyncAt = settings.lastSuccessfulContactSyncAt.first(),
+                    now = now
+                )
+            ) {
+                syncDirectory(automatic = true)
+            }
+        }
+    }
+
+    private suspend fun syncDirectory(automatic: Boolean) {
+        if (_syncState.value is SyncState.Syncing) return
+        _syncState.value = SyncState.Syncing
+        try {
+            val result = contactRepository.syncContacts()
+            settings.setLastSuccessfulContactSyncAt(System.currentTimeMillis())
+            _syncState.value = SyncState.Success(
+                result = result,
+                announce = !automatic || result.added > 0
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: SecurityException) {
+            settings.setAutomaticContactSyncEnabled(false)
+            _syncState.value = SyncState.PermissionDenied
+        } catch (e: Exception) {
+            _syncState.value = SyncState.Error(e.message)
         }
     }
     fun clearSyncState() {
@@ -283,7 +341,9 @@ class ContactsListViewModel @Inject constructor(
     sealed class SyncState {
         data object Idle : SyncState()
         data object Syncing : SyncState()
-        data class Success(val result: ContactsSyncManager.SyncResult) : SyncState()
+        data class Success(val result: ContactsSyncManager.SyncResult, val announce: Boolean) :
+            SyncState()
+        data object PermissionDenied : SyncState()
         data class Error(val message: String?) : SyncState()
     }
 }

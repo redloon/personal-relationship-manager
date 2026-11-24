@@ -41,6 +41,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -75,6 +76,7 @@ class DogfoodWorkflowTest {
         ui.activity.getSharedPreferences("capture_draft", 0).edit().clear().commit()
         runBlocking {
             settings.setDateDisplay(DateDisplay.ABSOLUTE)
+            settings.setAutomaticContactSyncEnabled(false)
             maya = contacts.createLocalContact("Maya Typo")
             db.contactDao().update(
                 contacts.getContactById(
@@ -140,6 +142,7 @@ class DogfoodWorkflowTest {
         ui.waitUntilTagDisplayed("edit_person_button")
         ui.onNodeWithTag("edit_person_button").performClick()
         ui.onNodeWithTag("open_android_contact").assertIsDisplayed()
+        ui.onNodeWithTag("create_android_contact").assertDoesNotExist()
         ui.onNodeWithTag("link_android_contact").assertDoesNotExist()
     }
 
@@ -165,7 +168,20 @@ class DogfoodWorkflowTest {
         assertEquals(listOf(maya), runBlocking { db.eventDao().getContactIdsForEvent(note) })
         assertEquals("Lantern bakery", runBlocking { db.eventDao().getById(note)!!.note })
         val androidId = createAndroidPerson("Dogfood Android Canonical")
+        val alreadyImported = runBlocking {
+            db.contactDao().insert(
+                Contact(displayName = "Imported copy", androidContactId = androidId)
+            )
+        }
+        val importedFact = runBlocking {
+            db.contactFactDao().insert(
+                ContactFact(contactId = alreadyImported, text = "Context from imported copy")
+            )
+        }
         runBlocking { contacts.linkAndroidContact(maya, androidId) }
+        assertFalse(runBlocking { settings.automaticContactSyncEnabled.first() })
+        assertNull(runBlocking { contacts.getContactById(alreadyImported) })
+        assertEquals(maya, runBlocking { db.contactFactDao().getById(importedFact)!!.contactId })
         assertFalse(runBlocking { contacts.getContactById(maya)!!.deletionAllowed })
         ui.onNodeWithTag("edit_person_button").performClick()
         ui.onNodeWithTag("open_android_contact").assertIsDisplayed()

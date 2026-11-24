@@ -1,5 +1,7 @@
 package com.redloon.prm.ui.settings
 
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.LocalIndication
@@ -46,6 +48,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.redloon.prm.R
 import com.redloon.prm.data.settings.DateDisplay
@@ -74,6 +77,7 @@ fun SettingsScreen(
     val dynamicColor by viewModel.dynamicColor.collectAsState()
     val dateDisplay by viewModel.dateDisplay.collectAsState()
     val defaultEventTime by viewModel.defaultEventTime.collectAsState()
+    val automaticContactSyncEnabled by viewModel.automaticContactSyncEnabled.collectAsState()
     val exportState by viewModel.exportState.collectAsState()
     val restoreState by viewModel.restoreState.collectAsState()
     val restorePreview by viewModel.restorePreview.collectAsState()
@@ -84,6 +88,9 @@ fun SettingsScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val contactsPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> viewModel.setAutomaticContactSyncEnabled(granted) }
 
     val safLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
@@ -165,6 +172,25 @@ fun SettingsScreen(
                     title = stringResource(R.string.people_hidden_title),
                     onClick = onHiddenPeople,
                     testTag = "settings_hidden_people"
+                )
+                SettingsSwitchRow(
+                    title = stringResource(R.string.settings_automatic_contact_refresh),
+                    checked = automaticContactSyncEnabled,
+                    onCheckedChange = { enabled ->
+                        if (!enabled) {
+                            viewModel.setAutomaticContactSyncEnabled(false)
+                        } else if (
+                            ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.READ_CONTACTS
+                            ) == PackageManager.PERMISSION_GRANTED
+                        ) {
+                            viewModel.setAutomaticContactSyncEnabled(true)
+                        } else {
+                            contactsPermission.launch(Manifest.permission.READ_CONTACTS)
+                        }
+                    },
+                    testTag = "automatic_contact_refresh_toggle"
                 )
             }
             SettingsSection(

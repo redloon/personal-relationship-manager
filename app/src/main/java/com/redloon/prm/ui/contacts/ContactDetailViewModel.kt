@@ -135,12 +135,13 @@ class ContactDetailViewModel @Inject constructor(
             }
         }
     }
-    fun linkAndroidContact(androidId: Long) {
+    fun linkAndroidContact(androidId: Long, onLinked: () -> Unit = {}) {
         if (_linking.value) return
         _linking.value = true
         viewModelScope.launch {
             try {
                 contactRepository.linkAndroidContact(contactId, androidId)
+                onLinked()
             } catch (
                 e: kotlinx.coroutines.CancellationException
             ) {

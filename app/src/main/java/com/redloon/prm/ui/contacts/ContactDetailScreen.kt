@@ -1,6 +1,7 @@
 package com.redloon.prm.ui.contacts
 
 import android.Manifest
+import android.app.Activity
 import android.content.ContentUris
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -62,6 +63,9 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.redloon.prm.R
+import com.redloon.prm.data.contacts.createAndroidContactIntent
+import com.redloon.prm.data.contacts.createdContactUri
+import com.redloon.prm.data.contacts.resolveAndroidContactId
 import com.redloon.prm.data.search.RecallSearch
 import com.redloon.prm.ui.addevent.AddEventSheet
 import com.redloon.prm.ui.components.EmptyState
@@ -116,6 +120,7 @@ fun ContactDetailScreen(
     var editingFact by rememberSaveable { mutableStateOf<Long?>(null) }
     var editingFollowUp by rememberSaveable { mutableStateOf<Long?>(null) }
     var pendingAndroid by rememberSaveable { mutableStateOf<Long?>(null) }
+    var pendingContactAction by rememberSaveable { mutableStateOf("pick") }
     val linking by viewModel.linking.collectAsState()
     val operationError by viewModel.operationError.collectAsState()
     val deleted by viewModel.deletedFact.collectAsState()
@@ -124,6 +129,7 @@ fun ContactDetailScreen(
     val undoLabel = stringResource(R.string.recall_undo)
     val actionFailedMessage = stringResource(R.string.recall_action_failed)
     val failedMessage = stringResource(R.string.recall_link_failed)
+    val creationCancelledMessage = stringResource(R.string.contacts_create_cancelled)
     val unavailable = stringResource(R.string.pilot_contact_unavailable)
     LaunchedEffect(deleted) {
         deleted?.let { id ->
@@ -147,18 +153,7 @@ fun ContactDetailScreen(
     }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickContact()) { uri ->
         if (uri != null) {
-            pendingAndroid =
-                runCatching {
-                    context.contentResolver.query(
-                        uri,
-                        arrayOf(ContactsContract.Contacts._ID),
-                        null,
-                        null,
-                        null
-                    )?.use {
-                        if (it.moveToFirst()) it.getLong(0) else null
-                    }
-                }.getOrNull()
+            pendingAndroid = resolveAndroidContactId(context.contentResolver, uri)
             if (pendingAndroid ==
                 null
             ) {
@@ -166,9 +161,40 @@ fun ContactDetailScreen(
             }
         }
     }
+    val creator = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val id = createdContactUri(result.resultCode, result.data)?.let {
+            resolveAndroidContactId(context.contentResolver, it)
+        }
+        if (id == null) {
+            Toast.makeText(
+                context,
+                if (result.resultCode == Activity.RESULT_CANCELED) {
+                    creationCancelledMessage
+                } else {
+                    failedMessage
+                },
+                Toast.LENGTH_SHORT
+            ).show()
+        } else {
+            viewModel.linkAndroidContact(id) { rename = false }
+        }
+    }
     val permission =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) picker.launch(null)
+            if (granted) {
+                if (pendingContactAction == "create") {
+                    runCatching { creator.launch(createAndroidContactIntent(newName)) }
+                        .onFailure {
+                            Toast.makeText(context, unavailable, Toast.LENGTH_SHORT).show()
+                        }
+                } else {
+                    picker.launch(null)
+                }
+            } else {
+                Toast.makeText(context, failedMessage, Toast.LENGTH_SHORT).show()
+            }
         }
     val listState = rememberLazyListState()
     Scaffold(
@@ -540,6 +566,33 @@ fun ContactDetailScreen(
                     if (contact?.androidContactId == null) {
                         TextButton(
                             onClick = {
+                                pendingContactAction = "create"
+                                if (ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.READ_CONTACTS
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    runCatching {
+                                        creator.launch(createAndroidContactIntent(newName))
+                                    }.onFailure {
+                                        Toast.makeText(
+                                            context,
+                                            unavailable,
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                } else {
+                                    permission.launch(Manifest.permission.READ_CONTACTS)
+                                }
+                            },
+                            enabled = !linking && newName.isNotBlank(),
+                            modifier = Modifier.testTag("create_android_contact")
+                        ) {
+                            Text(stringResource(R.string.contacts_create_action))
+                        }
+                        TextButton(
+                            onClick = {
+                                pendingContactAction = "pick"
                                 if (ContextCompat.checkSelfPermission(
                                         context,
                                         Manifest.permission.READ_CONTACTS
@@ -607,9 +660,11 @@ fun ContactDetailScreen(
             text = { Text(stringResource(R.string.recall_confirm_link_detail)) },
             confirmButton = {
                 TextButton(onClick = {
-                    pendingAndroid = null
-                    viewModel.linkAndroidContact(id)
-                }) { Text(stringResource(R.string.action_save)) }
+                    viewModel.linkAndroidContact(id) {
+                        pendingAndroid = null
+                        rename = false
+                    }
+                }, enabled = !linking) { Text(stringResource(R.string.action_save)) }
             },
             dismissButton = {
                 TextButton(onClick = {
