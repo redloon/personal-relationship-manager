@@ -31,6 +31,20 @@ keytool -list -v \
   -alias prm
 ```
 
+When releases are built in a persistent Codex sandbox, keep the recoverable key
+on the host and copy it directly into the sandbox without passing through the
+checkout. From a host shell, find the sandbox name with `sbx ls`, then run:
+
+```bash
+sbx exec SANDBOX_NAME sh -c \
+  'umask 077; mkdir -p /home/agent/.local/share/prm-signing; cat > /home/agent/.local/share/prm-signing/release.p12' \
+  < "$HOME/.local/share/prm-signing/release.p12"
+```
+
+Use `/home/agent/.local/share/prm-signing/release.p12` as `storeFile` below.
+The sandbox is persistent, but a replacement sandbox needs this one-time copy
+again. Keep the host key and its independent backup as the authoritative copies.
+
 Record the certificate's **SHA256** fingerprint. Create
 `app/release-signing.properties`, which is Git-ignored:
 
