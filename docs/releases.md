@@ -21,14 +21,14 @@ git remote get-url origin
 Create the key **outside the checkout**, using the interactive password prompts:
 
 ```bash
-mkdir -p "$HOME/.local/share/personal-crm-signing"
-chmod 700 "$HOME/.local/share/personal-crm-signing"
+mkdir -p "$HOME/.local/share/prm-signing"
+chmod 700 "$HOME/.local/share/prm-signing"
 keytool -genkeypair -v \
-  -keystore "$HOME/.local/share/personal-crm-signing/release.p12" \
-  -storetype PKCS12 -alias personal-crm -keyalg RSA -keysize 4096 -validity 10000
+  -keystore "$HOME/.local/share/prm-signing/release.p12" \
+  -storetype PKCS12 -alias prm -keyalg RSA -keysize 4096 -validity 10000
 keytool -list -v \
-  -keystore "$HOME/.local/share/personal-crm-signing/release.p12" \
-  -alias personal-crm
+  -keystore "$HOME/.local/share/prm-signing/release.p12" \
+  -alias prm
 ```
 
 Record the certificate's **SHA256** fingerprint. Create
@@ -37,7 +37,7 @@ Record the certificate's **SHA256** fingerprint. Create
 ```properties
 storeFile=/absolute/path/outside/checkout/release.p12
 storePassword=YOUR_LOCAL_PASSWORD
-keyAlias=personal-crm
+keyAlias=prm
 keyPassword=YOUR_LOCAL_PASSWORD
 certificateSha256=SHA256_FINGERPRINT_FROM_KEYTOOL
 ```
@@ -57,9 +57,8 @@ relying on it. Replacing the key prevents ordinary APK updates for existing user
 Never put credentials in command arguments, Git, release notes or release bundles.
 The signing invocation disables Gradle configuration caching.
 
-The `personal-crm-signing` directory, key alias, application ID and APK filenames
-intentionally remain stable when the checkout directory or GitHub repository is
-renamed. They identify the Android app and its signing lineage, not the checkout.
+The application ID remains `com.idontremember.personalcrm`; changing the checkout,
+repository, signing-key alias or release filename does not change the installed app.
 
 ## Choose, review and commit a version
 
@@ -102,7 +101,7 @@ failed gate block export. It never overwrites an existing version bundle.
 
 The read-only bundle is `ignored/releases/v0.1.0/`:
 
-- `personal-crm-0.1.0.apk`: signed APK.
+- `prm-0.1.0.apk`: signed APK.
 - `SHA256SUMS`: checksum for that exact APK.
 - `manifest.json`: APK hash, version, Android code, commit, source fingerprint,
   application ID and certificate fingerprint.
@@ -116,7 +115,7 @@ Confirm health reports runner v6, the expected source hash, `android_tests` and
 `busy=false`, then stage the **existing signed APK**, without rebuilding it:
 
 ```bash
-bash .mise/tasks/test-stage-app ignored/releases/v0.1.0/personal-crm-0.1.0.apk
+bash .mise/tasks/test-stage-app ignored/releases/v0.1.0/prm-0.1.0.apk
 ```
 
 Use the printed `app_sha256` with the host MCP tool:
@@ -166,7 +165,7 @@ In the GitHub repository:
    the manifest's commit; do not create a new tag from a branch in this form.
 3. Set the title to **v0.1.0** and write concise notes describing user-visible
    changes and any known limitations.
-4. Upload the bundle's `personal-crm-0.1.0.apk` and `SHA256SUMS`.
+4. Upload the bundle's `prm-0.1.0.apk` and `SHA256SUMS`.
 5. Review the assets and notes, then click **Publish release**.
 
 Download both published assets into a **new directory** using their GitHub links.

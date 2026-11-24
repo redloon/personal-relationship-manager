@@ -15,7 +15,7 @@ class StageReleaseTests(unittest.TestCase):
     def test_exact_apk_and_original_provenance_without_test_apk(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);bundle=root/'bundle';bundle.mkdir()
-            apk=bundle/'personal-crm-0.1.0.apk';apk.write_bytes(b'signed release')
+            apk=bundle/'prm-0.1.0.apk';apk.write_bytes(b'signed release')
             digest=hashlib.sha256(apk.read_bytes()).hexdigest()
             original=dict(version='0.1.0',version_code=2,application_id='com.idontremember.personalcrm',
                           app_sha256=digest,apk=apk.name,certificate_sha256='c'*64,

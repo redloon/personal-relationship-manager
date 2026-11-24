@@ -193,7 +193,7 @@ def build(root):
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix='.export-', dir=destination.parent))
     try:
-        filename = f'personal-crm-{name}.apk'
+        filename = f'prm-{name}.apk'
         exported = temporary/filename
         shutil.copyfile(apk, exported)
         checksum = hashlib.sha256(exported.read_bytes()).hexdigest()

@@ -124,6 +124,7 @@ print({'application-id':os.environ.get('PACKAGE_PROBE','com.idontremember.person
         self.assertEqual(result.returncode,0,result.stderr)
         bundle=self.root/'ignored/releases/v0.1.0'
         manifest=json.loads((bundle/'manifest.json').read_text())
+        self.assertEqual(manifest['apk'], 'prm-0.1.0.apk')
         apk=bundle/manifest['apk']
         self.assertEqual(manifest['git_revision'],self.git('rev-parse','HEAD'))
         self.assertEqual(manifest['certificate_sha256'],self.certificate)

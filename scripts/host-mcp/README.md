@@ -218,7 +218,7 @@ above and confirm health v6, its full-module hash/PID, dedicated AVD and idle st
 `start_recovery_test(app_sha256, case=null, timeout_seconds=null)` uses only the
 normal app APK, with debug or release signing. Stage a debug app with
 `bash .mise/tasks/test-stage-app`, or stage the immutable signed bundle's existing
-APK with `bash .mise/tasks/test-stage-app ignored/releases/vVERSION/personal-crm-VERSION.apk`.
+APK with `bash .mise/tasks/test-stage-app ignored/releases/vVERSION/prm-VERSION.apk`.
 The latter verifies the original manifest/checksum and retains its release provenance.
 Do not restage during any active job or cleanup.
 
