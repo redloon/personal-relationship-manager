@@ -104,6 +104,11 @@ android {
 
     lint {
         baseline = file("lint-baseline.xml")
+        disable += setOf(
+            "AndroidGradlePluginVersion",
+            "GradleDependency",
+            "NewerVersionAvailable"
+        )
         warningsAsErrors = true
     }
 
