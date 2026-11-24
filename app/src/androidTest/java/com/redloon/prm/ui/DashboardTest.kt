@@ -58,7 +58,11 @@ class DashboardTest {
         ui.onNodeWithTag("dashboard_person_$alice").performClick()
         ui.waitUntilTagDisplayed("contact_detail_screen", 10_000)
         ui.waitForKeyboard(visible = false)
-        ui.onNodeWithTag("clear_person_search").performClick()
+        ui.onNodeWithTag("person_search").assert(
+            SemanticsMatcher("Profile search query is empty") {
+                it.config[SemanticsProperties.EditableText].text.isEmpty()
+            }
+        )
         ui.onNodeWithTag(
             "contact_detail_screen"
         ).performScrollToNode(hasTestTag("person_management"))
