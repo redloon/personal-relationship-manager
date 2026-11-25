@@ -2,6 +2,10 @@
 
 Record important, non-obvious product decisions here, briefly.
 
+## 2026-11-25 — Defer deeper duplicate identity inspection
+
+Possible duplicates cards do not offer drill-down into saved profile context or full Android contact details. Names and the displayed details may therefore be insufficient to decide whether a pair represents the same person. Richer inspection/navigation is deferred until real usage warrants it: bulk automatic reconnection should leave these uncertain restore cases rare, so prioritize the main workflows rather than over-investing in this edge case. Uncertain pairs may remain unresolved; do not weaken conservative matching to compensate.
+
 ## 2026-11-24 — Conservative reconciliation after portable restore
 
 Contact sync may automatically reconnect a protected app-only profile when its normalized name and exact normalized phone or email match one Android contact bidirectionally uniquely. The app-only profile survives with its identity, creation date, visibility and saved context; Android supplies current contact details. Ambiguous, name-only and renamed-detail matches require review and can be dismissed durably. Dismissals are device-local and clear after restore.
