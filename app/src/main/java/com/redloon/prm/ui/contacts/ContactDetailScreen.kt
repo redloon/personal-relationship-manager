@@ -9,9 +9,9 @@ import android.provider.ContactsContract
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,12 +30,11 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -55,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -66,6 +66,7 @@ import com.redloon.prm.R
 import com.redloon.prm.data.contacts.createAndroidContactIntent
 import com.redloon.prm.data.contacts.createdContactUri
 import com.redloon.prm.data.contacts.resolveAndroidContactId
+import com.redloon.prm.data.search.RecallKind
 import com.redloon.prm.data.search.RecallSearch
 import com.redloon.prm.ui.addevent.AddEventSheet
 import com.redloon.prm.ui.components.EmptyState
@@ -76,9 +77,9 @@ import com.redloon.prm.ui.components.exposeTestTags
 import com.redloon.prm.ui.components.formatEventDateText
 import com.redloon.prm.ui.followups.FollowUpEditor
 import com.redloon.prm.ui.followups.FollowUpReader
+import com.redloon.prm.ui.followups.FollowUpsOverlay
 import com.redloon.prm.ui.followups.FollowUpsSection
 import com.redloon.prm.ui.reading.FactReaderSheet
-import com.redloon.prm.ui.reading.RecordPreview
 import com.redloon.prm.ui.recall.RecallNoteRow
 import com.redloon.prm.ui.recall.RecallViewModel
 import com.redloon.prm.ui.recall.SectionLabel
@@ -94,6 +95,7 @@ fun ContactDetailScreen(
     onEventClick: (Long) -> Unit,
     modifier: Modifier = Modifier,
     onContactClick: (Long) -> Unit = {},
+    onTagClick: (Long) -> Unit = {},
     viewModel: ContactDetailViewModel = hiltViewModel(),
     recall: RecallViewModel = hiltViewModel()
 ) {
@@ -109,7 +111,8 @@ fun ContactDetailScreen(
     var query by rememberSaveable(contactId) { mutableStateOf("") }
     var rename by rememberSaveable { mutableStateOf(false) }
     var newName by rememberSaveable { mutableStateOf("") }
-    var management by rememberSaveable { mutableStateOf(false) }
+    var searchFocused by remember { mutableStateOf(false) }
+    var showFollowUps by rememberSaveable { mutableStateOf(false) }
     var allFacts by rememberSaveable { mutableStateOf(false) }
     var allEvents by rememberSaveable { mutableStateOf(false) }
     var addNote by rememberSaveable { mutableStateOf(false) }
@@ -196,6 +199,9 @@ fun ContactDetailScreen(
             }
         }
     val listState = rememberLazyListState()
+    LaunchedEffect(searchFocused, query) {
+        if (searchFocused || query.isNotBlank()) listState.scrollToItem(0)
+    }
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -265,32 +271,36 @@ fun ContactDetailScreen(
                 ).padding(horizontal = 16.dp).testTag("contact_detail_screen"),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
-                item {
-                    if (contact?.androidContactId ==
-                        null
-                    ) {
-                        Text(
-                            stringResource(R.string.people_app_only_status),
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.testTag("app_only_status")
-                        )
-                    }
-                    interactions?.let { snapshot ->
-                        val latest = snapshot.forPerson(contactId).lastInteractionAt
-                        Text(
-                            stringResource(
-                                R.string.people_last_interaction,
-                                latest?.let {
-                                    formatEventDateText(it, dateDisplay, now = snapshot.asOf)
-                                }
-                                    ?: stringResource(R.string.people_no_interactions)
-                            ),
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(vertical = 8.dp).testTag("last_interaction")
-                        )
+                if (!searchFocused && query.isBlank()) {
+                    item(key = "profile_metadata") {
+                        if (contact?.androidContactId ==
+                            null
+                        ) {
+                            Text(
+                                stringResource(R.string.people_app_only_status),
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.testTag("app_only_status")
+                            )
+                        }
+                        interactions?.let { snapshot ->
+                            val latest = snapshot.forPerson(contactId).lastInteractionAt
+                            Text(
+                                stringResource(
+                                    R.string.people_last_interaction,
+                                    latest?.let {
+                                        formatEventDateText(it, dateDisplay, now = snapshot.asOf)
+                                    }
+                                        ?: stringResource(R.string.people_no_interactions)
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(
+                                    vertical = 8.dp
+                                ).testTag("last_interaction")
+                            )
+                        }
                     }
                 }
-                item {
+                item(key = "profile_search") {
                     SearchField(
                         query,
                         {
@@ -300,7 +310,9 @@ fun ContactDetailScreen(
                             R.string.recall_person_search
                         ),
                         "clear_person_search",
-                        Modifier.fillMaxWidth().testTag("person_search")
+                        Modifier.fillMaxWidth().testTag("person_search").onFocusChanged {
+                            searchFocused = it.isFocused
+                        }
                     )
                 }
                 if (query.isNotBlank()) {
@@ -324,6 +336,35 @@ fun ContactDetailScreen(
                         }
                     }
                 } else {
+                    item(key = "profile_overview") {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { allFacts = true }) {
+                                Text(stringResource(R.string.profile_facts_count, facts.size))
+                            }
+                            OutlinedButton(onClick = { allEvents = true }) {
+                                Text(stringResource(R.string.profile_notes_count, events.size))
+                            }
+                            OutlinedButton(onClick = { showFollowUps = true }) {
+                                Text(
+                                    stringResource(
+                                        R.string.profile_followups_count,
+                                        entries.orEmpty().count {
+                                            it.kind == RecallKind.FOLLOW_UP &&
+                                                it.belongsTo(contactId)
+                                        }
+                                    )
+                                )
+                            }
+                        }
+                    }
+                    item(key = "profile_links") {
+                        ProfileLinks(
+                            contactId,
+                            onContactClick,
+                            modifier = Modifier.testTag("profile_links"),
+                            onTag = onTagClick
+                        )
+                    }
                     item {
                         Row(
                             Modifier.fillMaxWidth(),
@@ -345,46 +386,22 @@ fun ContactDetailScreen(
                             )
                         }
                     }
-                    items(if (allFacts) facts else facts.take(3), key = {
+                    items(facts.take(3), key = {
                         "fact_${it.id}"
                     }) { fact ->
-                        ListItem(
-                            headlineContent = {
-                                RecordPreview(fact.text, onOpen = {
-                                    readingFact =
-                                        fact.id
-                                })
-                            },
-                            supportingContent = {
-                                Text(
-                                    stringResource(
-                                        R.string.pilot_recorded,
-                                        formatEventDateText(fact.createdAt, dateDisplay)
-                                    )
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth().testTag(
-                                "fact_row_${fact.id}"
-                            ).clickable {
-                                readingFact =
-                                    fact.id
-                            }
-                        )
+                        ProfileFactRow(fact, dateDisplay, onOpen = { readingFact = fact.id })
                     }
                     if (facts.size >
                         3
                     ) {
                         item {
                             TextButton(onClick = {
-                                allFacts = !allFacts
+                                allFacts = true
                             }) {
                                 Text(
                                     stringResource(
-                                        if (allFacts) {
-                                            R.string.recall_less_facts
-                                        } else {
-                                            R.string.recall_more_facts
-                                        }
+                                        R.string.profile_all_facts,
+                                        facts.size
                                     )
                                 )
                             }
@@ -393,11 +410,7 @@ fun ContactDetailScreen(
                     item {
                         SectionLabel(
                             stringResource(
-                                if (allEvents) {
-                                    R.string.recall_all_history
-                                } else {
-                                    R.string.recall_recent_notes
-                                }
+                                R.string.recall_recent_notes
                             )
                         )
                     }
@@ -409,59 +422,79 @@ fun ContactDetailScreen(
                             )
                         }
                     }
-                    items(if (allEvents) events else events.take(3), key = {
+                    items(events.take(3), key = {
                         "event_${it.id}"
                     }) { event ->
-                        Card(
-                            onClick = {
-                                onEventClick(event.id)
-                            },
-                            modifier = Modifier.fillMaxWidth().padding(
-                                bottom = 8.dp
-                            ).testTag("event_preview_${event.id}")
-                        ) {
-                            Column(Modifier.padding(16.dp)) {
-                                RecordPreview(event.note, onOpen = { onEventClick(event.id) })
-                                Text(
-                                    formatEventDateText(event.eventDate, dateDisplay),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
+                        ProfileNoteRow(event, dateDisplay, onOpen = { onEventClick(event.id) })
                     }
                     if (events.size >
                         3
                     ) {
                         item {
                             TextButton(onClick = {
-                                allEvents = !allEvents
+                                allEvents = true
                             }) {
                                 Text(
                                     stringResource(
-                                        if (allEvents) {
-                                            R.string.action_cancel
-                                        } else {
-                                            R.string.recall_all_history
-                                        }
+                                        R.string.profile_all_notes,
+                                        events.size
                                     )
                                 )
                             }
                         }
                     }
                     item { FollowUpsSection(contactId = contactId, onContact = onContactClick) }
-                    item {
-                        TextButton(onClick = {
-                            management = !management
-                        }, modifier = Modifier.testTag("person_management")) {
-                            Text(stringResource(R.string.recall_person_details))
-                        }
-                    }
-                    if (management) {
-                        item { ProfileLinks(contactId, onContactClick) }
-                    }
                 }
             }
         }
+    }
+    if (allFacts) {
+        ProfileRecordsSheet(
+            stringResource(R.string.profile_facts_count, facts.size),
+            "facts",
+            onDismiss = { allFacts = false }
+        ) {
+            if (facts.isEmpty()) {
+                item {
+                    EmptyState(
+                        stringResource(R.string.empty_facts),
+                        testTag = "profile_facts_empty"
+                    )
+                }
+            }
+            items(facts, key = { it.id }) { fact ->
+                ProfileFactRow(fact, dateDisplay, onOpen = {
+                    allFacts = false
+                    readingFact = fact.id
+                })
+            }
+        }
+    }
+    if (allEvents) {
+        ProfileRecordsSheet(
+            stringResource(R.string.profile_notes_count, events.size),
+            "notes",
+            onDismiss = { allEvents = false }
+        ) {
+            if (events.isEmpty()) {
+                item {
+                    EmptyState(
+                        stringResource(R.string.empty_contact_events),
+                        testTag = "profile_notes_empty"
+                    )
+                }
+            }
+            items(events, key = { it.id }) { event ->
+                ProfileNoteRow(event, dateDisplay, onOpen = { onEventClick(event.id) })
+            }
+        }
+    }
+    if (showFollowUps) {
+        FollowUpsOverlay(
+            onDismiss = { showFollowUps = false },
+            contactId = contactId,
+            onContact = onContactClick
+        )
     }
     if (addNote || addFact || editingFact != null) {
         AddEventSheet(

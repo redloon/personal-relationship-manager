@@ -221,7 +221,8 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                             onEventClick = {
                                 backStack.add(EventDetailRoute(it))
                             },
-                            onContactClick = { backStack.add(ContactDetailRoute(it)) }
+                            onContactClick = { backStack.add(ContactDetailRoute(it)) },
+                            onTagClick = { backStack.add(TagDetailRoute(it)) }
                         )
                     }
                     EventsRoute -> NavEntry(route) {

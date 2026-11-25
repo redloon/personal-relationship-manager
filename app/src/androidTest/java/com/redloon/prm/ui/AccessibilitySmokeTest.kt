@@ -7,6 +7,9 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -15,6 +18,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.text.TextLayoutResult
@@ -25,6 +29,7 @@ import com.redloon.prm.data.db.dao.ContactFactDao
 import com.redloon.prm.data.db.entity.Contact
 import com.redloon.prm.data.db.entity.ContactFact
 import com.redloon.prm.data.repository.EventRepository
+import com.redloon.prm.data.search.RecallSearch
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import javax.inject.Inject
@@ -105,16 +110,19 @@ class AccessibilitySmokeTest {
         val iName = texts.indexOf(NAME)
         val iFacts = texts.indexOf("Facts")
         val iFact = texts.indexOf(FACT_TEXT)
-        val iEvents = texts.indexOf("Recent notes")
-        val iNote = texts.indexOf(NOTE_TEXT)
         assertTrue(
             "Expected remembered context in the semantics tree, got: $readingOrder",
-            listOf(iName, iFacts, iFact, iEvents, iNote).all { it >= 0 }
+            listOf(iName, iFacts, iFact).all { it >= 0 }
         )
         assertTrue(
-            "TalkBack order should be name → Facts → fact → Recent notes → note, got: $readingOrder",
-            iName < iFacts && iFacts < iFact && iFact < iEvents && iEvents < iNote
+            "TalkBack order should be name → Facts → fact, got: $readingOrder",
+            iName < iFacts && iFacts < iFact
         )
+        composeTestRule.onNodeWithTag(
+            "contact_detail_screen"
+        ).performScrollToNode(hasText(NOTE_TEXT))
+        val notesOrder = readingOrder().map { it.first }
+        assertTrue(notesOrder.indexOf("Recent notes") in 0 until notesOrder.indexOf(NOTE_TEXT))
     }
 
     @Test
@@ -122,11 +130,58 @@ class AccessibilitySmokeTest {
         val contactId = seedContact() // no facts, no events
         openFirstContactDetail()
 
-        composeTestRule.waitUntilTagDisplayed("facts_empty_state")
+        composeTestRule.onNodeWithTag(
+            "contact_detail_screen"
+        ).performScrollToNode(hasTestTag("facts_empty_state"))
         composeTestRule.onNodeWithTag("facts_empty_state").assertIsDisplayed()
+        composeTestRule.onNodeWithTag(
+            "contact_detail_screen"
+        ).performScrollToNode(hasTestTag("contact_events_empty_state"))
         composeTestRule.onNodeWithTag("contact_events_empty_state")
             .performScrollTo()
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun profileSearchShowsMatchingTextAboveKeyboardAtMaximumFont() {
+        val person = seedContact()
+        val note = "Remembered conversation. ".repeat(30) +
+            "Skylark is the garden gate password. " + "More context. ".repeat(20)
+        runBlocking {
+            eventRepository.createEvent(
+                note = note,
+                contactIds = listOf(person),
+                tagNames = emptyList(),
+                eventDate = 1_700_000_000_000L
+            )
+        }
+        openFirstContactDetail()
+        setFontScale(2.0f)
+        composeTestRule.waitUntilTagDisplayed("person_search", 10_000)
+        composeTestRule.onNodeWithTag("person_search").performTextInput("Skylark")
+        composeTestRule.waitForKeyboard(true)
+        composeTestRule.onNodeWithTag("person_search").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("last_interaction").assertDoesNotExist()
+        val excerpt = RecallSearch.excerpt(note, "Skylark")
+        val textNode = composeTestRule.onNodeWithText(excerpt, useUnmergedTree = true)
+        textNode.assertIsDisplayed()
+        val layouts = mutableListOf<TextLayoutResult>()
+        textNode.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val layout = layouts.single()
+        val matchEnd = excerpt.indexOf("Skylark") + "Skylark".length
+        assertTrue(
+            "The matching word must not be truncated",
+            matchEnd <= layout.getLineEnd(layout.lineCount - 1, visibleEnd = true)
+        )
+        val bounds = textNode.getUnclippedBoundsInRoot()
+        val visibleBottom = composeTestRule.onRoot().getUnclippedBoundsInRoot().bottom
+        val matchBottom = with(composeTestRule.density) {
+            layout.getLineBottom(layout.getLineForOffset(matchEnd - 1)).toDp()
+        }
+        assertTrue(
+            "The matching word must be above the IME",
+            bounds.top + matchBottom <= visibleBottom
+        )
     }
 
     @Test

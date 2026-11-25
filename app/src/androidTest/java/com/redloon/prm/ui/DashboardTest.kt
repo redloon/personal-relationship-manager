@@ -65,10 +65,6 @@ class DashboardTest {
         )
         ui.onNodeWithTag(
             "contact_detail_screen"
-        ).performScrollToNode(hasTestTag("person_management"))
-        ui.onNodeWithTag("person_management").assertIsDisplayed().performClick()
-        ui.onNodeWithTag(
-            "contact_detail_screen"
         ).performScrollToNode(hasTestTag("relationship_add"))
         ui.onNodeWithTag("relationship_add").assertIsDisplayed().performClick()
         ui.onNodeWithTag("add_event_sheet").assertDoesNotExist()
@@ -81,10 +77,6 @@ class DashboardTest {
             "contact_detail_screen"
         ).performScrollToNode(hasTestTag("relationship_person_$bob"))
         ui.onNodeWithTag("relationship_person_$bob").assertIsDisplayed().performClick()
-        ui.onNodeWithTag(
-            "contact_detail_screen"
-        ).performScrollToNode(hasTestTag("person_management"))
-        ui.onNodeWithTag("person_management").assertIsDisplayed().performClick()
         ui.waitUntilTagExists("relationship_person_$alice", 10_000)
         ui.onNodeWithTag(
             "contact_detail_screen"

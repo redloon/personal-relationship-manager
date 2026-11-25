@@ -100,8 +100,9 @@ object RecallSearch {
         if (flattened.length <= maxLength) return flattened
         val hit = query.trim().split(Regex("\\s+")).filter(String::isNotBlank)
             .map { flattened.indexOf(it, ignoreCase = true) }.filter { it >= 0 }.minOrNull() ?: 0
-        val start = maxOf(0, minOf(hit - maxLength / 3, flattened.length - maxLength))
-        return (if (start > 0) "…" else "") + flattened.substring(start, start + maxLength) +
-            (if (start + maxLength < flattened.length) "…" else "")
+        val start = maxOf(0, hit - minOf(24, maxLength / 3))
+        val end = minOf(flattened.length, start + maxLength)
+        return (if (start > 0) "…" else "") + flattened.substring(start, end) +
+            (if (end < flattened.length) "…" else "")
     }
 }

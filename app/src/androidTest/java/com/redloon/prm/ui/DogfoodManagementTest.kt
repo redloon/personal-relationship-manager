@@ -89,10 +89,6 @@ class DogfoodManagementTest {
         ui.waitUntilTagDisplayed("contact_detail_screen")
         ui.onNodeWithTag(
             "contact_detail_screen"
-        ).performScrollToNode(hasTestTag("person_management"))
-        ui.onNodeWithTag("person_management").performClick()
-        ui.onNodeWithTag(
-            "contact_detail_screen"
         ).performScrollToNode(hasTestTag("relationship_add"))
         ui.onNodeWithTag("relationship_add").performClick()
         ui.onNodeWithTag("relationship_label").performTextInput("Spouse")

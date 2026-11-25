@@ -64,10 +64,24 @@ class RecallSearchTest {
         assertEquals(listOf(4L), RecallSearch.find(entries, "climbing").map { it.id })
     }
 
+    @Test fun excerptKeepsDeepMatchNearStartForLargeTextPreviews() {
+        val text = "Remembered conversation. ".repeat(30) + "Skylark gate password. ".repeat(10)
+        val excerpt = RecallSearch.excerpt(text, "Skylark")
+        assertTrue(excerpt.indexOf("Skylark") in 0..25)
+    }
+
     @Test fun excerptContainsMatchingWordDeepInLongNote() {
         val text = "irrelevant ".repeat(40) + "climbing outdoors together"
         assertTrue(RecallSearch.excerpt(text, "climbing", 80).contains("climbing"))
         assertTrue(RecallSearch.excerpt(text, "climbing", 80).length <= 82)
+    }
+
+    @Test fun excerptKeepsMatchNearStartEvenAtEndOfNote() {
+        val excerpt = RecallSearch.excerpt(
+            "Remembered conversation. ".repeat(30) + "Skylark",
+            "Skylark"
+        )
+        assertTrue(excerpt.indexOf("Skylark") in 0..25)
     }
 
     @Test fun explicitTypeScopeCanBrowseWithoutAQuery() {

@@ -3,12 +3,14 @@ package com.redloon.prm.ui
 import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import com.redloon.prm.data.db.AppDatabase
@@ -80,6 +82,7 @@ class ReadingUsabilityTest {
             db.contactFactDao().insert(ContactFact(contactId = person, text = "Short fact"))
         }
         openPerson()
+        ui.onNodeWithTag("contact_detail_screen").performScrollToNode(hasTestTag("fact_row_$fact"))
         ui.onNodeWithTag("fact_row_$fact").assertIsDisplayed()
         ui.onNodeWithTag("edit_fact_$fact").assertDoesNotExist()
         ui.onNodeWithTag("delete_fact_$fact").assertDoesNotExist()
@@ -103,7 +106,9 @@ class ReadingUsabilityTest {
             event
         }
         openPerson()
-        ui.onNodeWithTag("event_preview_$event").performScrollTo()
+        ui.onNodeWithTag(
+            "contact_detail_screen"
+        ).performScrollToNode(hasTestTag("event_preview_$event"))
         ui.onNodeWithText("Read more").performScrollTo().assertIsDisplayed().performClick()
         ui.waitUntilTagDisplayed("event_detail_screen", 10_000)
         ui.onNodeWithText(text).assertExists()

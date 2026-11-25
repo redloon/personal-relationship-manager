@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
@@ -42,7 +43,8 @@ fun ProfileLinks(
     contactId: Long,
     onContact: (Long) -> Unit,
     modifier: Modifier = Modifier,
-    vm: ProfileLinksViewModel = hiltViewModel()
+    vm: ProfileLinksViewModel = hiltViewModel(),
+    onTag: (Long) -> Unit = {}
 ) {
     val tags by vm.tags.collectAsState()
     val contacts by vm.contacts.collectAsState()
@@ -72,10 +74,21 @@ fun ProfileLinks(
         )
         assigned.forEach { tag ->
             Row {
-                Text(tag.name, Modifier.weight(1f))
+                TextButton(
+                    onClick = { onTag(tag.id) },
+                    modifier = Modifier.weight(1f).testTag("profile_tag_${tag.id}")
+                ) {
+                    Text(tag.name, Modifier.weight(1f))
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                }
                 IconButton(onClick = {
                     vm.unassign(contactId, tag.id)
-                }) { Icon(Icons.Default.Close, stringResource(R.string.pilot_remove)) }
+                }, modifier = Modifier.testTag("profile_tag_remove_${tag.id}")) {
+                    Icon(
+                        Icons.Default.Close,
+                        stringResource(R.string.profile_remove_tag, tag.name)
+                    )
+                }
             }
         }
         ProfileSectionHeader(
