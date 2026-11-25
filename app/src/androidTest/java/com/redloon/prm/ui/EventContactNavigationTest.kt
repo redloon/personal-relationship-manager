@@ -10,6 +10,7 @@ import com.redloon.prm.data.db.dao.ContactDao
 import com.redloon.prm.data.db.dao.EventDao
 import com.redloon.prm.data.db.entity.Contact
 import com.redloon.prm.data.repository.EventRepository
+import com.redloon.prm.testdata.PopulationFixtures
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import javax.inject.Inject
@@ -40,6 +41,7 @@ class EventContactNavigationTest {
         runBlocking {
             eventDao.deleteAll()
             contactDao.deleteAll()
+            PopulationFixtures.seedBackgroundPeople(contactDao)
             contactId = contactDao.insert(Contact(displayName = "Alice"))
             eventRepository.createEvent("Met Alice", listOf(contactId), emptyList())
         }

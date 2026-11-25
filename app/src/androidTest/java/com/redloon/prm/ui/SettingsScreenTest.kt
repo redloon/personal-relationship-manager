@@ -1,9 +1,12 @@
 package com.redloon.prm.ui
 
+import androidx.activity.compose.setContent
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -13,6 +16,7 @@ import com.redloon.prm.data.settings.DateDisplay
 import com.redloon.prm.data.settings.DefaultEventTime
 import com.redloon.prm.data.settings.SettingsRepository
 import com.redloon.prm.data.settings.ThemeMode
+import com.redloon.prm.ui.settings.BackupFolderLocation
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import javax.inject.Inject
@@ -145,6 +149,26 @@ class SettingsScreenTest {
         composeTestRule.onNodeWithTag("automatic_contact_refresh_toggle")
             .performScrollTo()
         composeTestRule.onNodeWithTag("automatic_contact_refresh_toggle").assertIsOff()
+    }
+
+    @Test fun selectedBackupLocationRemainsReadableWhenAccessWasRevoked() {
+        var opened = false
+        composeTestRule.activityRule.scenario.onActivity { activity ->
+            activity.setContent {
+                MaterialTheme {
+                    BackupFolderLocation(
+                        "content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FPRM",
+                        onOpen = { opened = true }
+                    )
+                }
+            }
+        }
+        composeTestRule.waitUntilTagExists("backup_folder_location")
+        composeTestRule.onNodeWithTag("backup_folder_location")
+            .assertTextContains("PRM")
+            .assertTextContains("Internal storage / Documents / PRM")
+            .performClick()
+        assertTrue(opened)
     }
 
     // --- helpers ---

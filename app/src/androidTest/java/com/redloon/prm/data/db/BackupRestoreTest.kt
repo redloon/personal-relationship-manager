@@ -17,6 +17,7 @@ import com.redloon.prm.data.recovery.TrashKind
 import com.redloon.prm.data.repository.ContactRepository
 import com.redloon.prm.data.repository.EventRepository
 import com.redloon.prm.data.settings.SettingsRepository
+import com.redloon.prm.testdata.PopulationFixtures
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import javax.inject.Inject
@@ -55,6 +56,7 @@ class BackupRestoreTest {
     }
 
     @Test fun exportClearAndRestorePreservesRelationships() = runBlocking {
+        val background = PopulationFixtures.seedBackgroundPeople(database.contactDao())
         val contactId = database.contactDao().insert(Contact(displayName = "李 Alice"))
         val otherId = database.contactDao().insert(Contact(displayName = "Bob"))
         database.contactFactDao().insert(ContactFact(contactId = contactId, text = "Likes 🍕"))
@@ -69,6 +71,14 @@ class BackupRestoreTest {
         val snapshot = BackupJson.decode(json)
         database.clearAllTables()
         exporter.restore(snapshot)
+
+        assertEquals(62, database.contactDao().getAllIncludingHiddenOnce().size)
+        assertEquals(
+            background,
+            database.contactDao().getAllIncludingHiddenOnce().filter {
+                it.displayName.startsWith("Zzz Background")
+            }.map { it.id }
+        )
 
         assertEquals("李 Alice", database.contactDao().getById(contactId)?.displayName)
         assertEquals(

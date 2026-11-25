@@ -6,6 +6,38 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class ContactReconciliationTest {
+    @Test fun indexedCandidatesMatchPairwisePolicyAtScaleAndKeepStableOrdering() {
+        val profiles = (1L..240).flatMap { index ->
+            listOf(
+                protected(
+                    index,
+                    " Person ${index % 80} ",
+                    "555${index % 90}",
+                    "a${index % 100}@test"
+                ),
+                linked(
+                    1000 + index,
+                    "person ${index % 85}",
+                    "555${index % 95}",
+                    "A${index % 105}@TEST"
+                )
+            )
+        } + listOf(protected(900, "Blank"), linked(1900, "Other blank"))
+        val dismissed = setOf(ProfilePair(1, 1001), ProfilePair(2, 1002))
+        val expected = profiles.filter { it.androidContactId == null }.flatMap { saved ->
+            profiles.filter { it.androidContactId != null }.mapNotNull { android ->
+                ReconnectMatching.reviewCandidate(saved, android)
+            }
+        }.filterNot { it.pair in dismissed }.sortedWith(
+            compareBy<ReconnectCandidate> {
+                ReconnectMatching.normalizeName(it.savedProfile.displayName)
+            }
+                .thenBy { it.savedProfile.id }.thenBy { it.androidProfile.id }
+        )
+        assertEquals(expected, ReconnectMatching.reviewCandidates(profiles.reversed(), dismissed))
+        assertEquals(expected.size, expected.map { it.pair }.distinct().size)
+    }
+
     @Test fun normalizesWhitespaceCasePhonesAndEmails() {
         assertEquals("maya chen", ReconnectMatching.normalizeName("  Maya\t CHEN  "))
         assertEquals("+14155550123", ReconnectMatching.normalizePhone(" +1 (415) 555-0123 "))

@@ -81,32 +81,55 @@ object ReconnectMatching {
         dismissed: Set<ProfilePair>
     ): List<ReconnectCandidate> {
         val saved = profiles.filter { it.androidContactId == null && !it.deletionAllowed }
-        val android = profiles.filter { it.androidContactId != null }
+        val android = profiles.filter { it.androidContactId != null }.map { NormalizedProfile(it) }
+        val byName = android.groupBy { it.name }
+        val byPhone = android.filter { it.phone != null }.groupBy { it.phone }
+        val byEmail = android.filter { it.email != null }.groupBy { it.email }
         return buildList {
             for (savedProfile in saved) {
-                for (androidProfile in android) {
-                    val pair = ProfilePair(savedProfile.id, androidProfile.id)
+                val normalized = NormalizedProfile(savedProfile)
+                val possible = buildSet {
+                    addAll(byName[normalized.name].orEmpty())
+                    normalized.phone?.let { addAll(byPhone[it].orEmpty()) }
+                    normalized.email?.let { addAll(byEmail[it].orEmpty()) }
+                }
+                for (androidProfile in possible) {
+                    val pair = ProfilePair(savedProfile.id, androidProfile.contact.id)
                     if (pair !in dismissed) {
-                        reviewCandidate(savedProfile, androidProfile)?.let(::add)
+                        add(
+                            ReconnectCandidate(
+                                savedProfile,
+                                androidProfile.contact,
+                                matches(normalized, androidProfile)
+                            )
+                        )
                     }
                 }
             }
         }
     }
 
-    private fun matches(saved: Contact, android: Contact): Set<ReconnectMatch> = buildSet {
-        if (normalizeName(saved.displayName) == normalizeName(android.displayName)) {
-            add(ReconnectMatch.NAME)
-        }
-        val savedPhone = normalizePhone(saved.phoneNumber)
-        if (savedPhone != null && savedPhone == normalizePhone(android.phoneNumber)) {
-            add(ReconnectMatch.PHONE)
-        }
-        val savedEmail = normalizeEmail(saved.email)
-        if (savedEmail != null && savedEmail == normalizeEmail(android.email)) {
-            add(ReconnectMatch.EMAIL)
-        }
+    private class NormalizedProfile(val contact: Contact) {
+        val name = normalizeName(contact.displayName)
+        val phone = normalizePhone(contact.phoneNumber)
+        val email = normalizeEmail(contact.email)
     }
+
+    private fun matches(saved: Contact, android: Contact): Set<ReconnectMatch> =
+        matches(NormalizedProfile(saved), NormalizedProfile(android))
+
+    private fun matches(saved: NormalizedProfile, android: NormalizedProfile): Set<ReconnectMatch> =
+        buildSet {
+            if (saved.name == android.name) {
+                add(ReconnectMatch.NAME)
+            }
+            if (saved.phone != null && saved.phone == android.phone) {
+                add(ReconnectMatch.PHONE)
+            }
+            if (saved.email != null && saved.email == android.email) {
+                add(ReconnectMatch.EMAIL)
+            }
+        }
 
     private fun keypadDigit(character: Char): Char = when (character.uppercaseChar()) {
         in 'A'..'C' -> '2'

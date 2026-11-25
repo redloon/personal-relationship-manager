@@ -6,6 +6,8 @@ Record important, non-obvious product decisions here, briefly.
 
 Contact sync may automatically reconnect a protected app-only profile when its normalized name and exact normalized phone or email match one Android contact bidirectionally uniquely. The app-only profile survives with its identity, creation date, visibility and saved context; Android supplies current contact details. Ambiguous, name-only and renamed-detail matches require review and can be dismissed durably. Dismissals are device-local and clear after restore.
 
+Automatic reconnection runs in bulk during one sync, including large restored address books. Only uncertain pairs appear on the scrollable Possible duplicates screen, reachable from People and the sync result. Resolving a pair removes it reactively; the screen stays open with a completion state when finished. Name-only or ambiguous matches never become bulk automatic merges.
+
 This is a restore-recovery exception to explicit linking. Newly created deletion-eligible profiles are never candidates, ordinary same-name people may remain separate, and general-purpose merging remains deferred.
 
 ## 2026-11-23 — Native contact creation and explicit foreground sync

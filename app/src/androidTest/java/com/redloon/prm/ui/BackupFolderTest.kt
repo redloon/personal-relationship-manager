@@ -7,6 +7,7 @@ import android.provider.DocumentsContract
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.redloon.prm.ui.settings.backupFolderIntent
 import com.redloon.prm.ui.settings.openBackupFolder
+import com.redloon.prm.ui.settings.resolveBackupFolderDisplay
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -15,6 +16,35 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class BackupFolderTest {
+    @Test fun readableLocationsCoverStorageDownloadsCloudAndRevokedMetadata() {
+        fun display(uri: String, label: String? = null) =
+            resolveBackupFolderDisplay(uri, "Internal storage", "Downloads") { label }
+        val local = display(tree.toString())
+        assertEquals("Documents", local.label)
+        assertEquals("Internal storage / Documents", local.location)
+        assertEquals(
+            "1234-ABCD / Backups / PRM",
+            display(
+                "content://com.android.externalstorage.documents/tree/1234-ABCD%3ABackups%2FPRM"
+            ).location
+        )
+        assertEquals(
+            "Downloads / PRM",
+            display(
+                "content://com.android.providers.downloads.documents/tree/downloads",
+                "PRM"
+            ).location
+        )
+        val cloud = display("content://com.google.android.apps.docs.storage/tree/opaque-id", "PRM")
+        assertEquals("PRM", cloud.label)
+        assertEquals("com.google.android.apps.docs.storage / PRM", cloud.location)
+        val revoked = resolveBackupFolderDisplay(tree.toString(), "Internal storage", "Downloads") {
+            throw SecurityException()
+        }
+        assertEquals(local, revoked)
+        assertTrue(display("invalid").location.isNotBlank())
+    }
+
     private val tree = Uri.parse(
         "content://com.android.externalstorage.documents/tree/primary%3ADocuments"
     )

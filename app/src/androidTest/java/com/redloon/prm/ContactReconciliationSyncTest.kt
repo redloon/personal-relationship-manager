@@ -2,9 +2,12 @@ package com.redloon.prm
 
 import android.content.ContentResolver
 import androidx.test.platform.app.InstrumentationRegistry
+import com.redloon.prm.data.backup.BackupJson
+import com.redloon.prm.data.backup.DataExporter
 import com.redloon.prm.data.contacts.ContactsSyncManager
 import com.redloon.prm.data.db.AppDatabase
 import com.redloon.prm.data.db.entity.Contact
+import com.redloon.prm.data.db.entity.ContactFact
 import com.redloon.prm.data.repository.ContactRepository
 import com.redloon.prm.data.settings.SettingsRepository
 import com.redloon.prm.testdata.RandomContactGenerator
@@ -34,6 +37,8 @@ class ContactReconciliationSyncTest {
     @Inject lateinit var repository: ContactRepository
 
     @Inject lateinit var settings: SettingsRepository
+
+    @Inject lateinit var exporter: DataExporter
 
     private lateinit var resolver: ContentResolver
 
@@ -76,6 +81,87 @@ class ContactReconciliationSyncTest {
         assertEquals(0, second.reconnected)
         assertEquals(1, db.contactDao().getAllIncludingHiddenOnce().size)
     }
+
+    @Test fun portableRestoreReconcilesFourHundredContactsLeavingOnlyUncertainPairs(): Unit =
+        runBlocking {
+            val provider = (1..400).map { index ->
+                RandomContactGenerator.SystemContact(
+                    index.toLong(),
+                    "Scale Person $index",
+                    "+1202555${index.toString().padStart(4, '0')}",
+                    null
+                )
+            } + listOf(
+                RandomContactGenerator.SystemContact(401, "Ambiguous Person", "3035550101", null),
+                RandomContactGenerator.SystemContact(402, "Name Only", null, null),
+                RandomContactGenerator.SystemContact(403, "Renamed Person", "3035550103", null),
+                RandomContactGenerator.SystemContact(
+                    404,
+                    "Dismissed Person New",
+                    "3035550104",
+                    null
+                )
+            )
+            RandomContactGenerator.seedContactsProvider(resolver, provider)
+            val saved = (1..200).map { index ->
+                db.contactDao().insert(
+                    Contact(
+                        androidContactId = 9000L + index,
+                        displayName = "  SCALE   person $index ",
+                        phoneNumber = provider[index - 1].phoneNumber,
+                        createdAt = index.toLong(),
+                        isHidden = index % 10 == 0
+                    )
+                )
+            }
+            db.contactFactDao().insert(
+                ContactFact(contactId = saved.first(), text = "Keep restored context")
+            )
+            repeat(2) {
+                db.contactDao().insert(
+                    Contact(displayName = "Ambiguous Person", phoneNumber = "3035550101")
+                )
+            }
+            db.contactDao().insert(Contact(displayName = "Name Only"))
+            db.contactDao().insert(Contact(displayName = "Old Person", phoneNumber = "3035550103"))
+            db.contactDao().insert(
+                Contact(displayName = "Dismissed Person", phoneNumber = "3035550104")
+            )
+            val snapshot = BackupJson.decode(exporter.exportToJson())
+            db.clearAllTables()
+            exporter.restore(snapshot)
+            assertTrue(
+                db.contactDao().getAllIncludingHiddenOnce().all {
+                    it.androidContactId == null
+                }
+            )
+
+            val first = sync.syncContacts()
+            assertEquals(200, first.reconnected)
+            assertEquals(204, first.added)
+            assertEquals(5, first.reviewable)
+            assertEquals(409, db.contactDao().getAllIncludingHiddenOnce().size)
+            saved.forEachIndexed { index, savedId ->
+                val survivor = db.contactDao().getById(savedId)!!
+                assertNotNull(survivor.androidContactId)
+                assertEquals(index + 1L, survivor.createdAt)
+                assertEquals((index + 1) % 10 == 0, survivor.isHidden)
+            }
+            assertEquals(
+                "Keep restored context",
+                db.contactFactDao().getByContactIdOnce(saved.first()).single().text
+            )
+            val dismissed = repository.observeReconnectCandidates().first().single {
+                it.savedProfile.displayName == "Dismissed Person"
+            }
+            repository.dismissReconnectCandidate(dismissed.pair)
+            val second = sync.syncContacts()
+            assertEquals(0, second.reconnected)
+            assertEquals(0, second.added)
+            assertEquals(0, second.updated)
+            assertEquals(4, second.reviewable)
+            assertEquals(409, db.contactDao().getAllIncludingHiddenOnce().size)
+        }
 
     @Test fun renamedDetailMatchIsReviewableAndDismissalSurvivesSync(): Unit = runBlocking {
         seed("Maya Alvarez", "415-555-0123", null)

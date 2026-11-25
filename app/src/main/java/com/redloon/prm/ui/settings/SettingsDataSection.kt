@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -23,6 +24,8 @@ import com.redloon.prm.R
 import com.redloon.prm.data.recovery.TrashKind
 import java.text.DateFormat
 import java.util.Date
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun BackupRecoverySection(viewModel: SettingsViewModel, modifier: Modifier = Modifier) {
@@ -64,9 +67,13 @@ fun BackupRecoverySection(viewModel: SettingsViewModel, modifier: Modifier = Mod
             testTag = "choose_backup_folder"
         )
         if (status.folder != null) {
+            val folder = status.folder!!
             SettingsActionRow(stringResource(R.string.backup_open_folder), onClick = {
-                folderOpenFailed = !openBackupFolder(status.folder!!) { context.startActivity(it) }
+                folderOpenFailed = !openBackupFolder(folder) { context.startActivity(it) }
             }, testTag = "open_backup_folder")
+            BackupFolderLocation(folder, onOpen = {
+                folderOpenFailed = !openBackupFolder(folder) { context.startActivity(it) }
+            })
             if (folderOpenFailed) {
                 Text(
                     stringResource(R.string.backup_open_folder_failed),
@@ -169,5 +176,21 @@ fun BackupRecoverySection(viewModel: SettingsViewModel, modifier: Modifier = Mod
                 Text(stringResource(R.string.reliability_recovery_failed))
             }
         }
+    }
+}
+
+@Composable
+internal fun BackupFolderLocation(folder: String, onOpen: () -> Unit) {
+    val context = LocalContext.current
+    val display by produceState<BackupFolderDisplay?>(null, folder) {
+        value = withContext(Dispatchers.IO) { resolveBackupFolderDisplay(context, folder) }
+    }
+    display?.let { location ->
+        SettingsActionRow(
+            location.label,
+            subtitle = location.location,
+            onClick = onOpen,
+            testTag = "backup_folder_location"
+        )
     }
 }

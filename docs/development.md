@@ -99,6 +99,16 @@ Resolve a failing hook or input mismatch instead of bypassing it. Stage a cohere
 
 ## Exploratory QA and demos
 
+Representative People, search, profile navigation, picker, and portable-backup tests use
+`PopulationFixtures.seedBackgroundPeople` with at least 50 unrelated people. Keep empty-state
+and isolated policy tests small. `ContactReconciliationSyncTest` exercises a real portable
+restore against 404 Android contacts, checking bulk automatic reconnection, survivor context,
+hidden profiles, uncertain pairs, durable dismissal, and repeated-sync idempotence. The
+matching-policy test compares indexed results against a pairwise oracle with collisions.
+Visual QA for restore recovery should show several uncertain comparison cards, not present
+a single exception as the whole restore flow. Capture the readable backup folder location
+in Settings too; SAF providers need not expose a filesystem path.
+
 Runner v4 adds batched ADB interactions and captures; see the MCP runbook for
 interfaces. Use the normally launched debug app with fictional data, stable
 selectors, and explicit assertions. Inspect keyboard-open layouts, Back/cancel,

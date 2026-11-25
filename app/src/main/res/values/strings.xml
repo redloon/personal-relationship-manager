@@ -204,5 +204,7 @@
     <string name="people_last_interaction">Last interaction: %1$s</string>
     <string name="people_no_interactions">No interactions recorded</string>
     <string name="backup_open_folder">Open backup folder</string>
+    <string name="backup_internal_storage">Internal storage</string>
+    <string name="backup_downloads">Downloads</string>
     <string name="backup_open_folder_failed">Couldn’t open this folder. Check folder access or try another file manager.</string>
 </resources>

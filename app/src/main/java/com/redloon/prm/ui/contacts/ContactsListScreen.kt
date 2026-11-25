@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,7 +29,6 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonOutline
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -120,7 +120,8 @@ fun ContactsListScreen(
     scope: PeopleListScope = PeopleListScope.ALL,
     onBack: () -> Unit = {},
     onHiddenPeople: () -> Unit = {},
-    onAppOnlyPeople: () -> Unit = {}
+    onAppOnlyPeople: () -> Unit = {},
+    onPossibleDuplicates: () -> Unit = {}
 ) {
     val hidden = scope == PeopleListScope.HIDDEN
     val secondary = scope != PeopleListScope.ALL
@@ -163,10 +164,8 @@ fun ContactsListScreen(
     }
     var addPerson by rememberSaveable { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
-    var reviewingDuplicates by rememberSaveable { mutableStateOf(false) }
     val contacts by viewModel.contacts.collectAsStateWithLifecycle()
     val reconnectCandidates by viewModel.reconnectCandidates.collectAsStateWithLifecycle()
-    val reconnectBusy by viewModel.reconnectBusy.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
@@ -292,12 +291,9 @@ fun ContactsListScreen(
                 },
                 duration = if (reviewable != null) SnackbarDuration.Long else SnackbarDuration.Short
             )
-            if (result == SnackbarResult.ActionPerformed) reviewingDuplicates = true
+            if (result == SnackbarResult.ActionPerformed) onPossibleDuplicates()
         }
         if (syncState !is ContactsListViewModel.SyncState.Syncing) viewModel.clearSyncState()
-    }
-    LaunchedEffect(reviewingDuplicates, reconnectCandidates) {
-        if (reviewingDuplicates && reconnectCandidates.isEmpty()) reviewingDuplicates = false
     }
 
     Scaffold(
@@ -399,7 +395,7 @@ fun ContactsListScreen(
                                         },
                                         onClick = {
                                             menu = false
-                                            reviewingDuplicates = true
+                                            onPossibleDuplicates()
                                         },
                                         modifier = Modifier.testTag("review_duplicates_menu")
                                     )
@@ -600,72 +596,47 @@ fun ContactsListScreen(
             startCreating = true
         )
     }
-    if (reviewingDuplicates) {
-        reconnectCandidates.firstOrNull()?.let { candidate ->
-            PossibleDuplicateDialog(
-                candidate = candidate,
-                remaining = reconnectCandidates.size,
-                busy = reconnectBusy,
-                onReconnect = { viewModel.reconnect(candidate) },
-                onDifferent = { viewModel.dismissReconnect(candidate) },
-                onDismiss = { if (!reconnectBusy) reviewingDuplicates = false }
-            )
-        }
-    }
 }
 
 @Composable
-private fun PossibleDuplicateDialog(
+internal fun PossibleDuplicateCard(
     candidate: ReconnectCandidate,
-    remaining: Int,
     busy: Boolean,
     onReconnect: () -> Unit,
-    onDifferent: () -> Unit,
-    onDismiss: () -> Unit
+    onDifferent: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                pluralStringResource(
-                    R.plurals.people_possible_duplicates_title,
-                    remaining,
-                    remaining
-                )
+    Card(
+        Modifier.fillMaxWidth().testTag(
+            "duplicate_${candidate.pair.savedProfileId}_${candidate.pair.androidProfileId}"
+        )
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            ContactComparison(
+                stringResource(R.string.people_saved_profile),
+                candidate.savedProfile
             )
-        },
-        text = {
-            Column {
-                ContactComparison(
-                    stringResource(R.string.people_saved_profile),
-                    candidate.savedProfile
-                )
-                ContactComparison(
-                    stringResource(R.string.people_android_contact),
-                    candidate.androidProfile
-                )
-                Text(
-                    stringResource(R.string.people_reconnect_explanation),
-                    modifier = Modifier.padding(top = 12.dp)
-                )
+            ContactComparison(
+                stringResource(R.string.people_android_contact),
+                candidate.androidProfile
+            )
+            Text(
+                stringResource(R.string.people_reconnect_explanation),
+                modifier = Modifier.padding(top = 12.dp)
+            )
+            FlowRow {
+                TextButton(
+                    onClick = onReconnect,
+                    enabled = !busy,
+                    modifier = Modifier.testTag("reconnect_profiles")
+                ) { Text(stringResource(R.string.people_reconnect)) }
+                TextButton(
+                    onClick = onDifferent,
+                    enabled = !busy,
+                    modifier = Modifier.testTag("dismiss_duplicate")
+                ) { Text(stringResource(R.string.people_not_same)) }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = onReconnect,
-                enabled = !busy,
-                modifier = Modifier.testTag("reconnect_profiles")
-            ) { Text(stringResource(R.string.people_reconnect)) }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDifferent,
-                enabled = !busy,
-                modifier = Modifier.testTag("dismiss_duplicate")
-            ) { Text(stringResource(R.string.people_not_same)) }
-        },
-        modifier = Modifier.testTag("duplicate_review_dialog")
-    )
+        }
+    }
 }
 
 @Composable

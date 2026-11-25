@@ -35,6 +35,7 @@ import com.redloon.prm.ui.addevent.AddEventSheet
 import com.redloon.prm.ui.addevent.observeCaptureDraft
 import com.redloon.prm.ui.contacts.ContactDetailScreen
 import com.redloon.prm.ui.contacts.ContactsListScreen
+import com.redloon.prm.ui.contacts.PossibleDuplicatesScreen
 import com.redloon.prm.ui.events.EventDetailScreen
 import com.redloon.prm.ui.events.HistoryScreen
 import com.redloon.prm.ui.followups.FollowUpEditor
@@ -65,6 +66,9 @@ data object AppOnlyPeopleRoute : NavKey
 
 @Serializable
 data object HiddenPeopleRoute : NavKey
+
+@Serializable
+data object PossibleDuplicatesRoute : NavKey
 
 @Serializable
 data class ContactDetailRoute(val contactId: Long) : NavKey
@@ -177,13 +181,22 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                         }, onEvent = { backStack.add(EventDetailRoute(it)) })
                     }
                     ContactsRoute -> NavEntry(route) {
-                        ContactsListScreen(onContactClick = {
-                            backStack.add(ContactDetailRoute(it))
-                        }, onSettingsClick = {
-                            backStack.add(SettingsRoute)
-                        }, onHiddenPeople = {
-                            backStack.add(HiddenPeopleRoute)
-                        }, onAppOnlyPeople = { backStack.add(AppOnlyPeopleRoute) })
+                        ContactsListScreen(
+                            onContactClick = {
+                                backStack.add(ContactDetailRoute(it))
+                            },
+                            onSettingsClick = {
+                                backStack.add(SettingsRoute)
+                            },
+                            onHiddenPeople = {
+                                backStack.add(HiddenPeopleRoute)
+                            },
+                            onAppOnlyPeople = { backStack.add(AppOnlyPeopleRoute) },
+                            onPossibleDuplicates = { backStack.add(PossibleDuplicatesRoute) }
+                        )
+                    }
+                    PossibleDuplicatesRoute -> NavEntry(route) {
+                        PossibleDuplicatesScreen(onBack = { backStack.removeLastOrNull() })
                     }
                     AppOnlyPeopleRoute -> NavEntry(route) {
                         ContactsListScreen(scope = PeopleListScope.APP_ONLY, onBack = {

@@ -24,6 +24,7 @@ import com.redloon.prm.data.db.dao.ContactDao
 import com.redloon.prm.data.db.dao.ContactFactDao
 import com.redloon.prm.data.db.entity.Contact
 import com.redloon.prm.data.repository.EventRepository
+import com.redloon.prm.testdata.PopulationFixtures
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import javax.inject.Inject
@@ -559,6 +560,7 @@ class AddEventSheetTest {
     }
 
     @Test fun duplicateNamePickerOffersExistingAndAnExplicitSeparatePerson() {
+        runBlocking { PopulationFixtures.seedBackgroundPeople(contactDao) }
         val personId = runBlocking { contactDao.insert(Contact(displayName = "Zoe Duplicate")) }
         openAddEventSheet()
         openPersonPicker()
