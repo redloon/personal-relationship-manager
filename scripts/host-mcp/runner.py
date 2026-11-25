@@ -31,6 +31,93 @@ SOURCE_SHA256 = source_fingerprint()
 RUNNER = PACKAGE + '.test/' + PACKAGE + '.HiltTestRunner'
 
 
+def status_summary(job_id, status):
+    """Bounded projection only; never change the persisted evidence or lifecycle."""
+    truncated = False
+
+    def text(value, limit=128):
+        nonlocal truncated
+        if value is None:
+            return None
+        if not isinstance(value, (str, int, float, bool)):
+            truncated = True
+            return '<non-scalar omitted>'
+        value = str(value)
+        if len(value) > limit:
+            truncated = True
+            return value[:limit]+'…'
+        return value
+
+    def number(value):
+        nonlocal truncated
+        if type(value) in (int, float) and -1e15 <= value <= 1e15:
+            return value
+        truncated = truncated or value is not None
+        return None
+
+    tests = status.get('tests')
+    actions = status.get('results')
+    summary = dict(job_id=job_id, kind=text(status.get('kind', 'test')),
+                   status=text(status.get('status')), phase=text(status.get('phase')),
+                   test_count=number(status.get('test_count')) if type(status.get('test_count')) is int else None,
+                   observed_test_count=len(tests) if isinstance(tests, list) else None,
+                   action_count=len(actions) if isinstance(actions, list) else None)
+    for key in ('session_id', 'app_sha256', 'test_sha256', 'filter', 'case'):
+        if key in status:
+            summary[key] = text(status[key])
+    if type(status.get('failed_step')) is int:
+        summary['failed_step'] = number(status['failed_step'])
+    timings = status.get('timings', {})
+    summary['timings'] = {key: number(value) for key, value in timings.items()
+                          if key in ('starting', 'emulator', 'install', 'tests', 'cleanup', 'total')
+                          and type(value) in (int, float)} if isinstance(timings, dict) else {}
+    provenance = status.get('provenance')
+    if isinstance(provenance, dict):
+        summary['provenance'] = {key: text(provenance[key]) for key in ('source_sha256', 'git_revision') if key in provenance}
+    failures = []
+    failure_count = 0
+
+    def failure(category, value):
+        nonlocal failure_count
+        failure_count += 1
+        if len(failures) < 3:
+            failures.append(dict(category=category, message=text(value)))
+
+    if isinstance(tests, list):
+        for entry in tests:
+            if not isinstance(entry, dict):
+                continue
+            outcome = entry.get('outcome', entry.get('status'))
+            if outcome in ('failed', 'error', 'cancelled', 'interrupted'):
+                identity = ' '.join(text(entry.get(key), 48) or '' for key in ('class_name', 'test_name', 'case'))
+                failure('test', identity.strip() or outcome)
+    for key in ('error', 'cleanup_error', 'capture_error', 'snapshot_error'):
+        if status.get(key) is not None:
+            failure(key, status[key])
+    if 'failed_step' in summary and status.get('error') is None:
+        failure('action', 'Failed step '+str(summary['failed_step']))
+    for key in ('cleanup_errors', 'capture_errors'):
+        if isinstance(status.get(key), list):
+            for value in status[key]:
+                failure(key, value)
+    summary.update(failure_count=failure_count if tests is not None or actions is not None or failure_count else None,
+                   failure_examples=failures, failures_omitted=failure_count-len(failures), truncated=truncated)
+    while len(json.dumps(summary, ensure_ascii=True, indent=2).encode()) > 8192:
+        def shrink(value):
+            if isinstance(value, str) and len(value) > 32:
+                return value[:max(32, len(value)//2)]+'…'
+            if isinstance(value, dict):
+                return {key: item if key in ('job_id', 'session_id', 'app_sha256', 'test_sha256', 'source_sha256', 'git_revision')
+                        and isinstance(item, str) and re.fullmatch('[0-9a-f]{32}|[0-9a-f]{40}|[0-9a-f]{64}', item)
+                        else shrink(item) for key, item in value.items()}
+            if isinstance(value, list):
+                return [shrink(item) for item in value]
+            return value
+        summary = shrink(summary)
+        summary['truncated'] = True
+    return summary
+
+
 class CommandError(RuntimeError):
     def __init__(self, args, returncode, output):
         self.output = output
@@ -227,7 +314,9 @@ class Runner(SessionTools):
         threading.Thread(target=self.run, args=(jid, filter, job_lock), daemon=True).start()
         return dict(job_id=jid, **({'session_id': jid} if interactive else {}))
 
-    def get_status(self, job_id: str, wait_seconds: int = 0):
+    def get_status(self, job_id: str, wait_seconds: int = 0, detail: str = 'full'):
+        if detail not in ('full', 'summary'):
+            raise ValueError('detail must be full or summary')
         if not re.fullmatch('[0-9a-f]{32}', job_id):
             raise ValueError('Invalid job ID')
         # Allow polling a job after reconnecting to another runner process.
@@ -240,7 +329,7 @@ class Runner(SessionTools):
         while True:
             status = json.loads(path.read_text())
             if status['status'] != 'running' or time.monotonic() >= until:
-                return status
+                return status_summary(job_id, status) if detail == 'summary' else status
             time.sleep(min(.1, max(0, until-time.monotonic())))
 
     def read_logs(self, job_id: str, offset: int = 0, log: str = 'output'):

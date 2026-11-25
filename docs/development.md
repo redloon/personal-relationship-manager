@@ -3,6 +3,10 @@
 Use `codex-sbx` for daily sandbox work. See [Codex sandboxes](codex-sandboxes.md)
 for installation, persistent history and emergency session rescue.
 
+Start with [right-sized delivery](delivery.md) for scope, fixtures, workflow
+selection, artifact placement and evidence reuse. Use the feature-handoff skill
+only for substantial UX work or explicitly requested review artifacts.
+
 ## Commands
 
 Executable tasks in `.mise/tasks/` are the source of truth. Use `mise run TASK`, or run the same file with Bash when mise is unavailable. Prerequisites are Bash, Python 3.11+, Git, and `flock` (util-linux on Linux). Builds also require JDK 21 and the Android SDK. Tasks discover JDK 21 from `JAVA_HOME`, PATH, standard Linux installs, or Mise; SDK discovery includes `~/android-sdk` and `~/Android/Sdk`. Keep machine-specific SDK paths out of shared `local.properties`.
@@ -74,6 +78,14 @@ Install hooks with `mise run hooks-install`. Hooks check staged syntax/formattin
 
 Resolve a failing hook or input mismatch instead of bypassing it. Stage a coherent change, preserving unrelated human work. Commit hooks do not substitute for instrumented runtime validation.
 
+For an authorized coherent commit, the mandatory hook owns the final broad gate;
+do not automatically run an identical manual gate immediately beforehand.
+Otherwise run the required standalone check. Fix all formatting findings and
+run `bash .mise/tasks/gradle ktlintCheck` before restarting broad validation.
+Record fingerprints, APK hashes, scope and job evidence using the reuse rules
+in [delivery](delivery.md#validation-without-repetition); committing alone does
+not require rerunning identical runtime inputs.
+
 ## Android test traps
 
 - Navigation3 requires both the saveable-state and ViewModel-store entry decorators.
@@ -115,6 +127,12 @@ selectors, and explicit assertions. Inspect keyboard-open layouts, Back/cancel,
 empty results and long content. Return screenshots and a short recorded journey
 with a qa-report pack for significant UX work. Existing Compose tests remain the
 regression gate; exploratory evidence is additional validation.
+
+Those population sizes are regression-test coverage, not a requirement to seed
+every review. For read-only reviews establish build provenance and reuse suitable
+APKs; add fixture dimensions only for a concrete review question. Ordinary
+localized completion needs targeted verification, not an automatic recording or
+review pack. See [delivery workflow selection](delivery.md#select-the-workflow).
 
 The integration owner holds one session through terminal cleanup before staging
 or running tests. Tooling checks include SDK-free host-runner tests. The real

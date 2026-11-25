@@ -1,5 +1,10 @@
 # Host Android MCP runner
 
+Navigate by task: [setup/refresh](#host-setup-or-refresh),
+[ordinary validation](#agent-workflow), [bounded monitoring](#bounded-monitoring),
+[interactive QA](#interactive-qa-runner-v4), [recovery](#process-recovery-runner-v6),
+[troubleshooting](#troubleshooting-and-boundaries).
+
 ## Host setup or refresh
 
 Prerequisites: Linux x86_64, Python 3.10+ with venv, Java, a logged-in `sbx`, and Android SDK **Command-line Tools (latest)** (install through Android Studio → SDK Manager → SDK Tools).
@@ -31,7 +36,22 @@ Refresh stops idle installed runners, including host Codex connections. It waits
 
 `start_test(app_sha256, test_sha256, filter=null, timeout_seconds=null)` defaults to 180 seconds with a class/method filter and 900 seconds without a filter. Explicit instrumentation deadlines must be integers from 1 to 900. The whole test job has a 1,200-second execution deadline, followed by bounded cleanup (at most 120 seconds). Use one unfiltered invocation for the complete suite; keep filters for iteration.
 
-`get_status(job_id, wait_seconds=0)` polls immediately by default. Set an integer wait of up to 30 seconds to wait for terminal cleanup. Status persists `timings` for starting, emulator, install, tests, cleanup and total; raw instrumentation reports individual class/method identities, outcomes and observed durations in `tests`. Timings measure host receipt of progress, with roughly 50 ms resolution. A completion summary alone is insufficient: the parser also requires a successful terminal instrumentation code and rejects mixed failure/abort/crash output.
+`get_status(job_id, wait_seconds=0, detail="full")` polls immediately by default.
+Set an integer wait of up to 30 seconds to wait for terminal cleanup. The default
+full response is unchanged. `detail="summary"` returns identity/kind, status,
+phase, available test/action counts, timings, APK hashes and source provenance,
+but no successful test records, snapshots, action histories or raw logs. Missing
+counts stay `null`. `failure_count` counts structured failing test records and
+error observations (not necessarily distinct failed tests); at most three
+`failure_examples` are included, with `failures_omitted` and `truncated` indicators.
+Serialized summaries are at most 8 KiB, including escaped adversarial errors.
+Full status, logs, captures and QA inputs remain available. Summary mode does not
+alter cleanup or terminal-state rules, and cannot independently prove a pass.
+Status persists `timings` for starting, emulator, install, tests, cleanup and total;
+raw instrumentation reports individual class/method identities, outcomes and
+observed durations in `tests`. Timings measure host receipt of progress, with
+roughly 50 ms resolution. The parser requires a successful terminal instrumentation
+code and rejects mixed failure/abort/crash output.
 
 Commands stream to `read_logs` while running, preserving partial output on cancellation/timeouts. Consume chunks using integer byte offsets through terminal cleanup. Full diagnostic logcat is retained separately in `logcat.log`; read it with `read_logs(job_id, offset=0, log="logcat")` when diagnosing failures. Normal progress reads default to `log="output"`.
 
@@ -62,7 +82,7 @@ MCP registration: `android-tests`. Installed code/config: `~/.local/share/androi
 | `health` | No arguments; reports version, PID, loaded source hash, job storage/inbox, missing SDK tools, configured AVD/serial, and whether any connection has a job active. Does not prove emulator readiness. |
 | `start_recovery_test` | `app_sha256`, optional `case` (`saved_records`, `edited_records`, `deleted_records`) and `timeout_seconds` (1–900). No test APK. Omit case for all three; returns `job_id`. |
 | `start_test` | `app_sha256`, `test_sha256`, optional `filter` (fully qualified class or class#method) and `timeout_seconds`. Returns `job_id`. Omit filter for full suite. |
-| `get_status` | `job_id`, optional `wait_seconds` (0–30); returns phase and status: running, passed, failed, cancelled, or interrupted; failures include command/error text; passes include `test_count`. Jobs can be polled after reconnecting. |
+| `get_status` | `job_id`, optional `wait_seconds` (0–30), `detail` (`full` default, or `summary`); returns phase/status and available counts. Full evidence is unchanged; summaries are bounded projections. Jobs can be polled after reconnecting. |
 | `read_logs` | `job_id`, integer byte `offset` (initially 0); returns text and integer next_offset, at most 32 KiB. Pass that integer directly to the next call. Read until offset stops advancing, then check again after completion. |
 | `cancel` | `job_id`; requests cancellation. Cleanup may take up to 120 seconds; a busy response means wait before submitting again. |
 
@@ -71,6 +91,64 @@ Phases: starting → emulator → install → tests → cleanup → finished. Se
 Debug/release APKs can use different certificates or version codes. On
 `INSTALL_FAILED_UPDATE_INCOMPATIBLE` or `INSTALL_FAILED_VERSION_DOWNGRADE`, the runner rechecks emulator identity, logs a warning, removes only this app and its test package from the dedicated emulator, and retries once. This also permits returning to a lower-code debug build after a
 signed release smoke test. Test app data is disposable and cleared each run anyway. Other install errors fail with the command and Android error. Physical-phone installs never perform this reset: keep using the same signing key/environment for the phone or back up its data before intentionally uninstalling.
+
+## Bounded monitoring
+
+Deploy these examples only after the idle trusted-host refresh above, and verify
+the loaded source hash/PID and dedicated AVD. Older snapshots do not accept
+`detail`. Do not rebuild/restage merely to refresh runner code when stable APKs
+with suitable provenance already exist. Runner changes still require focused
+and full live MCP validation after refresh.
+
+`monitoring.py` is a tested SDK-free client-side reference, not a new runner tool
+or installed service. Supply a synchronous `call(name, arguments)` adapter that
+decodes the existing MCP result JSON and enforces transport timeouts. For example,
+with the Python MCP client the adapter can use an AnyIO blocking portal to call
+`client.call_tool`; reject `isError` before decoding its text content. In a
+gateway code-mode batch, use the same bounded algorithm with awaited calls.
+Never submit inside a polling loop.
+
+For gateway batches, use one 30-second wait per invocation and leave transport
+overhead in the enclosing deadline. Two waits can exceed a gateway request
+deadline even when the tool timeout is larger; resume the same job and saved
+offset rather than submitting again.
+
+```python
+from monitoring import monitor
+import json
+
+with open("ignored/job-output-chunks.jsonl", "a") as evidence:
+    def retain(chunk):
+        evidence.write(json.dumps(chunk) + "\n")
+        evidence.flush()
+
+    result = monitor(call, job_id, retain, state=previous_continuation,
+                     max_polls=2, max_chunks=16, wait_seconds=30)
+```
+
+Each invocation waits at most twice for up to 30 seconds and consumes at most
+16 advancing log chunks (plus EOF probes). Resume the returned `continuation`
+for the **same job**, even when terminal status arrived before logs were drained.
+Persist the continuation after the evidence sink succeeds; on transport errors
+resume the last saved offset, tolerating/deduplicating overlapping chunks by
+byte offset. The helper copies its input state and advances offsets only after
+the sink succeeds. It never coerces byte offsets to strings. A timeout means
+unfinished monitoring, not a reason to resubmit, cancel, or claim failure.
+
+`on_change` can receive bounded navigation updates; unchanged status/counts are
+suppressed (timing changes alone do not trigger output). Keep complete returned
+chunks locally, including cleanup output. These are decoded tool chunks, not a
+byte-identical raw-log export: use `next_offset`, never re-encode text to compute
+offsets. `complete` means terminal **and** output EOF after cleanup, not passed.
+This helper processes every chunk; do not claim personal inspection of every
+line. Fetch full status deliberately for terminal evidence, require a nonzero
+test count, inspect failures and consume diagnostic `logcat` by the same integer
+offset loop when needed. Summaries never replace failure investigation. Retain
+complete evidence but return bounded diagnostics and evidence locations.
+
+For interactive QA batch predictable actions with explicit assertions. Inspect
+screenshots at decision points and every selected review-pack capture, without
+repeatedly fetching unchanged captures. See [interactive QA](#interactive-qa-runner-v4).
 
 ## Troubleshooting and boundaries
 

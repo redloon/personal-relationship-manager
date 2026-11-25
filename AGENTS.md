@@ -11,6 +11,8 @@
 
 ## Development
 
+- Follow `docs/delivery.md` for scope continuity, right-sized setup/artifacts, evidence reuse, and bounded reading/monitoring. Recommendations and localized feedback do not authorize broader implementation. Stop at the requested deliverable.
+
 - Red-green TDD: write tests first so you can quickly find out if something actually works.
 - Validation is key: if you can't prove that your code works, then assume it doesn't.
 - Assume most code doesn't need to handle migrations. Too often you've overbuilt migration code for features which are still in progress, and therefore had no users yet.
@@ -19,7 +21,7 @@
 
 - Use isolated Git worktrees by default for parallel implementation. Agree on interfaces, file ownership, and integration order before editing; one owner coordinates shared schema changes.
 - Workers run focused red-green JVM checks in their own worktree. One integration owner freezes the combined source snapshot and runs `check`, staging, and Android MCP jobs; no concurrent edits or competing Gradle builds in that checkout.
-- Run `mise run check` before handoff or committing Android changes. It runs JVM tests, builds both APKs, lint, and static checks; any failure blocks a clean-validation claim. Repeat broad checks only after new changes or an unresolved failure.
+- Run `mise run check` before handoff of Android changes. For an authorized coherent commit, let the mandatory staged hook own the final broad gate instead of automatically duplicating it manually. It runs JVM tests, builds both APKs, lint, and static checks; any failure blocks a clean-validation claim. Fix formatting and run the focused formatting gate before restarting broad validation.
 - Hooks validate staged inputs, not an unrelated working tree. Android commits require relevant worktree inputs to match the index and a full check; tooling commits run tooling tests. See `docs/development.md`.
 - Reusable worker instructions live in `.codex/agents/android-feature-worker.toml`. Give each worker a bounded task and require exact validation evidence; building an APK does not prove runtime behavior.
 
